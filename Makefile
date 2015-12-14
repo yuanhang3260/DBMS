@@ -14,6 +14,10 @@ OBJ_DIR=lib
 OBJ = $(OBJ_DIR)/Utility/Strings.o \
       $(OBJ_DIR)/Utility/StringBuilder.o \
       $(OBJ_DIR)/Utility/Utils.o \
+      $(OBJ_DIR)/Storage/Record.o \
+      $(OBJ_DIR)/Storage/RecordPage.o \
+      $(OBJ_DIR)/Storage/HeaderPage.o \
+      $(OBJ_DIR)/Schema/SchemaType.o \
 
 TESTOBJ = $(OBJ_DIR)/Utility/Strings_test.o \
           $(OBJ_DIR)/Utility/StringBuilder_test.o \
@@ -46,4 +50,5 @@ clean:
 	rm -rf libDBMS.a
 	rm -rf $(OBJ_DIR)/*.o
 	rm -rf $(OBJ_DIR)/Utility/*.o
+	rm -rf $(OBJ_DIR)/Storage/*.o
 	rm -rf test/*.out
