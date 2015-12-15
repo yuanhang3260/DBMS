@@ -3,7 +3,7 @@
 
 namespace DataBaseFiles {
 
-#define PAGE_SIZE 4096
+const int kPageSize = 4096;
 
 }  // namespace DataBaseFiles
 

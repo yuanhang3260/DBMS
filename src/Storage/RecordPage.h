@@ -26,6 +26,10 @@ class SlotDirectoryEntry {
   DEFINE_ACCESSOR(offset, int);
   DEFINE_ACCESSOR(length, int);
 
+  // Save and load
+  void SaveToMem(byte* buf) const;
+  void LoadFromMem(const byte* buf);
+
  private:
   int offset_ = -1;  // Slot offset in this page
   int length_ = 0;  // Slot length
@@ -51,6 +55,12 @@ class RecordPageMeta {
 
   // Page meta data dump and load.
   int size() const;
+  // Reset all fields.
+  void reset();
+  // Save meta data to page.
+  bool SaveMetaToPage(byte* ppage) const;
+  // Load meta data from page.
+  bool LoadMetaFromPage(const byte* ppage);
 
  private:
   int num_slots_ = 0;
@@ -71,6 +81,7 @@ class RecordPage {
 
   // Accessors
   DEFINE_ACCESSOR(id, int);
+  DEFINE_ACCESSOR(valid, bool);
   RecordPageMeta* Meta() { return page_meta_.get(); }
   byte* Data() { return data_; }
 
@@ -83,6 +94,7 @@ class RecordPage {
 
  private:
   int id_ = -1;  // page id
+  bool valid_ = false;
   std::unique_ptr<RecordPageMeta> page_meta_;
   FILE* file_ = nullptr;
   byte* data_ = nullptr;
