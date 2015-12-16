@@ -21,6 +21,24 @@ std::vector<SlotDirectoryEntry>& RecordPageMeta::slot_directory() {
   return slot_directory_;
 }
 
+int RecordPageMeta::AllocateSlotAvailable() {
+  if (empty_slots_.size() == 0) {
+    // We might even have no enough space to allocate a new slot directory enty.
+    if (free_start_ + 8 + size() > kPageSize) {
+      LogINFO("[Allocate New Slot ID Failed] - No enough space");
+      return -1;
+    }
+    slot_directory_.emplace_back(-1, 0);
+    num_slots_++;
+    return slot_directory_.size() - 1;
+  }
+  else {
+    int re = empty_slots_.back();
+    empty_slots_.pop_back();
+    return re;
+  }
+}
+
 int RecordPageMeta::size() const {
   // Slot directory entry size = 2 * sizeof(int)
   return (sizeof(int) * 5) + (sizeof(int) * 2) * slot_directory_.size();
@@ -105,6 +123,9 @@ bool RecordPageMeta::LoadMetaFromPage(const byte* ppage) {
     if (slot_directory_.back().offset() > 0) {
       valid_records++;
     }
+    else {
+      empty_slots_.push_back(i);
+    }
   }
 
   // Consistency checks for loaded page meta.
@@ -123,9 +144,6 @@ bool RecordPageMeta::LoadMetaFromPage(const byte* ppage) {
 
 // **************************** RecordPage ********************************** //
 RecordPage::~RecordPage() {
-  if (data_) {
-    delete data_;
-  }
 }
 
 int RecordPage::FreeSize() const {
@@ -145,13 +163,13 @@ bool RecordPage::DumpPageData() {
     LogERROR("[Dump Page Error] - No meta available");
     return false;
   }
-  if (!page_meta_->SaveMetaToPage(data_)) {
+  if (!page_meta_->SaveMetaToPage(data_.get())) {
     return false;
   }
 
   // Write page to file.
   fseek(file_, id_ * kPageSize, SEEK_SET);
-  int re = fwrite(data_, 1, kPageSize, file_);
+  int re = fwrite(data_.get(), 1, kPageSize, file_);
   if (re != kPageSize) {
     LogERROR("[Dump Page Error] - Wrote %d bytes", re);
     return false;
@@ -162,14 +180,18 @@ bool RecordPage::DumpPageData() {
 }
 
 bool RecordPage::LoadPageData() {
-  if (!file_ || !data_) {
+  if (!file_) {
     return false;
+  }
+
+  if (!data_) {
+    data_.reset(new byte[kPageSize]);
   }
 
   // Load page data.
   fflush(file_);
   fseek(file_, id_ * kPageSize, SEEK_SET);
-  int re = fread(data_, 1, kPageSize, file_);
+  int re = fread(data_.get(), 1, kPageSize, file_);
   if (re != kPageSize) {
     LogERROR("[Read Page Error] - Load %d bytes", re);
     return false;
@@ -179,10 +201,59 @@ bool RecordPage::LoadPageData() {
   if (!page_meta_) {
     page_meta_.reset(new RecordPageMeta());
   }
-  if (!page_meta_->LoadMetaFromPage(data_)) {
+  if (!page_meta_->LoadMetaFromPage(data_.get())) {
     return false;
   }
   valid_ = true;
+  return true;
+}
+
+void RecordPage::ReorganizeRecords() {
+  byte* new_page = new byte[kPageSize];
+  int offset = 0;
+  for (const auto& slot: page_meta_->slot_directory()) {
+    if (slot.offset() >= 0) {
+      memcpy(new_page + offset, data_.get() + slot.offset(), slot.length());
+      offset += slot.length();
+    }
+  }
+  page_meta_->set_free_start(offset);
+  // save meta to the new page.
+  page_meta_->SaveMetaToPage(new_page);
+
+  data_.reset(new_page);
+}
+
+bool RecordPage::InsertRecord(const byte* content, int length) {
+  uint32 slot_id = page_meta_->AllocateSlotAvailable();
+  std::vector<SlotDirectoryEntry>& slot_dir = page_meta_->slot_directory();
+
+  if (FreeSize() < length) {
+    // Re-organize records and re-try insertion.
+    ReorganizeRecords();
+    if (FreeSize() < length) {
+      // Rollback the possible newly allocated entry at the end of slot
+      // directory.
+      if (slot_dir.back().offset() < 0) {
+        slot_dir.pop_back();
+      }
+      return false;
+    }
+  }
+
+  slot_dir[slot_id].set_offset(page_meta_->free_start());
+  slot_dir[slot_id].set_length(length);
+  page_meta_->increment_free_start(length);
+  page_meta_->increment_num_records(1);
+
+  // Write the record content to page.
+  memcpy(data_.get() + slot_dir[slot_id].offset(), content, length);
+
+  // (TODO: need this?) Re-write meta data to page.
+  if (!page_meta_->SaveMetaToPage(data_.get())) {
+    return false;
+  }
+
   return true;
 }
 

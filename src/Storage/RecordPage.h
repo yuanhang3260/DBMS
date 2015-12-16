@@ -46,11 +46,15 @@ class RecordPageMeta {
 
   // Accessors
   DEFINE_ACCESSOR(num_slots, int);
+  DEFINE_INCREMENTOR_DECREMENTOR(num_slots, int);
   DEFINE_ACCESSOR(num_records, int);
+  DEFINE_INCREMENTOR_DECREMENTOR(num_records, int);
   DEFINE_ACCESSOR(free_start, int);
+  DEFINE_INCREMENTOR_DECREMENTOR(free_start, int);
   DEFINE_ACCESSOR(next_page, int);
   DEFINE_ACCESSOR(prev_page, int);
 
+  // Get slot directory.
   std::vector<SlotDirectoryEntry>& slot_directory();
 
   // Page meta data dump and load.
@@ -62,6 +66,9 @@ class RecordPageMeta {
   // Load meta data from page.
   bool LoadMetaFromPage(const byte* ppage);
 
+  // Get a unused slot id avaible.
+  int AllocateSlotAvailable();
+
  private:
   int num_slots_ = 0;
   int num_records_ = 0;
@@ -69,6 +76,10 @@ class RecordPageMeta {
   int next_page_ = -1;
   int prev_page_ = -1;
   std::vector<SlotDirectoryEntry> slot_directory_;
+
+  // A list of empty slots id. It is created when loading a page. New record
+  // insert operation will first check this list to find a slot available.
+  std::vector<int> empty_slots_;
 };
 
 
@@ -83,21 +94,27 @@ class RecordPage {
   DEFINE_ACCESSOR(id, int);
   DEFINE_ACCESSOR(valid, bool);
   RecordPageMeta* Meta() { return page_meta_.get(); }
-  byte* Data() { return data_; }
+  byte* Data() { return data_.get(); }
 
-  // Get free size available on this page.
-  int FreeSize() const;
   // Dump page data to file.
   bool DumpPageData();
   // Load this page from file.
   bool LoadPageData();
+
+  // Get free size available on this page.
+  int FreeSize() const;
+  // Re-organize records.
+  void ReorganizeRecords();
+
+  // Insert a record
+  bool InsertRecord(const byte* content, int length);
 
  private:
   int id_ = -1;  // page id
   bool valid_ = false;
   std::unique_ptr<RecordPageMeta> page_meta_;
   FILE* file_ = nullptr;
-  byte* data_ = nullptr;
+  std::unique_ptr<byte> data_;
 };
 
 }  // namespace DataBaseFiles
