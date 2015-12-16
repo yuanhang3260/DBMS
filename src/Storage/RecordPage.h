@@ -18,21 +18,21 @@ namespace DataBaseFiles {
 class SlotDirectoryEntry {
  public:
   // Constructors
-  SlotDirectoryEntry(int offset, int length) :
+  SlotDirectoryEntry(int16 offset, int16 length) :
       offset_(offset),
       length_(length) {}
 
   // Accessors
-  DEFINE_ACCESSOR(offset, int);
-  DEFINE_ACCESSOR(length, int);
+  DEFINE_ACCESSOR(offset, int16);
+  DEFINE_ACCESSOR(length, int16);
 
   // Save and load
   void SaveToMem(byte* buf) const;
   void LoadFromMem(const byte* buf);
 
  private:
-  int offset_ = -1;  // Slot offset in this page
-  int length_ = 0;  // Slot length
+  int16 offset_ = -1;  // Slot offset in this page
+  int16 length_ = 0;  // Slot length
 };
 
 
@@ -68,6 +68,8 @@ class RecordPageMeta {
 
   // Get a unused slot id avaible.
   int AllocateSlotAvailable();
+  // Release a slot.
+  void ReleaseSlot(int slotid);
 
  private:
   int num_slots_ = 0;
@@ -108,6 +110,9 @@ class RecordPage {
 
   // Insert a record
   bool InsertRecord(const byte* content, int length);
+
+  // Delete a record
+  bool DeleteRecord(int slotid);
 
  private:
   int id_ = -1;  // page id

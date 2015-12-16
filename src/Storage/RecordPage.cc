@@ -6,13 +6,15 @@ namespace DataBaseFiles {
 
 // ************************** RecordPageMeta ******************************** //
 void SlotDirectoryEntry::SaveToMem(byte* buf) const {
-  memcpy(buf, &offset_, sizeof(offset_));
-  memcpy(buf + sizeof(offset_), &length_, sizeof(length_));
+  int entry = (offset_ << 16) | length_;
+  memcpy(buf, &entry, sizeof(entry));
 }
 
 void SlotDirectoryEntry::LoadFromMem(const byte* buf) {
-  memcpy(&offset_, buf, sizeof(offset_));
-  memcpy(&length_, buf + sizeof(offset_), sizeof(length_));
+  int entry;
+  memcpy(&entry, buf, sizeof(entry));
+  offset_ = (entry >> 16) & 0x0000FFFF;
+  length_ = entry & 0x0000FFFF;
 }
 
 
@@ -24,7 +26,7 @@ std::vector<SlotDirectoryEntry>& RecordPageMeta::slot_directory() {
 int RecordPageMeta::AllocateSlotAvailable() {
   if (empty_slots_.size() == 0) {
     // We might even have no enough space to allocate a new slot directory enty.
-    if (free_start_ + 8 + size() > kPageSize) {
+    if (free_start_ + kSlotDirectoryEntrySize + size() > kPageSize) {
       LogINFO("[Allocate New Slot ID Failed] - No enough space");
       return -1;
     }
@@ -39,9 +41,22 @@ int RecordPageMeta::AllocateSlotAvailable() {
   }
 }
 
+void RecordPageMeta::ReleaseSlot(int slot_id) {
+  if (slot_directory_[slot_id].offset() >= 0) {
+    slot_directory_[slot_id].set_offset(-1);
+    num_records_--;
+    empty_slots_.push_back(slot_id);
+
+    // Remove the slot entry if at the end of slot directory.
+    if (slot_id == (int)slot_directory_.size() - 1) {
+      slot_directory_.pop_back();
+    }
+  }
+}
+
 int RecordPageMeta::size() const {
   // Slot directory entry size = 2 * sizeof(int)
-  return (sizeof(int) * 5) + (sizeof(int) * 2) * slot_directory_.size();
+  return (sizeof(int) * 5) + kSlotDirectoryEntrySize * slot_directory_.size();
 }
 
 void RecordPageMeta::reset() {
@@ -61,7 +76,7 @@ bool RecordPageMeta::SaveMetaToPage(byte* ppage) const {
   }
   int offset = kPageSize - sizeof(num_slots_);
   memcpy(ppage + offset, &num_slots_, sizeof(num_slots_));
-  
+
   offset -= sizeof(num_records_);
   memcpy(ppage + offset, &num_records_, sizeof(num_records_));
 
@@ -77,7 +92,7 @@ bool RecordPageMeta::SaveMetaToPage(byte* ppage) const {
   // save slot directory
   int valid_records = 0;
   for (const auto& slot: slot_directory_) {
-    offset -= (sizeof(int) * 2);
+    offset -= kSlotDirectoryEntrySize;
     slot.SaveToMem(ppage + offset);
     if (slot.offset() >= 0) {
       valid_records ++;
@@ -117,7 +132,7 @@ bool RecordPageMeta::LoadMetaFromPage(const byte* ppage) {
   // Load slot directory.
   int valid_records = 0;
   for (int i = 0; i < num_slots_; i++) {
-    offset -= sizeof(int) * 2;
+    offset -= kSlotDirectoryEntrySize;
     slot_directory_.emplace_back(-1, 0);
     slot_directory_.back().LoadFromMem(ppage + offset);
     if (slot_directory_.back().offset() > 0) {
@@ -248,6 +263,20 @@ bool RecordPage::InsertRecord(const byte* content, int length) {
 
   // Write the record content to page.
   memcpy(data_.get() + slot_dir[slot_id].offset(), content, length);
+
+  // (TODO: need this?) Re-write meta data to page.
+  if (!page_meta_->SaveMetaToPage(data_.get())) {
+    return false;
+  }
+
+  return true;
+}
+
+bool RecordPage::DeleteRecord(int slot_id) {
+  if (slot_id < 0) {
+    return false;
+  }
+  page_meta_->ReleaseSlot(slot_id);
 
   // (TODO: need this?) Re-write meta data to page.
   if (!page_meta_->SaveMetaToPage(data_.get())) {

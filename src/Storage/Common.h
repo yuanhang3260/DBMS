@@ -4,6 +4,7 @@
 namespace DataBaseFiles {
 
 const int kPageSize = 4096;
+const int kSlotDirectoryEntrySize = 4;
 
 }  // namespace DataBaseFiles
 
