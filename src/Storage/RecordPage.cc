@@ -168,6 +168,11 @@ int RecordPage::FreeSize() const {
   return kPageSize - page_meta_->free_start() - page_meta_->size();
 }
 
+void RecordPage::InitInMemoryPage() {
+  page_meta_.reset(new RecordPageMeta());
+  data_.reset(new byte[kPageSize]);
+}
+
 bool RecordPage::DumpPageData() {
   if (!file_ || !data_) {
     return false;
@@ -240,7 +245,14 @@ void RecordPage::ReorganizeRecords() {
 }
 
 bool RecordPage::InsertRecord(const byte* content, int length) {
+  if (length <= 0) {
+    return false;
+  }
+
   uint32 slot_id = page_meta_->AllocateSlotAvailable();
+  if (slot_id < 0) {
+    return false;
+  }
   std::vector<SlotDirectoryEntry>& slot_dir = page_meta_->slot_directory();
 
   if (FreeSize() < length) {

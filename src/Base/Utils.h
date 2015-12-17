@@ -1,5 +1,5 @@
-#ifndef UTILS_
-#define UTILS_
+#ifndef BASE_UTILS_
+#define BASE_UTILS_
 
 class Utils {
  public:
@@ -19,4 +19,4 @@ class Utils {
   static bool rand_seed_init_;
 };
 
-#endif
+#endif  /* BASE_UTILS_ */

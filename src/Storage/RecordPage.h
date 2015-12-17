@@ -98,6 +98,9 @@ class RecordPage {
   RecordPageMeta* Meta() { return page_meta_.get(); }
   byte* Data() { return data_.get(); }
 
+  // Init a page in memory.
+  void InitInMemoryPage();
+
   // Dump page data to file.
   bool DumpPageData();
   // Load this page from file.
