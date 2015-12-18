@@ -15,6 +15,7 @@ OBJ = $(OBJ_DIR)/Utility/Strings.o \
       $(OBJ_DIR)/Utility/StringBuilder.o \
       $(OBJ_DIR)/Base/Utils.o \
       $(OBJ_DIR)/Base/Log.o \
+      $(OBJ_DIR)/Storage/Common.o \
       $(OBJ_DIR)/Storage/Record.o \
       $(OBJ_DIR)/Storage/RecordPage.o \
       $(OBJ_DIR)/Storage/HeaderPage.o \

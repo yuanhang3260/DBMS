@@ -1,6 +1,8 @@
 #ifndef BASE_UTILS_
 #define BASE_UTILS_
 
+#include <vector>
+
 class Utils {
  public:
   template<typename T>
@@ -12,6 +14,8 @@ class Utils {
   static int RandomNumber();
 
   static void PrintMemoryBytes(const char* buf, int size);
+
+  static std::vector<int> RandomListFromRange(int start, int end, int num);
 
  private:
   static void InitRandomSeed();
