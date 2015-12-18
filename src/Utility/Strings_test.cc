@@ -344,7 +344,7 @@ void test_GetToken() {
     if (result.size() != 2) {
       fprintf(stderr,
               "ERROR Round %d ReplaceWith(rpc AddStudent(StudentRequest) returns (StudentResponse) {", rd);
-      fprintf(stderr, "expect result.size() = 2, actual: %d\n", result.size());
+      fprintf(stderr, "expect result.size() = 2, actual: %d\n", (int)result.size());
       exit(-1);
     }
     std::vector<std::string> expect{"(StudentRequest)", "(StudentResponse)"};

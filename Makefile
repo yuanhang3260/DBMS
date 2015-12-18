@@ -22,9 +22,11 @@ OBJ = $(OBJ_DIR)/Utility/Strings.o \
 
 TESTOBJ = $(OBJ_DIR)/Utility/Strings_test.o \
           $(OBJ_DIR)/Utility/StringBuilder_test.o \
+          $(OBJ_DIR)/Storage/RecordPage_test.o \
 
 TESTEXE = test/Strings_test.out \
           test/StringBuilder_test.out \
+          test/RecordPage_test.out \
 
 library: $(OBJ)
 	ar cr libDBMS.a $(OBJ)
@@ -44,7 +46,16 @@ $(OBJ_DIR)/Utility/%.o: $(SRC_DIR)/Utility/%.cc $(SRC_DIR)/Utility/%.h
 $(OBJ_DIR)/Utility/%.o: $(SRC_DIR)/Utility/%.cc
 	$(CC) $(CFLAGS) $(IFLAGS) -c $< -o $@
 
+$(OBJ_DIR)/Storage/%.o: $(SRC_DIR)/Storage/%.cc $(SRC_DIR)/Storage/%.h
+	$(CC) $(CFLAGS) $(IFLAGS) -c $< -o $@
+
+$(OBJ_DIR)/Storage/%.o: $(SRC_DIR)/Storage/%.cc
+	$(CC) $(CFLAGS) $(IFLAGS) -c $< -o $@
+
 test/%.out: $(OBJ_DIR)/Utility/%.o library
+	$(CC) $(CFLAGS) $(LFLAGS) $< libDBMS.a -o $@
+
+test/%.out: $(OBJ_DIR)/Storage/%.o library
 	$(CC) $(CFLAGS) $(LFLAGS) $< libDBMS.a -o $@
 
 clean:
@@ -52,7 +63,9 @@ clean:
 	rm -rf $(OBJ_DIR)/*.o
 	rm -rf $(OBJ_DIR)/Base/*.o
 	rm -rf $(OBJ_DIR)/Log/*.o
+	rm -rf $(OBJ_DIR)/UnitTest/*.o
 	rm -rf $(OBJ_DIR)/Utility/*.o
 	rm -rf $(OBJ_DIR)/Storage/*.o
 	rm -rf $(OBJ_DIR)/Schema/*.o
 	rm -rf test/*.out
+	rm -rf test/*.data

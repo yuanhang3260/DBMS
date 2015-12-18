@@ -9,7 +9,7 @@ void LogINFO(const char* error_msg, ...) {
   va_start(args, error_msg);
   vfprintf(stdout, error_msg, args);
   va_end(args);
-  fprintf(stdout, ".\n");
+  fprintf(stdout, "\n");
 }
 
 void LogERROR(const char* error_msg, ...) {
@@ -17,7 +17,7 @@ void LogERROR(const char* error_msg, ...) {
   va_start(args, error_msg);
   vfprintf(stderr, error_msg, args);
   va_end(args);
-  fprintf(stderr, ".\n");
+  fprintf(stderr, "\n");
 }
 
 void debug(int i) {

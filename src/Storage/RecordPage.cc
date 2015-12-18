@@ -72,7 +72,9 @@ void RecordPageMeta::reset() {
 // as shown in RecordPage.h
 bool RecordPageMeta::SaveMetaToPage(byte* ppage) const {
   if (num_slots_ != (int)slot_directory_.size()) {
-    LogERROR("Page meta data error - num_slots inconsistency");
+    LogERROR("[Save page meta data error] - num_slots inconsistency (%d, %d)",
+             num_slots_, slot_directory_.size());
+    return false;
   }
   int offset = kPageSize - sizeof(num_slots_);
   memcpy(ppage + offset, &num_slots_, sizeof(num_slots_));
@@ -100,7 +102,8 @@ bool RecordPageMeta::SaveMetaToPage(byte* ppage) const {
   }
 
   if (num_records_ != valid_records) {
-    LogERROR("[Save page meta data error] - num_records inconsistency");
+    LogERROR("[Save page meta data error] - num_records inconsistency (%d, %d)",
+             num_records_, valid_records);
     return false;
   }
   if (kPageSize - offset != size()) {
@@ -120,6 +123,12 @@ bool RecordPageMeta::LoadMetaFromPage(const byte* ppage) {
   offset -= sizeof(num_records_);
   memcpy(&num_records_, ppage + offset, sizeof(num_records_));
 
+  if (num_records_ > num_slots_) {
+    LogERROR("[Load page meta data error] - num_records_ >  num_slots_ (%d, %d)",
+             num_records_, num_slots_);
+    return false;
+  }
+
   offset -= sizeof(free_start_);
   memcpy(&free_start_, ppage + offset, sizeof(free_start_));
 
@@ -135,7 +144,7 @@ bool RecordPageMeta::LoadMetaFromPage(const byte* ppage) {
     offset -= kSlotDirectoryEntrySize;
     slot_directory_.emplace_back(-1, 0);
     slot_directory_.back().LoadFromMem(ppage + offset);
-    if (slot_directory_.back().offset() > 0) {
+    if (slot_directory_.back().offset() >= 0) {
       valid_records++;
     }
     else {
@@ -145,7 +154,8 @@ bool RecordPageMeta::LoadMetaFromPage(const byte* ppage) {
 
   // Consistency checks for loaded page meta.
   if (num_records_ != valid_records) {
-    LogERROR("[Load page meta data error] - num_records inconsistency");
+    LogERROR("[Load page meta data error] - num_records inconsistency (%d, %d)",
+             num_records_, valid_records);
     return false;
   }
   if (kPageSize - offset != size()) {
@@ -263,6 +273,7 @@ bool RecordPage::InsertRecord(const byte* content, int length) {
       // directory.
       if (slot_dir.back().offset() < 0) {
         slot_dir.pop_back();
+        page_meta_->decrement_num_slots(1);
       }
       return false;
     }

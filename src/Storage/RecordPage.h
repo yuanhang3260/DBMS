@@ -96,7 +96,7 @@ class RecordPage {
   DEFINE_ACCESSOR(id, int);
   DEFINE_ACCESSOR(valid, bool);
   RecordPageMeta* Meta() { return page_meta_.get(); }
-  byte* Data() { return data_.get(); }
+  byte* data() { return data_.get(); }
 
   // Init a page in memory.
   void InitInMemoryPage();
