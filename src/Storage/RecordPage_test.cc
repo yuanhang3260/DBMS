@@ -19,13 +19,13 @@ class FakeRecord {
  private:
   void InitRecord() {
     // Generate random record data.
-    length_ = Utils::RandomNumber() % 30 + 1;
+    length_ = Utils::RandomNumber(30) + 1;
     data_.reset(new byte[length_ + sizeof(int)]);
     // Write key to data.
     memcpy(data_.get(), &key_, sizeof(int));
     // Write record data.
     for (int i = 4; i < length_ + 4; i++) {
-      (data_.get())[i] = Utils::RandomNumber() % 26 + 'a';
+      (data_.get())[i] = Utils::RandomNumber(26)+ 'a';
     }
   }
 
@@ -70,7 +70,7 @@ class RecordPageTest: public UnitTest {
 
     // Begin inserting records until the page is full.
     while (true) {
-      int key = Utils::RandomNumber() % records_source_.size();
+      int key = Utils::RandomNumber(records_source_.size());
       FakeRecord& record = records_source_[key];
       bool expect_success =
           (total_size + record.size() + kSlotDirectoryEntrySize) <= kPageSize;
@@ -92,11 +92,15 @@ class RecordPageTest: public UnitTest {
   }
 
   void VerifyPageRecords() {
-    for (auto slot: page_->Meta()->slot_directory()) {
+    for (auto& slot: page_->Meta()->slot_directory()) {
       int offset = slot.offset();
       int length = slot.length();
+      if (offset < 0) {
+        continue;
+      }
       const byte* record = page_->data() + offset;
       int key = *(reinterpret_cast<const int*>(record));
+      AssertLess(key, kNumRecordsSource);
       AssertTrue(ContentEqual(record + 4, records_source_[key].data() + 4,
                               length - 4));
     }
@@ -125,44 +129,84 @@ class RecordPageTest: public UnitTest {
     AssertTrue(page_->LoadPageData());
 
     // Delete some records, and refill the page to full. Repeat this process.
-    for (int i = 0; i < 100; i++) {
+    int empty_slots = 0;
+    int free_size = page_->FreeSize();
+    for (int i = 0; i < 10000; i++) {
+      int number_records = page_->Meta()->num_records();
       // Generate a random list of slot id to delete.
-      int delete_percent = (Utils::RandomNumber() % 10 + 1) / 10;
-      auto slot_directory = page_->Meta()->slot_directory();
+      double delete_percent = (Utils::RandomNumber(10) + 1) / 10.0;
+      auto& slot_directory = page_->Meta()->slot_directory();
       int delete_num = slot_directory.size() * delete_percent;
       std::vector<int> slots_to_delete =
           Utils::RandomListFromRange(0, slot_directory.size() - 1, delete_num);
-      AssertFalse(slots_to_delete.empty());
+      AssertFalse(slots_to_delete.empty(), "delete list empty");
 
       // delete records.
-      int free_size = page_->FreeSize();
       for (int slot_id: slots_to_delete) {
-        free_size += slot_directory[slot_id].length();
-        // if deleted last slot, we save another 4 bytes from releasing the
-        // slot direcotry entry.
-        if (slot_id == (int)slot_directory.size() - 1) {
-          free_size += 4;
+        // delete the record.
+        if(slot_directory[slot_id].offset() >= 0) {
+          free_size += slot_directory[slot_id].length();
+          // if deleted last slot, we save another 4 bytes from releasing the
+          // slot direcotry entry.
+          if (slot_id == (int)slot_directory.size() - 1) {
+            free_size += 4;
+            for (int i = slot_directory.size() - 2;
+                 i >= 0 && slot_directory[i].offset() < 0;
+                 i--) {
+              free_size += 4;
+              empty_slots--;
+            }
+          }
+          else {
+            empty_slots++;
+          }
+          AssertTrue(page_->DeleteRecord(slot_id), "DeleteRecord Failed");
+          AssertTrue(slot_directory.back().offset() >= 0,
+                     "Slot Directory has empty trailing slots.");
+          number_records--;
         }
-        AssertTrue(page_->DeleteRecord(slot_id));
+        else {
+          AssertFalse(page_->DeleteRecord(slot_id),
+                      "DeleteRecord Empty Slot Should not Success");
+        }
       }
+      AssertEqual(number_records, page_->Meta()->num_records(),
+                  "num_records mismatch after delete");
 
       // Refill page with new records.
       while (true) {
-        int key = Utils::RandomNumber() % records_source_.size();
+        int key = Utils::RandomNumber(records_source_.size());
         FakeRecord& record = records_source_[key];
-        bool expect_success =
-            (free_size + record.size() + kSlotDirectoryEntrySize) <= kPageSize;
-        AssertEqual(expect_success,
-                    page_->InsertRecord(record.data(), record.size()));
-
-        if (expect_success) {
-          //num_records_inserted++;
-          free_size -= (record.size() + kSlotDirectoryEntrySize);
+        int tmp_free = free_size;
+        bool reuse_slot = false;
+        if (empty_slots > 0) {
+          empty_slots--;
+          reuse_slot = true;
+          free_size -= record.size();
         }
         else {
+          free_size -= (record.size() + kSlotDirectoryEntrySize);
+        }
+        bool expect_success = free_size >= 0;
+        AssertEqual(expect_success,
+                    page_->InsertRecord(record.data(), record.size()),
+                    "InsertRecord result unexpected");
+
+        if (expect_success) {
+          number_records++;
+        }
+        else {
+          free_size = tmp_free;
+          if (reuse_slot) {
+            empty_slots++;
+          }
           break;
         }
+        AssertEqual(number_records, page_->Meta()->num_records(),
+                    "num_records mismatch after insert");
       }
+
+      VerifyPageRecords();
       // Done. Repeat.
     }
   }
@@ -175,7 +219,7 @@ int main() {
   for (int i = 0; i < 1; i++) {
     DataBaseFiles::RecordPageTest test;
     test.setup();
-    test.Test_InsertRecords();
+    test.Test_DeleteRecords();
     test.teardown();
   }
 

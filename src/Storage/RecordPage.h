@@ -6,6 +6,7 @@
 #include <unistd.h>
 #include <string.h>
 #include <vector>
+#include <set>
 #include <memory>
 #include <string>
 
@@ -69,7 +70,11 @@ class RecordPageMeta {
   // Get a unused slot id avaible.
   int AllocateSlotAvailable();
   // Release a slot.
-  void ReleaseSlot(int slotid);
+  bool ReleaseSlot(int slotid);
+  // Number of empty slots available.
+  int NumEmptySlots() const { return empty_slots_.size(); }
+  // Add an empty slot entry.
+  bool AddEmptySlot(int slot_id);
 
  private:
   int num_slots_ = 0;
@@ -79,9 +84,9 @@ class RecordPageMeta {
   int prev_page_ = -1;
   std::vector<SlotDirectoryEntry> slot_directory_;
 
-  // A list of empty slots id. It is created when loading a page. New record
+  // A set of empty slots id. It is created when loading a page. New record
   // insert operation will first check this list to find a slot available.
-  std::vector<int> empty_slots_;
+  std::set<int> empty_slots_;
 };
 
 
@@ -109,7 +114,7 @@ class RecordPage {
   // Get free size available on this page.
   int FreeSize() const;
   // Re-organize records.
-  void ReorganizeRecords();
+  bool ReorganizeRecords();
 
   // Insert a record
   bool InsertRecord(const byte* content, int length);

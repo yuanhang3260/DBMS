@@ -21,9 +21,16 @@ int Utils::RandomNumber() {
   return rand();
 }
 
+int Utils::RandomNumber(int range) {
+  if (!rand_seed_init_) {
+    InitRandomSeed();
+  }
+  return rand() % range;
+}
+
 std::vector<int> Utils::RandomListFromRange(int start, int end, int num) {
   std::vector<int> result;
-  if (num < 0 || end  - start + 1 < num) {
+  if (num <= 0 || end  - start + 1 < num) {
     return result;
   }
 
@@ -34,19 +41,22 @@ std::vector<int> Utils::RandomListFromRange(int start, int end, int num) {
   // shuffle the vector and return first num elements.
   for (int i = result.size() - 1; i >= 1; i--) {
     int j = RandomNumber() % (i + 1);
-    int tmp = result[j];
-    result[j] = result[i];
-    result[i] = tmp;
+    Swap(&result[i], &result[j]);
   }
-  for (int i = num; i < (int)result.size(); i++) {
-    result.pop_back();
-  }
+  result.resize(num);
   return result;
 }
 
 void Utils::PrintMemoryBytes(const char* buf, int size) {
   for (int i = 0; i < size; i++) {
     printf("0x%x ", buf[i] & 0xff);
+  }
+  printf("\n");
+}
+
+void Utils::PrintMemoryChars(const char* buf, int size) {
+  for (int i = 0; i < size; i++) {
+    printf("%c ", buf[i]);
   }
   printf("\n");
 }
