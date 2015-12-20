@@ -32,7 +32,6 @@ class HeaderPage {
   // TODO: meta pages of heapfile and hash-based index file
   int free_page_ = -1;  // header of free pages
 
-  Schema::SchemaField key_;
   // TOOD: list of fields
 };
 

@@ -20,6 +20,7 @@ OBJ = $(OBJ_DIR)/Utility/Strings.o \
       $(OBJ_DIR)/Storage/RecordPage.o \
       $(OBJ_DIR)/Storage/HeaderPage.o \
       $(OBJ_DIR)/Schema/SchemaType.o \
+      $(OBJ_DIR)/Schema/DataTypes.o \
 
 TESTOBJ = $(OBJ_DIR)/Utility/Strings_test.o \
           $(OBJ_DIR)/Utility/StringBuilder_test.o \

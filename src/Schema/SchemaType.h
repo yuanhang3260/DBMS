@@ -1,29 +1,29 @@
 #ifndef SCHEMA_TYPES_
 #define SCHEMA_TYPES_
 
+#include "Base/BaseTypes.h"
 #include "Base/MacroUtils.h"
 
 namespace Schema {
 
 enum FieldType {
   INT,
-  CHAR,
-  STRING,
+  LONGINT,
   DOUBLE,
   BOOL,
+  STRING,
+  CHARARRAY,
 };
 
 class SchemaField {
  public:
-  SchemaField(FieldType type, int length) : type_(type), length_(length) {}
+  SchemaField() = default;
 
-  // Accessors
-  DEFINE_ACCESSOR_ENUM(type, FieldType);
-  DEFINE_ACCESSOR(length, int);
+  virtual FieldType type() = 0;
+  virtual int length() = 0;
+  virtual int DumpToMem(byte* buf) const = 0;
 
- private:
-  FieldType type_;
-  int length_;
+ protected:
 };
 
 }  // Schema
