@@ -4,16 +4,27 @@ namespace Schema {
 
 // Comparable
 bool StringType::operator<(const StringType& other) const {
-  int len = Utils::Min(value_.length(), other.value_.length());
-  for (int i = 0; i < len; i++) {
-    if (value_[i] < other.value_[i]) {
-      return true;
-    }
-    else if (value_[i] < other.value_[i]) {
-      return false;
-    }
-  }
-  return value_.length() < other.value_.length();
+  return strcmp(value_.c_str(), other.value_.c_str()) < 0;
+}
+
+bool StringType::operator>(const StringType& other) const {
+  return strcmp(value_.c_str(), other.value_.c_str()) > 0;
+}
+
+bool StringType::operator<=(const StringType& other) const {
+  return !(*this > other);
+}
+
+bool StringType::operator>=(const StringType& other) const {
+  return !(*this < other);
+}
+
+bool StringType::operator==(const StringType& other) const {
+  return strcmp(value_.c_str(), other.value_.c_str()) == 0;
+}
+
+bool StringType::operator!=(const StringType& other) const {
+  return !(*this == other);
 }
 
 // Dump to memory
@@ -63,15 +74,45 @@ CharArrayType::~CharArrayType() {
 // Comparable
 bool CharArrayType::operator<(const CharArrayType& other) const {
   int len = Utils::Min(length_, other.length_);
-  for (int i = 0; i < len; i++) {
-    if (value_[i] < other.value_[i]) {
-      return true;
-    }
-    else if (value_[i] < other.value_[i]) {
-      return false;
-    }
+  int re = strncmp(value_, other.value_, len);
+  if (re < 0) {
+    return true;
+  }
+  if (re > 0) {
+    return false;
   }
   return length_ < other.length_;
+}
+
+bool CharArrayType::operator>(const CharArrayType& other) const {
+  int len = Utils::Min(length_, other.length_);
+  int re = strncmp(value_, other.value_, len);
+  if (re > 0) {
+    return true;
+  }
+  if (re < 0) {
+    return false;
+  }
+  return length_ > other.length_;
+}
+
+bool CharArrayType::operator<=(const CharArrayType& other) const {
+  return !(*this > other);
+}
+
+bool CharArrayType::operator>=(const CharArrayType& other) const {
+  return !(*this < other);
+}
+
+bool CharArrayType::operator==(const CharArrayType& other) const {
+  if (length_ != other.length_) {
+    return false;
+  }
+  return strncmp(value_, other.value_, length_) == 0;
+}
+
+bool CharArrayType::operator!=(const CharArrayType& other) const {
+  return !(*this == other);
 }
 
 // Dump to memory

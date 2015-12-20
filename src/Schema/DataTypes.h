@@ -11,7 +11,7 @@
 
 namespace Schema {
 
-class IntType: public SchemaField {
+class IntType: public SchemaFieldType {
  public:
   IntType() = default;
   IntType(int value) : value_(value) {}
@@ -23,6 +23,26 @@ class IntType: public SchemaField {
   // Comparable
   bool operator<(const IntType& other) const {
     return value_ < other.value();
+  }
+
+  bool operator<=(const IntType& other) const {
+    return value_ <= other.value();
+  }
+
+  bool operator>(const IntType& other) const {
+    return value_ > other.value();
+  }
+
+  bool operator>=(const IntType& other) const {
+    return value_ >= other.value();
+  }
+
+  bool operator==(const IntType& other) const {
+    return value_ == other.value();
+  }
+
+  bool operator!=(const IntType& other) const {
+    return value_ != other.value();
   }
 
   // Dump to memory
@@ -39,7 +59,7 @@ class IntType: public SchemaField {
 };
 
 
-class LongIntType: public SchemaField {
+class LongIntType: public SchemaFieldType {
  public:
   LongIntType() = default;
   LongIntType(int64 value) : value_(value) {}
@@ -51,6 +71,26 @@ class LongIntType: public SchemaField {
   // Comparable
   bool operator<(const LongIntType& other) const {
     return value_ < other.value();
+  }
+
+  bool operator<=(const LongIntType& other) const {
+    return value_ <= other.value();
+  }
+
+  bool operator>(const LongIntType& other) const {
+    return value_ > other.value();
+  }
+
+  bool operator>=(const LongIntType& other) const {
+    return value_ >= other.value();
+  }
+
+  bool operator==(const LongIntType& other) const {
+    return value_ == other.value();
+  }
+
+  bool operator!=(const LongIntType& other) const {
+    return value_ != other.value();
   }
 
   // Dump to memory
@@ -67,7 +107,7 @@ class LongIntType: public SchemaField {
 };
 
 
-class DoubleType: public SchemaField {
+class DoubleType: public SchemaFieldType {
  public:
   DoubleType() = default;
   DoubleType(double value) : value_(value) {}
@@ -79,6 +119,26 @@ class DoubleType: public SchemaField {
   // Comparable
   bool operator<(const DoubleType& other) const {
     return value_ < other.value();
+  }
+
+  bool operator<=(const DoubleType& other) const {
+    return value_ <= other.value();
+  }
+
+  bool operator>(const DoubleType& other) const {
+    return value_ > other.value();
+  }
+
+  bool operator>=(const DoubleType& other) const {
+    return value_ >= other.value();
+  }
+
+  bool operator==(const DoubleType& other) const {
+    return value_ == other.value();
+  }
+
+  bool operator!=(const DoubleType& other) const {
+    return value_ != other.value();
   }
 
   // Dump to memory
@@ -95,7 +155,7 @@ class DoubleType: public SchemaField {
 };
 
 
-class BoolType: public SchemaField {
+class BoolType: public SchemaFieldType {
  public:
   BoolType() = default;
   BoolType(bool value) : value_(value) {}
@@ -107,6 +167,26 @@ class BoolType: public SchemaField {
   // Comparable
   bool operator<(const BoolType& other) const {
     return value_ < other.value();
+  }
+
+  bool operator<=(const BoolType& other) const {
+    return value_ <= other.value();
+  }
+
+  bool operator>(const BoolType& other) const {
+    return value_ > other.value();
+  }
+
+  bool operator>=(const BoolType& other) const {
+    return value_ >= other.value();
+  }
+
+  bool operator==(const BoolType& other) const {
+    return value_ == other.value();
+  }
+
+  bool operator!=(const BoolType& other) const {
+    return value_ != other.value();
   }
 
   // Dump to memory
@@ -123,7 +203,7 @@ class BoolType: public SchemaField {
 };
 
 
-class StringType: public SchemaField {
+class StringType: public SchemaFieldType {
  public:
   StringType() = default;
   StringType(std::string str) : value_(str) {}
@@ -134,6 +214,11 @@ class StringType: public SchemaField {
 
   // Comparable
   bool operator<(const StringType& other) const;
+  bool operator<=(const StringType& other) const;
+  bool operator>(const StringType& other) const;
+  bool operator>=(const StringType& other) const;
+  bool operator==(const StringType& other) const;
+  bool operator!=(const StringType& other) const;
 
   // Dump to memory
   int DumpToMem(byte* buf) const override;
@@ -143,7 +228,7 @@ class StringType: public SchemaField {
 };
 
 
-class CharArrayType: public SchemaField {
+class CharArrayType: public SchemaFieldType {
  public:
   CharArrayType() = default;
   CharArrayType(std::string str, int lenlimit);
@@ -158,6 +243,11 @@ class CharArrayType: public SchemaField {
 
   // Comparable
   bool operator<(const CharArrayType& other) const;
+  bool operator<=(const CharArrayType& other) const;
+  bool operator>(const CharArrayType& other) const;
+  bool operator>=(const CharArrayType& other) const;
+  bool operator==(const CharArrayType& other) const;
+  bool operator!=(const CharArrayType& other) const;
 
   // Dump to memory
   int DumpToMem(byte* buf) const override;

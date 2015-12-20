@@ -26,11 +26,13 @@ TESTOBJ = $(OBJ_DIR)/Utility/Strings_test.o \
           $(OBJ_DIR)/Utility/StringBuilder_test.o \
           $(OBJ_DIR)/Base/Utils_test.o \
           $(OBJ_DIR)/Storage/RecordPage_test.o \
+          $(OBJ_DIR)/Schema/DataTypes_test.o \
 
 TESTEXE = test/Strings_test.out \
           test/StringBuilder_test.out \
           test/Utils_test.out \
           test/RecordPage_test.out \
+          test/DataTypes_test.out \
 
 library: $(OBJ)
 	ar cr libDBMS.a $(OBJ)
@@ -62,6 +64,12 @@ $(OBJ_DIR)/Base/%.o: $(SRC_DIR)/Base/%.cc $(SRC_DIR)/Base/%.h
 $(OBJ_DIR)/Base/%.o: $(SRC_DIR)/Base/%.cc
 	$(CC) $(CFLAGS) $(IFLAGS) -c $< -o $@
 
+$(OBJ_DIR)/Schema/%.o: $(SRC_DIR)/Schema/%.cc $(SRC_DIR)/Schema/%.h
+	$(CC) $(CFLAGS) $(IFLAGS) -c $< -o $@
+
+$(OBJ_DIR)/Schema/%.o: $(SRC_DIR)/Schema/%.cc
+	$(CC) $(CFLAGS) $(IFLAGS) -c $< -o $@
+
 test/%.out: $(OBJ_DIR)/Utility/%.o library
 	$(CC) $(CFLAGS) $(LFLAGS) $< libDBMS.a -o $@
 
@@ -69,6 +77,9 @@ test/%.out: $(OBJ_DIR)/Storage/%.o library
 	$(CC) $(CFLAGS) $(LFLAGS) $< libDBMS.a -o $@
 
 test/%.out: $(OBJ_DIR)/Base/%.o library
+	$(CC) $(CFLAGS) $(LFLAGS) $< libDBMS.a -o $@
+
+test/%.out: $(OBJ_DIR)/Schema/%.o library
 	$(CC) $(CFLAGS) $(LFLAGS) $< libDBMS.a -o $@
 
 clean:

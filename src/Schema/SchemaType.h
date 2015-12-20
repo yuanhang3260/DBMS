@@ -15,9 +15,9 @@ enum FieldType {
   CHARARRAY,
 };
 
-class SchemaField {
+class SchemaFieldType {
  public:
-  SchemaField() = default;
+  SchemaFieldType() = default;
 
   virtual FieldType type() = 0;
   virtual int length() = 0;
