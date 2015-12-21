@@ -21,23 +21,28 @@ OBJ = $(OBJ_DIR)/Utility/Strings.o \
       $(OBJ_DIR)/Storage/HeaderPage.o \
       $(OBJ_DIR)/Schema/SchemaType.o \
       $(OBJ_DIR)/Schema/DataTypes.o \
+      $(OBJ_DIR)/Schema/RecordKey.o \
 
 TESTOBJ = $(OBJ_DIR)/Utility/Strings_test.o \
           $(OBJ_DIR)/Utility/StringBuilder_test.o \
           $(OBJ_DIR)/Base/Utils_test.o \
           $(OBJ_DIR)/Storage/RecordPage_test.o \
           $(OBJ_DIR)/Schema/DataTypes_test.o \
+          $(OBJ_DIR)/Schema/RecordKey_test.o \
 
 TESTEXE = test/Strings_test.out \
           test/StringBuilder_test.out \
           test/Utils_test.out \
           test/RecordPage_test.out \
           test/DataTypes_test.out \
+          test/RecordKey_test.out \
 
 library: $(OBJ)
 	ar cr libDBMS.a $(OBJ)
 
-test: $(TESTEXE) library
+test: $(TESTEXE)
+
+$(TESTEXE): $(TESTOBJ) library
 
 # compiler: $(SRC_DIR)/Compiler/Compiler_main.cc proto_library
 # 	$(CC) $(CFLAGS) $(LFLAGS) -c $(SRC_DIR)/Compiler/Compiler_main.cc -o $(COMPILEROBJ)
@@ -70,6 +75,8 @@ $(OBJ_DIR)/Schema/%.o: $(SRC_DIR)/Schema/%.cc $(SRC_DIR)/Schema/%.h
 $(OBJ_DIR)/Schema/%.o: $(SRC_DIR)/Schema/%.cc
 	$(CC) $(CFLAGS) $(IFLAGS) -c $< -o $@
 
+
+# Tests
 test/%.out: $(OBJ_DIR)/Utility/%.o library
 	$(CC) $(CFLAGS) $(LFLAGS) $< libDBMS.a -o $@
 

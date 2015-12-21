@@ -19,9 +19,10 @@ class SchemaFieldType {
  public:
   SchemaFieldType() = default;
 
-  virtual FieldType type() = 0;
-  virtual int length() = 0;
+  virtual FieldType type() const = 0;
+  virtual int length() const = 0;
   virtual int DumpToMem(byte* buf) const = 0;
+  virtual int LoadFromMem(const byte* buf) = 0;
 
  protected:
 };

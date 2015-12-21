@@ -17,8 +17,8 @@ class IntType: public SchemaFieldType {
   IntType(int value) : value_(value) {}
 
   DEFINE_ACCESSOR(value, int);
-  FieldType type() override { return INT; }
-  int length() override { return 4; }
+  FieldType type() const override { return INT; }
+  int length() const override { return 4; }
 
   // Comparable
   bool operator<(const IntType& other) const {
@@ -54,6 +54,14 @@ class IntType: public SchemaFieldType {
     return sizeof(value_);
   }
 
+  int LoadFromMem(const byte* buf) override {
+    if (!buf) {
+      return -1;
+    }
+    memcpy(&value_, buf, sizeof(int));
+    return sizeof(int);
+  }
+
  private:
   int value_ = 0;
 };
@@ -65,8 +73,8 @@ class LongIntType: public SchemaFieldType {
   LongIntType(int64 value) : value_(value) {}
 
   DEFINE_ACCESSOR(value, int64);
-  FieldType type() override { return LONGINT; }
-  int length() override { return 8; }
+  FieldType type() const override { return LONGINT; }
+  int length() const override { return 8; }
 
   // Comparable
   bool operator<(const LongIntType& other) const {
@@ -102,6 +110,14 @@ class LongIntType: public SchemaFieldType {
     return sizeof(value_);
   }
 
+  int LoadFromMem(const byte* buf) override {
+    if (!buf) {
+      return -1;
+    }
+    memcpy(&value_, buf, sizeof(int64));
+    return sizeof(int64);
+  }
+
  private:
   int64 value_ = 0;
 };
@@ -113,8 +129,8 @@ class DoubleType: public SchemaFieldType {
   DoubleType(double value) : value_(value) {}
 
   DEFINE_ACCESSOR(value, double);
-  FieldType type() override { return DOUBLE; }
-  int length() override { return 8; }
+  FieldType type() const override { return DOUBLE; }
+  int length() const override { return 8; }
 
   // Comparable
   bool operator<(const DoubleType& other) const {
@@ -150,6 +166,14 @@ class DoubleType: public SchemaFieldType {
     return sizeof(value_);
   }
 
+  int LoadFromMem(const byte* buf) override {
+    if (!buf) {
+      return -1;
+    }
+    memcpy(&value_, buf, sizeof(double));
+    return sizeof(double);
+  }
+
  private:
   double value_ = 0.0;
 };
@@ -161,8 +185,8 @@ class BoolType: public SchemaFieldType {
   BoolType(bool value) : value_(value) {}
 
   DEFINE_ACCESSOR(value, bool);
-  FieldType type() override { return BOOL; }
-  int length() override { return 4; }
+  FieldType type() const override { return BOOL; }
+  int length() const override { return 4; }
 
   // Comparable
   bool operator<(const BoolType& other) const {
@@ -198,6 +222,14 @@ class BoolType: public SchemaFieldType {
     return sizeof(value_);
   }
 
+  int LoadFromMem(const byte* buf) override {
+    if (!buf) {
+      return -1;
+    }
+    memcpy(&value_, buf, sizeof(bool));
+    return sizeof(bool);
+  }
+
  private:
   bool value_ = false;
 };
@@ -209,8 +241,8 @@ class StringType: public SchemaFieldType {
   StringType(std::string str) : value_(str) {}
 
   DEFINE_ACCESSOR(value, std::string);
-  FieldType type() override { return STRING; }
-  int length() override { return value_.length(); }
+  FieldType type() const override { return STRING; }
+  int length() const override { return value_.length(); }
 
   // Comparable
   bool operator<(const StringType& other) const;
@@ -222,6 +254,7 @@ class StringType: public SchemaFieldType {
 
   // Dump to memory
   int DumpToMem(byte* buf) const override;
+  int LoadFromMem(const byte* buf) override;
 
  private:
   std::string value_;
@@ -237,8 +270,8 @@ class CharArrayType: public SchemaFieldType {
 
   bool SetData(const char* src, int length);
 
-  FieldType type() override { return CHARARRAY; }
-  int length() override { return length_; }
+  FieldType type() const override { return CHARARRAY; }
+  int length() const override { return length_; }
   const char* value() { return value_; }
 
   // Comparable
@@ -251,10 +284,11 @@ class CharArrayType: public SchemaFieldType {
 
   // Dump to memory
   int DumpToMem(byte* buf) const override;
+  int LoadFromMem(const byte* buf) override;
 
  private:
   char* value_ = nullptr;
-  int length_ = 0;
+  int length_ = 0;  // Length of the char array. Ending '\0' excluded.
   int length_limit_;
 };
 

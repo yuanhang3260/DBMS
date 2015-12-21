@@ -33,7 +33,17 @@ int StringType::DumpToMem(byte* buf) const {
     return -1;
   }
   memcpy(buf, value_.c_str(), value_.length());
-  return value_.length();
+  buf[value_.length()] = '\0';
+  return value_.length() + 1;
+}
+
+// Dump to memory
+int StringType::LoadFromMem(const byte* buf) {
+  if (!buf) {
+    return -1;
+  }
+  value_ = std::string(reinterpret_cast<const char*>(buf));
+  return value_.length() + 1;
 }
 
 CharArrayType::CharArrayType(std::string str, int lenlimit) :
@@ -105,7 +115,7 @@ bool CharArrayType::operator>=(const CharArrayType& other) const {
 }
 
 bool CharArrayType::operator==(const CharArrayType& other) const {
-  if (length_ != other.length_) {
+  if (length_ != other.length_ || length_limit_ != other.length_limit_) {
     return false;
   }
   return strncmp(value_, other.value_, length_) == 0;
@@ -121,6 +131,26 @@ int CharArrayType::DumpToMem(byte* buf) const {
     return -1;
   }
   memcpy(buf, value_, length_);
+  buf[length_] = '\0';
+  return length_ + 1;
+}
+
+// Dump to memory
+int CharArrayType::LoadFromMem(const byte* buf) {
+  if (!buf) {
+    return -1;
+  }
+
+  int i = 0;
+  for (; i < length_limit_; i++) {
+    if ((char)buf[i] != '\0') {
+      value_[i] = buf[i];
+    }
+    else {
+      break;
+    }
+  }
+  length_ = i;
   return length_;
 }
 
