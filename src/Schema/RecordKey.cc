@@ -121,4 +121,28 @@ int RecordKey::CompareSchemaFields(const SchemaFieldType* field1,
   return 0;
 }
 
+int RecordKey::DumpToMem(byte* buf) const {
+  if (!buf) {
+    return -1;
+  }
+
+  int offset = 0;
+  for (const auto& field: fields_) {
+    offset += field->DumpToMem(buf + offset);
+  }
+  return offset;
+}
+
+int RecordKey::LoadFromMem(const byte* buf) {
+  if (!buf) {
+    return -1;
+  }
+
+  int offset = 0;
+  for (const auto& field: fields_) {
+    offset += field->LoadFromMem(buf + offset);
+  }
+  return offset;
+}
+
 }  // namespace Schema

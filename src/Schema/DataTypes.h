@@ -264,6 +264,7 @@ class StringType: public SchemaFieldType {
 class CharArrayType: public SchemaFieldType {
  public:
   CharArrayType() = default;
+  CharArrayType(int lenlimit);
   CharArrayType(std::string str, int lenlimit);
   CharArrayType(const char* src, int length, int lenlimit);
   ~CharArrayType();

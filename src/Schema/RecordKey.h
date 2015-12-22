@@ -28,6 +28,9 @@ class RecordKey {
   static int CompareSchemaFields(const SchemaFieldType* field1,
                                  const SchemaFieldType* field2);
 
+  int DumpToMem(byte* buf) const;
+  int LoadFromMem(const byte* buf);
+
   // Overloading operators.
   bool operator<(const RecordKey& other) const;
   bool operator>(const RecordKey& other) const;

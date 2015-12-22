@@ -46,6 +46,11 @@ int StringType::LoadFromMem(const byte* buf) {
   return value_.length() + 1;
 }
 
+CharArrayType::CharArrayType(int lenlimit) :
+    length_limit_(lenlimit) {
+  value_ = new char[length_limit_];
+}
+
 CharArrayType::CharArrayType(std::string str, int lenlimit) :
     length_limit_(lenlimit) {
   if (!SetData(str.c_str(), str.length())) {
@@ -115,7 +120,7 @@ bool CharArrayType::operator>=(const CharArrayType& other) const {
 }
 
 bool CharArrayType::operator==(const CharArrayType& other) const {
-  if (length_ != other.length_ || length_limit_ != other.length_limit_) {
+  if (length_ != other.length_) {
     return false;
   }
   return strncmp(value_, other.value_, length_) == 0;
@@ -151,7 +156,10 @@ int CharArrayType::LoadFromMem(const byte* buf) {
     }
   }
   length_ = i;
-  return length_;
+  // If i reaches length limit and we haven't incur '\0', stop loading and
+  // return the length. Otherwise since we load one more '\0', return
+  // length + 1;
+  return i == length_limit_ ? i : i + 1;
 }
 
 }  // namepsace Schema
