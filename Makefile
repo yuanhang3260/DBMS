@@ -18,7 +18,7 @@ OBJ = $(OBJ_DIR)/Utility/Strings.o \
       $(OBJ_DIR)/Storage/Common.o \
       $(OBJ_DIR)/Storage/Record.o \
       $(OBJ_DIR)/Storage/RecordPage.o \
-      $(OBJ_DIR)/Storage/HeaderPage.o \
+      $(OBJ_DIR)/Storage/BplusTree.o \
       $(OBJ_DIR)/Schema/SchemaType.o \
       $(OBJ_DIR)/Schema/DataTypes.o \
       $(OBJ_DIR)/Schema/RecordKey.o \

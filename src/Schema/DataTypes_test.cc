@@ -90,6 +90,7 @@ class DataTypesTest: public UnitTest {
   }
 
   void Test_StringType() {
+    std::cout << __FUNCTION__ << std::endl;
     AssertTrue(StringType("ab") < StringType("ac"));
     AssertTrue(StringType("ab") < StringType("abc"));
     AssertTrue(StringType("") < StringType("ab"));
@@ -104,6 +105,7 @@ class DataTypesTest: public UnitTest {
   }
 
   void Test_CharArrayType() {
+    std::cout << __FUNCTION__ << std::endl;
     AssertTrue(CharArrayType("ab", 5) < CharArrayType("ac", 5));
     AssertTrue(CharArrayType("ab", 5) < CharArrayType("abc", 5));
     AssertTrue(CharArrayType("", 5) < CharArrayType("ab", 5));
