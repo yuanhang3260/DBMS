@@ -10,6 +10,13 @@ namespace DataBaseFiles {
 const int kPageSize = 4096;
 const int kSlotDirectoryEntrySize = 4;
 
+// File Type
+enum FileType {
+  INDEX,
+  INDEX_DATA,
+  HEAPFILE,
+};
+
 bool ContentEqual (const byte* data1, const byte* data2, int length);
 
 }  // namespace DataBaseFiles

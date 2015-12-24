@@ -11,9 +11,16 @@
 #include <string>
 
 #include "Common.h"
-#include "Record.h"
+#include "RecordData.h"
 
 namespace DataBaseFiles {
+
+enum PageType {
+  NONE = 0,
+  TREE_ROOT = 1,
+  TREE_NODE = 2,
+  TREE_LEAVE = 4,
+};
 
 // entry of slot directory.
 class SlotDirectoryEntry {
@@ -46,14 +53,18 @@ class RecordPageMeta {
   RecordPageMeta() = default;
 
   // Accessors
-  DEFINE_ACCESSOR(num_slots, int);
-  DEFINE_INCREMENTOR_DECREMENTOR(num_slots, int);
-  DEFINE_ACCESSOR(num_records, int);
-  DEFINE_INCREMENTOR_DECREMENTOR(num_records, int);
-  DEFINE_ACCESSOR(free_start, int);
-  DEFINE_INCREMENTOR_DECREMENTOR(free_start, int);
-  DEFINE_ACCESSOR(next_page, int);
-  DEFINE_ACCESSOR(prev_page, int);
+  DEFINE_ACCESSOR(num_slots, int16);
+  DEFINE_INCREMENTOR_DECREMENTOR(num_slots, int16);
+  DEFINE_ACCESSOR(num_records, int16);
+  DEFINE_INCREMENTOR_DECREMENTOR(num_records, int16);
+  DEFINE_ACCESSOR(free_start, int16);
+  DEFINE_INCREMENTOR_DECREMENTOR(free_start, int16);
+  DEFINE_ACCESSOR(next_page, int16);
+  DEFINE_ACCESSOR(prev_page, int16);
+  DEFINE_ACCESSOR(parent_page, int16);
+  DEFINE_ACCESSOR(space_used, int16);
+  DEFINE_INCREMENTOR_DECREMENTOR(space_used, int16);
+  DEFINE_ACCESSOR_ENUM(page_type, PageType);
 
   // Get slot directory.
   std::vector<SlotDirectoryEntry>& slot_directory();
@@ -77,11 +88,14 @@ class RecordPageMeta {
   bool AddEmptySlot(int slot_id);
 
  private:
-  int num_slots_ = 0;
-  int num_records_ = 0;
-  int free_start_ = 0;  // offset of free space in this page
-  int next_page_ = -1;
-  int prev_page_ = -1;
+  int16 num_slots_ = 0;
+  int16 num_records_ = 0;
+  int16 free_start_ = 0;  // offset of free space in this page
+  int16 next_page_ = -1;
+  int16 prev_page_ = -1;
+  int16 parent_page_ = -1;
+  int16 space_used_ = 0;  // total space that has been used.
+  PageType page_type_ = NONE;
   std::vector<SlotDirectoryEntry> slot_directory_;
 
   // A set of empty slots id. It is created when loading a page. New record
@@ -111,8 +125,12 @@ class RecordPage {
   // Load this page from file.
   bool LoadPageData();
 
-  // Get free size available on this page.
+  // Get free size available on this page. This is pre-reorganizing free space,
+  // that is, counting from the start of free space pointer to the beginning of
+  // meta data area. It won't count in empty record slots among records.
   int FreeSize() const;
+  // Space occupied by record data.
+  double Occupation() const; 
   // Re-organize records.
   bool ReorganizeRecords();
 

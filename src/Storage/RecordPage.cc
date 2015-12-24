@@ -48,6 +48,9 @@ bool RecordPageMeta::ReleaseSlot(int slot_id) {
   if (slot_directory_[slot_id].offset() >= 0) {
     slot_directory_[slot_id].set_offset(-1);
     num_records_--;
+    // Decrement space_used.
+    space_used_ -= slot_directory_[slot_id].length();
+
     // Remove the slot entry if at the end of slot directory.
     if (slot_id == (int)slot_directory_.size() - 1) {
       slot_directory_.pop_back();
@@ -85,7 +88,7 @@ bool RecordPageMeta::AddEmptySlot(int slot_id) {
 
 int RecordPageMeta::size() const {
   // Slot directory entry size = 2 * sizeof(int)
-  return (sizeof(int) * 5) + kSlotDirectoryEntrySize * slot_directory_.size();
+  return (sizeof(int16) * 8) + kSlotDirectoryEntrySize * slot_directory_.size();
 }
 
 void RecordPageMeta::reset() {
@@ -94,6 +97,7 @@ void RecordPageMeta::reset() {
   free_start_ = 0;
   next_page_ = -1;
   prev_page_ = -1;
+  space_used_ = 0;
   slot_directory_.clear();
 }
 
@@ -127,26 +131,44 @@ bool RecordPageMeta::SaveMetaToPage(byte* ppage) const {
   offset -= sizeof(prev_page_);
   memcpy(ppage + offset, &prev_page_, sizeof(prev_page_));
 
+  offset -= sizeof(parent_page_);
+  memcpy(ppage + offset, &parent_page_, sizeof(parent_page_));
+
+  offset -= sizeof(space_used_);
+  memcpy(ppage + offset, &space_used_, sizeof(space_used_));
+
+  offset -= sizeof(int16);
+  memcpy(ppage + offset, &page_type_, sizeof(int16));
+
+  // Additional meta info reserved.
+  //offset -= sizeof(int16) * 1;
+
   // save slot directory
-  int valid_records = 0;
+  int count_valid_records = 0;
+  int count_space_used = 0;
   for (const auto& slot: slot_directory_) {
     offset -= kSlotDirectoryEntrySize;
     slot.SaveToMem(ppage + offset);
     if (slot.offset() >= 0) {
-      valid_records ++;
+      count_valid_records++;
+      count_space_used += slot.length();
     }
   }
 
-  if (num_records_ != valid_records) {
+  if (num_records_ != count_valid_records) {
     LogERROR("[Save page meta data error] - num_records inconsistency (%d, %d)",
-             num_records_, valid_records);
+             num_records_, count_valid_records);
+    return false;
+  }
+  if (space_used_ != count_space_used) {
+    LogERROR("[Save page meta data error] - space_used inconsistency (%d, %d)",
+             space_used_, count_space_used);
     return false;
   }
   if (kPageSize - offset != size()) {
     LogERROR("[Save page meta data error] - meta data length inconsistency");
     return false;
   }
-
   return true;
 }
 
@@ -174,14 +196,28 @@ bool RecordPageMeta::LoadMetaFromPage(const byte* ppage) {
   offset -= sizeof(prev_page_);
   memcpy(&prev_page_, ppage + offset, sizeof(prev_page_));
 
+  offset -= sizeof(parent_page_);
+  memcpy(&parent_page_, ppage + offset, sizeof(parent_page_));
+
+  offset -= sizeof(space_used_);
+  memcpy(&space_used_, ppage + offset, sizeof(space_used_));
+
+  offset -= sizeof(int16);
+  memcpy(&page_type_, ppage + offset, sizeof(int16));
+
+  // Additional meta info reserved.
+  //offset -= sizeof(int16) * 1;
+
   // Load slot directory.
-  int valid_records = 0;
+  int count_valid_records = 0;
+  int count_space_used = 0;
   for (int i = 0; i < num_slots_; i++) {
     offset -= kSlotDirectoryEntrySize;
     slot_directory_.emplace_back(-1, 0);
     slot_directory_.back().LoadFromMem(ppage + offset);
     if (slot_directory_.back().offset() >= 0) {
-      valid_records++;
+      count_valid_records++;
+      count_space_used += slot_directory_.back().length();
     }
     else {
       empty_slots_.insert(i);
@@ -200,9 +236,14 @@ bool RecordPageMeta::LoadMetaFromPage(const byte* ppage) {
              num_records_, (int)empty_slots_.size(), num_slots_);
     return false;
   }
-  if (num_records_ != valid_records) {
+  if (num_records_ != count_valid_records) {
     LogERROR("[Load page meta data error] - num_records inconsistency (%d, %d)",
-             num_records_, valid_records);
+             num_records_, count_valid_records);
+    return false;
+  }
+  if (space_used_ != count_space_used) {
+    LogERROR("[Load page meta data error] - space_used inconsistency (%d, %d)",
+             space_used_, count_space_used);
     return false;
   }
   if (kPageSize - offset != size()) {
@@ -223,6 +264,10 @@ int RecordPage::FreeSize() const {
     return -1;
   }
   return kPageSize - page_meta_->free_start() - page_meta_->size();
+}
+
+double RecordPage::Occupation() const {
+  return 1.0 * page_meta_->space_used() / (kPageSize - page_meta_->size());
 }
 
 void RecordPage::InitInMemoryPage() {
@@ -344,6 +389,8 @@ bool RecordPage::InsertRecord(const byte* content, int length) {
 
   // Write the record content to page.
   memcpy(data_.get() + slot_dir[slot_id].offset(), content, length);
+
+  page_meta_->increment_space_used(length);
 
   // (TODO: need this?) Re-write meta data to page.
   if (!page_meta_->SaveMetaToPage(data_.get())) {

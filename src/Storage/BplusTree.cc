@@ -3,8 +3,39 @@
 #include "Base/Log.h"
 #include "BplusTree.h"
 
-
 namespace DataBaseFiles {
+
+// *************************** TreeNodeRecord ********************************//
+int TreeNodeRecord::ParseFromMem(const byte* buf) {
+  if (!buf) {
+    return -1;
+  }
+  int offset = key_->LoadFromMem(buf);
+  memcpy(&page_id_, buf + offset, sizeof(page_id_));
+  return offset + sizeof(page_id_);
+}
+
+int TreeNodeRecord::DumpToMem(byte* buf) const {
+  if (!buf) {
+    return -1;
+  }
+  int offset = key_->DumpToMem(buf);
+  memcpy(buf + offset, &page_id_, sizeof(page_id_));
+  return offset + sizeof(page_id_);
+}
+
+// ************************ BplusTreeHeaderPage ******************************//
+BplusTreeHeaderPage::BplusTreeHeaderPage(FileType file_type) :
+    HeaderPage(file_type) {
+}
+
+BplusTreeHeaderPage::BplusTreeHeaderPage(FILE* file) :
+    HeaderPage(file) {
+}
+
+BplusTreeHeaderPage::BplusTreeHeaderPage(FILE* file, FileType file_type) :
+    HeaderPage(file, file_type) {
+}
 
 bool BplusTreeHeaderPage::DumpToMem(byte* buf) const {
   if (!buf) {
@@ -12,14 +43,14 @@ bool BplusTreeHeaderPage::DumpToMem(byte* buf) const {
     return false;
   }
 
-  if (!ConsistencyCheck()) {
+  if (!ConsistencyCheck("Dump")) {
     return false;
   }
 
   int offset = 0;
   // record type
-  memcpy(buf + offset, &record_type_, sizeof(record_type_));
-  offset += sizeof(record_type_);
+  memcpy(buf + offset, &file_type_, sizeof(file_type_));
+  offset += sizeof(file_type_);
   // num_pages
   memcpy(buf + offset, &num_pages_, sizeof(num_pages_));
   offset += sizeof(num_pages_);
@@ -42,11 +73,11 @@ bool BplusTreeHeaderPage::DumpToMem(byte* buf) const {
   memcpy(buf + offset, &depth_, sizeof(depth_));
   offset += sizeof(depth_);
 
-  return false;
+  return true;
 }
 
 
-bool BplusTreeHeaderPage::LoadFromMem(const byte* buf) {
+bool BplusTreeHeaderPage::ParseFromMem(const byte* buf) {
   if (!buf) {
     LogERROR("[Can't load B+ tree header page from memory] - nullptr");
     return false;
@@ -54,8 +85,8 @@ bool BplusTreeHeaderPage::LoadFromMem(const byte* buf) {
 
   int offset = 0;
   // record type
-  memcpy(&record_type_, buf + offset, sizeof(record_type_));
-  offset += sizeof(record_type_);
+  memcpy(&file_type_, buf + offset, sizeof(file_type_));
+  offset += sizeof(file_type_);
   // num_pages
   memcpy(&num_pages_, buf + offset, sizeof(num_pages_));
   offset += sizeof(num_pages_);
@@ -79,18 +110,61 @@ bool BplusTreeHeaderPage::LoadFromMem(const byte* buf) {
   offset += sizeof(depth_);
 
   // Do consistency check.
-  if (!ConsistencyCheck()) {
+  if (!ConsistencyCheck("Load")) {
     return false;
   }
 
   return false;
 }
 
-bool BplusTreeHeaderPage::ConsistencyCheck() const {
+bool BplusTreeHeaderPage::SaveToDisk() const {
+  if (!file_) {
+    LogERROR("[Can't save B+ tree header to disk] - FILE is nullptr");
+    return false;
+  }
+
+  byte buf[kPageSize];
+  if (!DumpToMem(buf)) {
+    LogERROR("[Can't save B+ tree header to disk] - DumpToMem failed");
+    return false;
+  }
+
+  fseek(file_, 0, SEEK_SET);
+  int nwrite = fwrite(buf, 1, kPageSize, file_);
+  if (nwrite != kPageSize) {
+    LogERROR("[Write B+ tree header page failed] - nwrite = %d", nwrite);
+    return false;
+  }
+  fflush(file_);
+  return true;
+}
+
+bool BplusTreeHeaderPage::LoadFromDisk() {
+  if (!file_) {
+    LogERROR("[Can't Load B+ tree header from disk] - FILE is nullptr");
+  }
+
+  byte buf[kPageSize];
+
+  fflush(file_);
+  fseek(file_, 0, SEEK_SET);
+  int nread = fread(buf, 1, kPageSize, file_);
+  if (nread != kPageSize) {
+    LogERROR("[Read B+ tree header page failed] - nread = %d", nread);
+    return false;
+  }
+
+  if (!ParseFromMem(buf)) {
+    return false;
+  }
+  return true;
+}
+
+bool BplusTreeHeaderPage::ConsistencyCheck(const char* op) const {
   if (num_pages_ != num_free_pages_ + num_used_pages_) {
-    LogERROR("[Save B+ tree header page error] - "
+    LogERROR("[%s B+ tree header page error] - "
              "num_pages !=  num_used_pages_ + num_free_pages_, "
-             "(%d != %d + %d)",
+             "(%d != %d + %d)", op,
              num_pages_, num_used_pages_, num_free_pages_);
     return false;
   }
@@ -110,6 +184,118 @@ bool BplusTreeHeaderPage::ConsistencyCheck() const {
     return false;
   }
 
+  return true;
+}
+
+
+// ****************************** BplusTree **********************************//
+BplusTree::~BplusTree() {
+  if (!file_) {
+    fflush(file_);
+    fclose(file_);
+  }
+}
+
+BplusTree::BplusTree(std::string filename) {
+  file_ = fopen(filename.c_str(), "a+");
+  if (!file_) {
+    LogERROR("[Open B+ tree file failed] - %s", filename.c_str());
+    throw std::runtime_error("Can't init B+ tree");
+  }
+
+  // Load header page and root node.
+  if (!LoadHeaderPage()) {
+    throw std::runtime_error("Can't init B+ tree");
+  }
+
+  // Load root node if exists. Add it to PageMap.
+  if (!LoadRootNode()) {
+    throw std::runtime_error("Can't init B+ tree");
+  }
+}
+
+bool BplusTree::LoadHeaderPage() {
+  if (!file_) {
+    LogERROR("[Won't load B+ tree header page] - FILE is nullptr");
+    return false;
+  }
+
+  if (!header_) {
+    header_.reset(new BplusTreeHeaderPage(file_));
+  }
+
+  if (header_->LoadFromDisk()) {
+    return false;
+  }
+  return true;
+}
+
+bool BplusTree::LoadRootNode() {
+  if (!header_) {
+    LogERROR("[Can't create root node page] - B+ tree header page not loaded");
+    return false;
+  }
+  int root_page_id = header_->root_page();
+  if (root_page_id > 0) {
+    page_map_[root_page_id] = std::make_shared<RecordPage>(root_page_id, file_);
+    page_map_.at(root_page_id)->LoadPageData();
+  }
+  else {
+    LogINFO("[Won't load root node] - root_page_id = %d", root_page_id);
+  }
+  return true;
+}
+
+RecordPage* BplusTree::root() {
+  if (!header_) {
+    LogERROR("[Can't get root node page] - B+ tree header page not loaded");
+    return nullptr;
+  }
+  int root_page_id = header_->root_page();
+  if (root_page_id > 0) {
+    if (page_map_.find(root_page_id) == page_map_.end()) {
+      LogERROR("[No root node for B+ tree] - root page is %d", root_page_id);
+      return nullptr;
+    }
+    return page_map_.at(root_page_id).get();
+  }
+  return nullptr;
+}
+
+bool BplusTree::CreateFile(std::string filename, FileType file_type) {
+  if (file_) {
+    LogINFO("[Closing exsiting B+ tree file]");
+    fclose(file_);
+  }
+
+  file_ = fopen(filename.c_str(), "w+");
+  if (!file_) {
+    LogERROR("[Create B+ tree file failed] - %s", filename.c_str());
+    return false;
+  }
+
+  // Create header page.
+  header_.reset(new BplusTreeHeaderPage(file_, file_type));
+
+  return true;
+}
+
+bool BplusTree::SaveToDisk() const {
+  // Save header page
+  if (!header_->SaveToDisk()) {
+    return false;
+  }
+
+  // (TODO) Save B+ tree. Root node, tree node and leaves.
+  return true;
+}
+
+bool BplusTree::LoadFromDisk() {
+  if (!header_->LoadFromDisk()) {
+    return false;
+  }
+
+  // (TODO) Load B+ tree. Root node, tree node and leaves.
   return true;
 }
 

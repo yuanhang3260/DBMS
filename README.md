@@ -1,1 +1,0 @@
-##A Simple DataBase Management System.

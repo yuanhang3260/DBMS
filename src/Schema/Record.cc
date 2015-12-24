@@ -1,19 +1,27 @@
 #include <stdexcept>
 
 #include "Base/Utils.h"
-#include "RecordKey.h"
+#include "Record.h"
 
 namespace Schema {
 
-void RecordKey::AddField(SchemaFieldType* new_field) {
+int RecordBase::size() const {
+  int size = 0;
+  for (const auto& field: fields_) {
+    size += field->length();
+  }
+  return size;
+}
+
+void RecordBase::AddField(SchemaFieldType* new_field) {
   fields_.push_back(std::shared_ptr<SchemaFieldType>(new_field));
 }
 
-bool RecordKey::operator<(const RecordKey& other) const {
+bool RecordBase::operator<(const RecordBase& other) const {
   const auto& other_fields = other.fields();
   int len = Utils::Min(fields_.size(), other_fields.size());
   for (int i = 0; i < len; i++) {
-    int re = RecordKey::CompareSchemaFields(
+    int re = RecordBase::CompareSchemaFields(
                  fields_.at(i).get(), other_fields.at(i).get());
     if (re < 0) {
       return true;
@@ -25,11 +33,11 @@ bool RecordKey::operator<(const RecordKey& other) const {
   return fields_.size() < other_fields.size();
 }
 
-bool RecordKey::operator>(const RecordKey& other) const {
+bool RecordBase::operator>(const RecordBase& other) const {
   const auto& other_fields = other.fields();
   int len = Utils::Min(fields_.size(), other_fields.size());
   for (int i = 0; i < len; i++) {
-    int re = RecordKey::CompareSchemaFields(
+    int re = RecordBase::CompareSchemaFields(
                  fields_.at(i).get(), other_fields.at(i).get());
     if (re > 0) {
       return true;
@@ -41,15 +49,15 @@ bool RecordKey::operator>(const RecordKey& other) const {
   return fields_.size() > other_fields.size();
 }
 
-bool RecordKey::operator<=(const RecordKey& other) const {
+bool RecordBase::operator<=(const RecordBase& other) const {
   return !(*this > other);
 }
 
-bool RecordKey::operator>=(const RecordKey& other) const {
+bool RecordBase::operator>=(const RecordBase& other) const {
   return !(*this < other);
 }
 
-bool RecordKey::operator==(const RecordKey& other) const {
+bool RecordBase::operator==(const RecordBase& other) const {
   uint32 len = fields_.size();
   if (len != other.fields_.size()) {
     return false;
@@ -57,7 +65,7 @@ bool RecordKey::operator==(const RecordKey& other) const {
 
   const auto& other_fields = other.fields();
   for (uint32 i = 0; i < len; i++) {
-    int re = RecordKey::CompareSchemaFields(
+    int re = RecordBase::CompareSchemaFields(
                  fields_.at(i).get(), other_fields.at(i).get());
     if (re != 0) {
       return false;
@@ -66,7 +74,7 @@ bool RecordKey::operator==(const RecordKey& other) const {
   return true;
 }
 
-bool RecordKey::operator!=(const RecordKey& other) const {
+bool RecordBase::operator!=(const RecordBase& other) const {
   return !(*this == other);
 }
 
@@ -81,7 +89,7 @@ bool RecordKey::operator!=(const RecordKey& other) const {
   }                                                   \
   return 0;                                           \
 
-int RecordKey::CompareSchemaFields(const SchemaFieldType* field1,
+int RecordBase::CompareSchemaFields(const SchemaFieldType* field1,
                                    const SchemaFieldType* field2) {
   if (!field1 && !field2) {
     return 0;
@@ -121,7 +129,7 @@ int RecordKey::CompareSchemaFields(const SchemaFieldType* field1,
   return 0;
 }
 
-int RecordKey::DumpToMem(byte* buf) const {
+int RecordBase::DumpToMem(byte* buf) const {
   if (!buf) {
     return -1;
   }
@@ -133,7 +141,7 @@ int RecordKey::DumpToMem(byte* buf) const {
   return offset;
 }
 
-int RecordKey::LoadFromMem(const byte* buf) {
+int RecordBase::LoadFromMem(const byte* buf) {
   if (!buf) {
     return -1;
   }

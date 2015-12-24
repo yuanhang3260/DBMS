@@ -49,6 +49,7 @@ int StringType::LoadFromMem(const byte* buf) {
 CharArrayType::CharArrayType(int lenlimit) :
     length_limit_(lenlimit) {
   value_ = new char[length_limit_];
+  memset(value_, 0, length_limit_);
 }
 
 CharArrayType::CharArrayType(std::string str, int lenlimit) :
@@ -71,6 +72,7 @@ CharArrayType::CharArrayType(const char* src, int length, int lenlimit) :
 bool CharArrayType::SetData(const char* src, int length) {
   if (!value_) {
     value_ = new char[length_limit_];
+    memset(value_, 0, length_limit_);
   }
   if (length > length_limit_) {
     return false;

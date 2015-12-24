@@ -2,14 +2,14 @@
 
 #include "UnitTest/UnitTest.h"
 #include "Base/Utils.h"
-#include "RecordKey.h"
+#include "Record.h"
 
 namespace Schema {
 
-class RecordKeyTest: public UnitTest {
+class RecordTest: public UnitTest {
  public:
-  void Test_RecordKey_Operators() {
-    RecordKey key1;
+  void Test_Record_Operators() {
+    Record key1;
     key1.AddField(new IntType(5));
     key1.AddField(new LongIntType(1111111111111));
     key1.AddField(new DoubleType(3.5));
@@ -17,7 +17,7 @@ class RecordKeyTest: public UnitTest {
     key1.AddField(new StringType("abc"));
     key1.AddField(new CharArrayType("acd", 3, 10));
     
-    RecordKey key2;
+    Record key2;
     key2.AddField(new IntType(5));
     key2.AddField(new LongIntType(1111111111111));
     key2.AddField(new DoubleType(3.5));
@@ -72,30 +72,47 @@ class RecordKeyTest: public UnitTest {
     AssertEqual(6, key2.NumFields());
   }
 
-  void Test_RecordKey_LoadDump() {
+  void Test_Record_LoadDump() {
     // Dump
-    RecordKey key1;
+    Record key1;
     key1.AddField(new IntType(5));  // 4
     key1.AddField(new StringType("abc"));  // 4
     key1.AddField(new LongIntType(1111111111111));  // 8
+    key1.AddField(new StringType(""));  // 1
     key1.AddField(new DoubleType(3.5));  // 8
     key1.AddField(new CharArrayType("wxyz", 4, 10));  // 5
     key1.AddField(new BoolType(false));  // 1
+    key1.AddField(new CharArrayType("####", 0, 5));  // 1
 
     byte* buf = new byte[128];
-    AssertEqual(30, key1.DumpToMem(buf), "Dump size error");
+    AssertEqual(32, key1.DumpToMem(buf), "Dump size error");
 
     // Load
-    RecordKey key2;
+    Record key2;
     key2.AddField(new IntType());
     key2.AddField(new StringType());
     key2.AddField(new LongIntType());
+    key2.AddField(new StringType());
     key2.AddField(new DoubleType());
     key2.AddField(new CharArrayType(11));
     key2.AddField(new BoolType());
-    AssertEqual(30, key2.LoadFromMem(buf), "Load size error");
-
+    key2.AddField(new CharArrayType(7));
+    AssertEqual(32, key2.LoadFromMem(buf), "Load size error");
     AssertTrue(key1 == key2);
+
+    Record key3;
+    key3.AddField(new IntType());
+    key3.AddField(new StringType());
+    key3.AddField(new LongIntType());
+    key3.AddField(new StringType());
+    key3.AddField(new DoubleType());
+    key3.AddField(new CharArrayType(11));
+    key3.AddField(new BoolType());
+    key3.AddField(new CharArrayType(7));
+    AssertTrue(key3 < key1);
+
+    Record key4;
+    AssertTrue(key4 < key1);
 
     delete[] buf;
   }
@@ -104,10 +121,10 @@ class RecordKeyTest: public UnitTest {
 }  // namespace Schema
 
 int main() {
-  Schema::RecordKeyTest test;
+  Schema::RecordTest test;
   test.setup();
-  test.Test_RecordKey_Operators();
-  test.Test_RecordKey_LoadDump();
+  test.Test_Record_Operators();
+  test.Test_Record_LoadDump();
   test.teardown();
 
   std::cout << "\033[2;32mPassed ^_^\033[0m" << std::endl;

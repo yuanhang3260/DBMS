@@ -1,5 +1,5 @@
-#ifndef DATABASEFILES_RECORD_
-#define DATABASEFILES_RECORD_
+#ifndef DATABASEFILES_RECORD_DATA_
+#define DATABASEFILES_RECORD_DATA_
 
 #include <vector>
 
@@ -35,4 +35,4 @@ class IndexRecord {
 }  // namespace DataBaseFiles
 
 
-#endif  /* DATABASEFILES_RECORD_ */
+#endif  /* DATABASEFILES_RECORD_DATA_ */

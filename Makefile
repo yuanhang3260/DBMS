@@ -6,7 +6,7 @@
 CC=g++ -std=c++11
 CFLAGS=-Wall -Werror -O2
 LFLAGS=-pthread
-IFLAGS=-Isrc/
+IFLAGS=-Isrc/ -I../ProtoBuf/src/
 
 SRC_DIR=src
 OBJ_DIR=lib
@@ -16,26 +16,29 @@ OBJ = $(OBJ_DIR)/Utility/Strings.o \
       $(OBJ_DIR)/Base/Utils.o \
       $(OBJ_DIR)/Base/Log.o \
       $(OBJ_DIR)/Storage/Common.o \
-      $(OBJ_DIR)/Storage/Record.o \
+      $(OBJ_DIR)/Storage/RecordData.o \
       $(OBJ_DIR)/Storage/RecordPage.o \
       $(OBJ_DIR)/Storage/BplusTree.o \
       $(OBJ_DIR)/Schema/SchemaType.o \
       $(OBJ_DIR)/Schema/DataTypes.o \
-      $(OBJ_DIR)/Schema/RecordKey.o \
+      $(OBJ_DIR)/Schema/Record.o \
+      $(OBJ_DIR)/Schema/DBTable_pb.o \
 
 TESTOBJ = $(OBJ_DIR)/Utility/Strings_test.o \
           $(OBJ_DIR)/Utility/StringBuilder_test.o \
           $(OBJ_DIR)/Base/Utils_test.o \
+          $(OBJ_DIR)/Storage/BplusTree_test.o \
           $(OBJ_DIR)/Storage/RecordPage_test.o \
           $(OBJ_DIR)/Schema/DataTypes_test.o \
-          $(OBJ_DIR)/Schema/RecordKey_test.o \
+          $(OBJ_DIR)/Schema/Record_test.o \
 
 TESTEXE = test/Strings_test.out \
           test/StringBuilder_test.out \
           test/Utils_test.out \
           test/RecordPage_test.out \
           test/DataTypes_test.out \
-          test/RecordKey_test.out \
+          test/Record_test.out \
+          test/BplusTree_test.out
 
 library: $(OBJ)
 	ar cr libDBMS.a $(OBJ)
@@ -78,16 +81,16 @@ $(OBJ_DIR)/Schema/%.o: $(SRC_DIR)/Schema/%.cc
 
 # Tests
 test/%.out: $(OBJ_DIR)/Utility/%.o library
-	$(CC) $(CFLAGS) $(LFLAGS) $< libDBMS.a -o $@
+	$(CC) $(CFLAGS) $< libDBMS.a -o $@
 
 test/%.out: $(OBJ_DIR)/Storage/%.o library
-	$(CC) $(CFLAGS) $(LFLAGS) $< libDBMS.a -o $@
+	$(CC) $(CFLAGS) $< libDBMS.a -o $@
 
 test/%.out: $(OBJ_DIR)/Base/%.o library
-	$(CC) $(CFLAGS) $(LFLAGS) $< libDBMS.a -o $@
+	$(CC) $(CFLAGS) $< libDBMS.a -o $@
 
 test/%.out: $(OBJ_DIR)/Schema/%.o library
-	$(CC) $(CFLAGS) $(LFLAGS) $< libDBMS.a -o $@
+	$(CC) $(CFLAGS) $< libDBMS.a -o $@
 
 clean:
 	rm -rf libDBMS.a

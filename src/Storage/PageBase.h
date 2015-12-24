@@ -1,36 +1,46 @@
 #ifndef DATABASEFILES_HEADERPAGE_
 #define DATABASEFILES_HEADERPAGE_
 
+#include <stdio.h>
+#include <stdlib.h>
+
 #include "Base/MacroUtils.h"
-#include "Schema/SchemaType.h"
+#include "Common.h"
 
 namespace DataBaseFiles {
-
-// Page Type
-enum PageType {
-  INDEX,
-  INDEX_DATA,
-  HEAPFILE,
-};
-
 
 class HeaderPage {
  public:
   // Constructors
   HeaderPage() = default;
+  HeaderPage(FileType file_type) : file_type_(file_type) {}
+  HeaderPage(FILE* file): file_(file) {}
+  HeaderPage(FILE* file, FileType file_type) :
+      file_(file),
+      file_type_(file_type) {
+  }
 
   // Accessors
-  DEFINE_ACCESSOR_ENUM(record_type, PageType);
+  DEFINE_ACCESSOR(file, FILE*);
+  DEFINE_ACCESSOR_ENUM(file_type, FileType);
   DEFINE_ACCESSOR(num_pages, int);
   DEFINE_ACCESSOR(num_free_pages, int);
   DEFINE_ACCESSOR(num_used_pages, int);
   DEFINE_ACCESSOR(free_page, int);
 
+  // Dump page to memory
   virtual bool DumpToMem(byte* buf) const = 0;
-  virtual bool LoadFromMem(const byte* buf) = 0;
+  // Parse page from memory
+  virtual bool ParseFromMem(const byte* buf) = 0;
+
+  // Save header page to disk.
+  virtual bool SaveToDisk() const = 0;
+  // Load header page from disk.
+  virtual bool LoadFromDisk() = 0;
 
  protected:
-  PageType record_type_ = INDEX;
+  FILE* file_ = nullptr;
+  FileType file_type_ = INDEX;
   int num_pages_ = 0;
   int num_free_pages_ = 0;
   int num_used_pages_ = 0;

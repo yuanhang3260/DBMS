@@ -3,6 +3,8 @@
 
 #include <string.h>
 #include <string>
+#include <climits>
+#include <cfloat>
 
 #include "Base/MacroUtils.h"
 #include "Base/BaseTypes.h"
@@ -63,7 +65,7 @@ class IntType: public SchemaFieldType {
   }
 
  private:
-  int value_ = 0;
+  int value_ = LONG_MIN;
 };
 
 
@@ -119,7 +121,7 @@ class LongIntType: public SchemaFieldType {
   }
 
  private:
-  int64 value_ = 0;
+  int64 value_ = LLONG_MIN;
 };
 
 
@@ -175,7 +177,7 @@ class DoubleType: public SchemaFieldType {
   }
 
  private:
-  double value_ = 0.0;
+  double value_ = -DBL_MAX;
 };
 
 
@@ -242,7 +244,7 @@ class StringType: public SchemaFieldType {
 
   DEFINE_ACCESSOR(value, std::string);
   FieldType type() const override { return STRING; }
-  int length() const override { return value_.length(); }
+  int length() const override { return value_.length() + 1; }
 
   // Comparable
   bool operator<(const StringType& other) const;
@@ -272,7 +274,9 @@ class CharArrayType: public SchemaFieldType {
   bool SetData(const char* src, int length);
 
   FieldType type() const override { return CHARARRAY; }
-  int length() const override { return length_; }
+  int length() const override {
+    return length_ == length_limit_? length_limit_ : length_ + 1;
+  }
   const char* value() { return value_; }
 
   // Comparable

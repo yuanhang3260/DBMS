@@ -66,7 +66,7 @@ class RecordPageTest: public UnitTest {
     page_->InitInMemoryPage();
     InitRecordSource();
     int num_records_inserted = 0;
-    int total_size = 20; // size of meta data excluding slot directory.
+    int total_size = 8 * sizeof(int16); // size of meta data excluding slot directory.
 
     // Begin inserting records until the page is full.
     while (true) {
@@ -132,7 +132,7 @@ class RecordPageTest: public UnitTest {
     int empty_slots = 0;
     int free_size = page_->FreeSize();
     for (int i = 0; i < 10000; i++) {
-      int number_records = page_->Meta()->num_records();
+      int16 number_records = page_->Meta()->num_records();
       // Generate a random list of slot id to delete.
       double delete_percent = (Utils::RandomNumber(10) + 1) / 10.0;
       auto& slot_directory = page_->Meta()->slot_directory();
@@ -209,6 +209,12 @@ class RecordPageTest: public UnitTest {
       VerifyPageRecords();
       // Done. Repeat.
     }
+
+    // Final verificaton - save page to disk and reload.
+    AssertTrue(page_->DumpPageData());
+    page_.reset(new RecordPage(0, file));
+    AssertTrue(page_->LoadPageData());
+    VerifyPageRecords();
   }
 
 };
