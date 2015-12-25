@@ -103,3 +103,5 @@ clean:
 	rm -rf $(OBJ_DIR)/Schema/*.o
 	rm -rf test/*.out
 	rm -rf test/*.data
+	rm -rf test/*.index
+	rm -rf test/*.indata

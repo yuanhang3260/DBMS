@@ -319,14 +319,57 @@ void BplusTree::SortRecords(std::vector<Schema::Record>& records,
   std::sort(records.begin(), records.end(), comparator);
 }
 
+RecordPage* BplusTree::AllocateNewPage() {
+  return new RecordPage(next_id++, file_);
+}
+
+bool BplusTree::InsertRecordToLeave(const Schema::Record& record,
+                                    RecordPage* leave) {
+  byte* buf = leave->InsertRecord(record.size());
+  if (buf) {
+    // Write the record content to page.
+    record.DumpToMem(buf);
+    return true;
+  }
+  // Can't add record to leave page. No enough space.
+  return false;
+}
+
+void BplusTree::InsertPageToParentNode(int page_id, RecordPage* parent) {
+
+}
+
 // BulkLoading data
 bool BplusTree::BulkLoading(std::vector<Schema::Record> records,
                             const std::vector<int>& key_indexes) {
-  if (records.size() <= 1) {
+  if (records.size() <= 0) {
     return true;
   }
 
+  // Sort input records.
   SortRecords(records, key_indexes);
+
+  // Begin writing records to pages.
+  for (const auto& record: records) {
+    // Allocate a new leave page if necessary.
+    if (!crt_leave) {
+      crt_leave = AllocateNewPage();
+    }
+    // Try inserting the record to current leave page. If success, we continue.
+    // Otherwise we need to add this leave page to a tree node (current active
+    // tree node).
+    if (InsertRecordToLeave(record, crt_leave)) {
+      continue;
+    }
+    // Allocate a new tree node if necessary.
+    if (!crt_node) {
+      crt_node = AllocateNewPage();
+    }
+    // Add current leave page to tree node. This function may lead to tree node
+    // split, and possibly propagate split to upper tree nodes recursively.
+    InsertPageToParentNode(crt_leave->id(), crt_node);
+  }
+
   return true;
 }
 

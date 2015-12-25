@@ -89,7 +89,6 @@ class BplusTreeTest: public UnitTest {
     for (int i = 0; i < 10; i++) {
       records[i].Print();
     }
-    AssertTrue(Schema::RecordBase::RecordComparator(records[4], records[5], std::vector<int>{4, 0}));
   }
 };
 
@@ -103,7 +102,7 @@ int main() {
   test.Test_SortRecords();
   test.teardown();
 
-  std::cout << "\033[2;32mPassed ^_^\033[0m" << std::endl;
+  std::cout << "\033[2;32mAll Passed ^_^\033[0m" << std::endl;
   return 0;
 }
 

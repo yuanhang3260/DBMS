@@ -2,6 +2,7 @@
 #include <stdexcept>
 
 #include "Base/Utils.h"
+#include "Base/Log.h"
 #include "Record.h"
 
 namespace Schema {
@@ -85,7 +86,7 @@ bool RecordBase::operator==(const RecordBase& other) const {
 }
 
 bool RecordBase::RecordComparator(const RecordBase& r1, const RecordBase& r2,
-                                  std::vector<int> indexes) {
+                                  const std::vector<int>& indexes) {
   for (int i = 0; i < (int)indexes.size(); i++) {
     int re = RecordBase::CompareSchemaFields(
              r1.fields_.at(indexes[i]).get(), r2.fields_.at(indexes[i]).get());
@@ -162,6 +163,10 @@ int RecordBase::DumpToMem(byte* buf) const {
   int offset = 0;
   for (const auto& field: fields_) {
     offset += field->DumpToMem(buf + offset);
+  }
+
+  if (offset != size()) {
+    LogFATAL("Record dump %d byte, record.size() = %d", offset, size());
   }
   return offset;
 }

@@ -134,7 +134,10 @@ class RecordPage {
   // Re-organize records.
   bool ReorganizeRecords();
 
-  // Insert a record
+  // Insert a record. This function only reserved space in page but no actual
+  // record data will be copied yet.
+  byte* InsertRecord(int length);
+  // Insert a record with data.
   bool InsertRecord(const byte* content, int length);
 
   // Delete a record

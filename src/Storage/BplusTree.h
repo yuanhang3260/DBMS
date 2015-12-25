@@ -88,20 +88,34 @@ class BplusTree {
                           const std::vector<int>& key_indexes);
 
  private:
+  // Load header page from disk.
   bool LoadHeaderPage();
+  // Load root node from disk.
   bool LoadRootNode();
+
+  // Allocate a new page in bulkloading.
+  RecordPage* AllocateNewPage();
+  // Insert a record to a leave node.
+  bool InsertRecordToLeave(const Schema::Record& record, RecordPage* leave);
+  // Insert a page to a parent node.
+  void InsertPageToParentNode(int page_id, RecordPage* parent);
 
   FILE* file_ = nullptr;
 
   // Header page contains meta data of this B+ tree.
   std::unique_ptr<BplusTreeHeaderPage> header_;
 
-  // PageMap: <page_id => RecordPage>
+  // PageMap: <page_id ==> RecordPage>
   // This is a page cache for active pages that are being processed. Root node
   // page should always reside in this cache. Whenever a page is removed from
   // cache, it must be written to disk file.
   using PageMap = std::map<int, std::shared_ptr<RecordPage>>;
   PageMap page_map_;
+
+  // helper variables for bulkloading
+  RecordPage* crt_leave = nullptr;
+  RecordPage* crt_node = nullptr;
+  int next_id = 1;
 };
 
 }

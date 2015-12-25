@@ -47,7 +47,7 @@ class RecordBase {
   bool operator!=(const RecordBase& other) const;
 
   static bool RecordComparator(const RecordBase& r1, const RecordBase& r2,
-                               std::vector<int> indexes);
+                               const std::vector<int>& indexes);
 
  protected:
   std::vector<std::shared_ptr<SchemaFieldType>> fields_;
