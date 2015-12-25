@@ -47,6 +47,8 @@ class IntType: public SchemaFieldType {
     return value_ != other.value();
   }
 
+  std::string AsString() const override { return std::to_string(value_); }
+
   // Dump to memory
   int DumpToMem(byte* buf) const override {
     if (!buf) {
@@ -102,6 +104,8 @@ class LongIntType: public SchemaFieldType {
   bool operator!=(const LongIntType& other) const {
     return value_ != other.value();
   }
+
+  std::string AsString() const override { return std::to_string(value_); }
 
   // Dump to memory
   int DumpToMem(byte* buf) const override {
@@ -159,6 +163,8 @@ class DoubleType: public SchemaFieldType {
     return value_ != other.value();
   }
 
+  std::string AsString() const override { return std::to_string(value_); }
+
   // Dump to memory
   int DumpToMem(byte* buf) const override {
     if (!buf) {
@@ -215,6 +221,8 @@ class BoolType: public SchemaFieldType {
     return value_ != other.value();
   }
 
+  std::string AsString() const override { return std::to_string(value_); }
+
   // Dump to memory
   int DumpToMem(byte* buf) const override {
     if (!buf) {
@@ -258,6 +266,8 @@ class StringType: public SchemaFieldType {
   int DumpToMem(byte* buf) const override;
   int LoadFromMem(const byte* buf) override;
 
+  std::string AsString() const override { return value_; }
+
  private:
   std::string value_;
 };
@@ -286,6 +296,8 @@ class CharArrayType: public SchemaFieldType {
   bool operator>=(const CharArrayType& other) const;
   bool operator==(const CharArrayType& other) const;
   bool operator!=(const CharArrayType& other) const;
+
+  std::string AsString() const override { return std::string(value_, length_); }
 
   // Dump to memory
   int DumpToMem(byte* buf) const override;

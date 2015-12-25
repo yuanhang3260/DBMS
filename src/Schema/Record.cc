@@ -1,3 +1,4 @@
+#include <iostream>
 #include <stdexcept>
 
 #include "Base/Utils.h"
@@ -11,6 +12,15 @@ int RecordBase::size() const {
     size += field->length();
   }
   return size;
+}
+
+void RecordBase::Print() const {
+  std::cout << "Record: | ";
+  for (auto& field: fields_) {
+    std::cout << SchemaFieldType::FieldTypeAsString(field->type()) << ": "
+              << field->AsString() << " | ";
+  }
+  std::cout << std::endl;
 }
 
 void RecordBase::AddField(SchemaFieldType* new_field) {
@@ -74,6 +84,21 @@ bool RecordBase::operator==(const RecordBase& other) const {
   return true;
 }
 
+bool RecordBase::RecordComparator(const RecordBase& r1, const RecordBase& r2,
+                                  std::vector<int> indexes) {
+  for (int i = 0; i < (int)indexes.size(); i++) {
+    int re = RecordBase::CompareSchemaFields(
+             r1.fields_.at(indexes[i]).get(), r2.fields_.at(indexes[i]).get());
+    if (re < 0) {
+      return true;
+    }
+    else if (re > 0) {
+      return false;
+    }
+  }
+  return false;
+}
+
 bool RecordBase::operator!=(const RecordBase& other) const {
   return !(*this == other);
 }
@@ -90,7 +115,7 @@ bool RecordBase::operator!=(const RecordBase& other) const {
   return 0;                                           \
 
 int RecordBase::CompareSchemaFields(const SchemaFieldType* field1,
-                                   const SchemaFieldType* field2) {
+                                    const SchemaFieldType* field2) {
   if (!field1 && !field2) {
     return 0;
   }

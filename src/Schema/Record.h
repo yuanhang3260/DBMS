@@ -23,7 +23,9 @@ class RecordBase {
 
   // Number of fields this key contains.
   int NumFields() const { return fields_.size(); }
-  // Size of this key.
+
+  // Print this record.
+  void Print() const;
 
   // Add a new fiild. This method takes ownership of SchemaFieldType pointer.
   void AddField(SchemaFieldType* new_field);
@@ -43,6 +45,9 @@ class RecordBase {
   bool operator>=(const RecordBase& other) const;
   bool operator==(const RecordBase& other) const;
   bool operator!=(const RecordBase& other) const;
+
+  static bool RecordComparator(const RecordBase& r1, const RecordBase& r2,
+                               std::vector<int> indexes);
 
  protected:
   std::vector<std::shared_ptr<SchemaFieldType>> fields_;

@@ -1,6 +1,8 @@
 #include <string.h>
+#include <algorithm>
 
 #include "Base/Log.h"
+#include "Base/Utils.h"
 #include "BplusTree.h"
 
 namespace DataBaseFiles {
@@ -39,11 +41,12 @@ BplusTreeHeaderPage::BplusTreeHeaderPage(FILE* file, FileType file_type) :
 
 bool BplusTreeHeaderPage::DumpToMem(byte* buf) const {
   if (!buf) {
-    LogERROR("[Can't dump B+ tree header page to memory] - nullptr");
+    LogERROR("buf nullptr");
     return false;
   }
 
   if (!ConsistencyCheck("Dump")) {
+    LogERROR("ConsistencyCheck failed");
     return false;
   }
 
@@ -79,7 +82,7 @@ bool BplusTreeHeaderPage::DumpToMem(byte* buf) const {
 
 bool BplusTreeHeaderPage::ParseFromMem(const byte* buf) {
   if (!buf) {
-    LogERROR("[Can't load B+ tree header page from memory] - nullptr");
+    LogERROR("nullptr");
     return false;
   }
 
@@ -114,25 +117,25 @@ bool BplusTreeHeaderPage::ParseFromMem(const byte* buf) {
     return false;
   }
 
-  return false;
+  return true;
 }
 
 bool BplusTreeHeaderPage::SaveToDisk() const {
   if (!file_) {
-    LogERROR("[Can't save B+ tree header to disk] - FILE is nullptr");
+    LogERROR("FILE is nullptr");
     return false;
   }
 
   byte buf[kPageSize];
   if (!DumpToMem(buf)) {
-    LogERROR("[Can't save B+ tree header to disk] - DumpToMem failed");
+    LogERROR("DumpToMem(buf)");
     return false;
   }
 
   fseek(file_, 0, SEEK_SET);
   int nwrite = fwrite(buf, 1, kPageSize, file_);
   if (nwrite != kPageSize) {
-    LogERROR("[Write B+ tree header page failed] - nwrite = %d", nwrite);
+    LogERROR("nwrite = %d", nwrite);
     return false;
   }
   fflush(file_);
@@ -141,7 +144,8 @@ bool BplusTreeHeaderPage::SaveToDisk() const {
 
 bool BplusTreeHeaderPage::LoadFromDisk() {
   if (!file_) {
-    LogERROR("[Can't Load B+ tree header from disk] - FILE is nullptr");
+    LogERROR("FILE is nullptr");
+    return false;
   }
 
   byte buf[kPageSize];
@@ -150,11 +154,12 @@ bool BplusTreeHeaderPage::LoadFromDisk() {
   fseek(file_, 0, SEEK_SET);
   int nread = fread(buf, 1, kPageSize, file_);
   if (nread != kPageSize) {
-    LogERROR("[Read B+ tree header page failed] - nread = %d", nread);
+    LogERROR("nread = %d", nread);
     return false;
   }
 
   if (!ParseFromMem(buf)) {
+    LogERROR("ParseFromMem(buf)");
     return false;
   }
   return true;
@@ -162,8 +167,7 @@ bool BplusTreeHeaderPage::LoadFromDisk() {
 
 bool BplusTreeHeaderPage::ConsistencyCheck(const char* op) const {
   if (num_pages_ != num_free_pages_ + num_used_pages_) {
-    LogERROR("[%s B+ tree header page error] - "
-             "num_pages !=  num_used_pages_ + num_free_pages_, "
+    LogERROR("num_pages !=  num_used_pages_ + num_free_pages_, "
              "(%d != %d + %d)", op,
              num_pages_, num_used_pages_, num_free_pages_);
     return false;
@@ -171,15 +175,15 @@ bool BplusTreeHeaderPage::ConsistencyCheck(const char* op) const {
 
   if ((num_free_pages_ > 0 && free_page_ < 0) ||
       (num_free_pages_ <= 0 && free_page_ >= 0)) {
-    LogERROR("[Save B+ tree header page error] - "
-             "num_free_pages_ = %d, first_free_page_id = %d",
+    LogERROR(""
+             "num_free_pages_ = %d, first_free_page_id = %d", op,
              num_free_pages_, free_page_);
     return false;
   }
 
   if (root_page_ < 0 && (num_leaves_ > 0 || depth_ > 0)) {
-    LogERROR("[Save B+ tree header page error] - "
-             "Empty tree, but num_leaves_ = %d, depth_ = %d",
+    LogERROR(""
+             "Empty tree, but num_leaves_ = %d, depth_ = %d", op,
              num_leaves_, depth_);
     return false;
   }
@@ -199,24 +203,19 @@ BplusTree::~BplusTree() {
 BplusTree::BplusTree(std::string filename) {
   file_ = fopen(filename.c_str(), "a+");
   if (!file_) {
-    LogERROR("[Open B+ tree file failed] - %s", filename.c_str());
+    LogERROR("file name %s", filename.c_str());
     throw std::runtime_error("Can't init B+ tree");
   }
 
   // Load header page and root node.
-  if (!LoadHeaderPage()) {
-    throw std::runtime_error("Can't init B+ tree");
-  }
-
-  // Load root node if exists. Add it to PageMap.
-  if (!LoadRootNode()) {
+  if (!LoadFromDisk()) {
     throw std::runtime_error("Can't init B+ tree");
   }
 }
 
 bool BplusTree::LoadHeaderPage() {
   if (!file_) {
-    LogERROR("[Won't load B+ tree header page] - FILE is nullptr");
+    LogERROR("FILE is nullptr");
     return false;
   }
 
@@ -224,7 +223,8 @@ bool BplusTree::LoadHeaderPage() {
     header_.reset(new BplusTreeHeaderPage(file_));
   }
 
-  if (header_->LoadFromDisk()) {
+  if (!header_->LoadFromDisk()) {
+    LogERROR("Load from disk failed");
     return false;
   }
   return true;
@@ -232,7 +232,7 @@ bool BplusTree::LoadHeaderPage() {
 
 bool BplusTree::LoadRootNode() {
   if (!header_) {
-    LogERROR("[Can't create root node page] - B+ tree header page not loaded");
+    LogERROR("B+ tree header page not loaded");
     return false;
   }
   int root_page_id = header_->root_page();
@@ -241,20 +241,20 @@ bool BplusTree::LoadRootNode() {
     page_map_.at(root_page_id)->LoadPageData();
   }
   else {
-    LogINFO("[Won't load root node] - root_page_id = %d", root_page_id);
+    LogINFO("LoadRootNodroot_page_id = %d", root_page_id);
   }
   return true;
 }
 
 RecordPage* BplusTree::root() {
   if (!header_) {
-    LogERROR("[Can't get root node page] - B+ tree header page not loaded");
+    LogERROR("B+ tree header page not loaded");
     return nullptr;
   }
   int root_page_id = header_->root_page();
   if (root_page_id > 0) {
     if (page_map_.find(root_page_id) == page_map_.end()) {
-      LogERROR("[No root node for B+ tree] - root page is %d", root_page_id);
+      LogERROR("can't root page id %d in page map", root_page_id);
       return nullptr;
     }
     return page_map_.at(root_page_id).get();
@@ -264,13 +264,13 @@ RecordPage* BplusTree::root() {
 
 bool BplusTree::CreateFile(std::string filename, FileType file_type) {
   if (file_) {
-    LogINFO("[Closing exsiting B+ tree file]");
+    LogINFO("Existing B+ tree file, closing ...");
     fclose(file_);
   }
 
   file_ = fopen(filename.c_str(), "w+");
   if (!file_) {
-    LogERROR("[Create B+ tree file failed] - %s", filename.c_str());
+    LogERROR("open file %s failed", filename.c_str());
     return false;
   }
 
@@ -286,16 +286,47 @@ bool BplusTree::SaveToDisk() const {
     return false;
   }
 
-  // (TODO) Save B+ tree. Root node, tree node and leaves.
+  // (TODO) Save B+ tree nodes. Root node, tree node and leaves.
   return true;
 }
 
 bool BplusTree::LoadFromDisk() {
-  if (!header_->LoadFromDisk()) {
+  if (!LoadHeaderPage()) {
     return false;
   }
 
-  // (TODO) Load B+ tree. Root node, tree node and leaves.
+  // Load root node if exists. Add it to PageMap.
+  if (!LoadRootNode()) {
+    return false;
+  }
+
+  return true;
+}
+
+// Sort records.
+void BplusTree::SortRecords(std::vector<Schema::Record>& records,
+                            const std::vector<int>& key_indexes) {
+  for (int i: key_indexes) {
+    if (i >= records[0].NumFields()) {
+      LogERROR("key index = %d, records only has %d fields",
+               i, records[0].NumFields());
+      throw std::out_of_range("key index out of range");
+    }
+  }
+  auto comparator = std::bind(Schema::RecordBase::RecordComparator,
+                              std::placeholders::_1, std::placeholders::_2,
+                              key_indexes);
+  std::sort(records.begin(), records.end(), comparator);
+}
+
+// BulkLoading data
+bool BplusTree::BulkLoading(std::vector<Schema::Record> records,
+                            const std::vector<int>& key_indexes) {
+  if (records.size() <= 1) {
+    return true;
+  }
+
+  SortRecords(records, key_indexes);
   return true;
 }
 

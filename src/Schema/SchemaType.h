@@ -1,6 +1,8 @@
 #ifndef SCHEMA_TYPES_
 #define SCHEMA_TYPES_
 
+#include <string>
+
 #include "Base/BaseTypes.h"
 #include "Base/MacroUtils.h"
 
@@ -13,6 +15,7 @@ enum FieldType {
   BOOL,
   STRING,
   CHARARRAY,
+  UNKWON,
 };
 
 class SchemaFieldType {
@@ -23,6 +26,10 @@ class SchemaFieldType {
   virtual int length() const = 0;
   virtual int DumpToMem(byte* buf) const = 0;
   virtual int LoadFromMem(const byte* buf) = 0;
+
+  virtual std::string AsString() const = 0;
+
+  static std::string FieldTypeAsString(FieldType type);
 
  protected:
 };

@@ -73,8 +73,19 @@ class BplusTree {
   // Create an index or index-data file based on B+ tree;
   bool CreateFile(std::string filename, FileType file_type);
 
+  // Load and save the B+ tree
   bool SaveToDisk() const;
   bool LoadFromDisk();
+
+  // BulkLoading data. Input is a list of Record consisting of various fields
+  // defined in Schema/DataTypes. These records should be sorted first based
+  // on a key which consists of fields from Record speficed from key_indexes.
+  bool BulkLoading(std::vector<Schema::Record>,
+                   const std::vector<int>& key_indexes);
+
+  // Sort a list of records based on indexes that specified key.
+  static void SortRecords(std::vector<Schema::Record>& records,
+                          const std::vector<int>& key_indexes);
 
  private:
   bool LoadHeaderPage();
