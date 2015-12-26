@@ -7,6 +7,7 @@ CC=g++ -std=c++11
 CFLAGS=-Wall -Werror -O2
 LFLAGS=-pthread
 IFLAGS=-Isrc/ -I../ProtoBuf/src/
+ProtoBufLib=../ProtoBuf/libproto.a
 
 SRC_DIR=src
 OBJ_DIR=lib
@@ -81,16 +82,16 @@ $(OBJ_DIR)/Schema/%.o: $(SRC_DIR)/Schema/%.cc
 
 # Tests
 test/%.out: $(OBJ_DIR)/Utility/%.o library
-	$(CC) $(CFLAGS) $< libDBMS.a -o $@
+	$(CC) $(CFLAGS) $< libDBMS.a $(ProtoBufLib) -o $@
 
 test/%.out: $(OBJ_DIR)/Storage/%.o library
-	$(CC) $(CFLAGS) $< libDBMS.a -o $@
+	$(CC) $(CFLAGS) $< libDBMS.a $(ProtoBufLib) -o $@
 
 test/%.out: $(OBJ_DIR)/Base/%.o library
-	$(CC) $(CFLAGS) $< libDBMS.a -o $@
+	$(CC) $(CFLAGS) $< libDBMS.a $(ProtoBufLib) -o $@
 
 test/%.out: $(OBJ_DIR)/Schema/%.o library
-	$(CC) $(CFLAGS) $< libDBMS.a -o $@
+	$(CC) $(CFLAGS) $< libDBMS.a $(ProtoBufLib) -o $@
 
 clean:
 	rm -rf libDBMS.a
@@ -102,6 +103,7 @@ clean:
 	rm -rf $(OBJ_DIR)/Storage/*.o
 	rm -rf $(OBJ_DIR)/Schema/*.o
 	rm -rf test/*.out
-	rm -rf test/*.data
-	rm -rf test/*.index
-	rm -rf test/*.indata
+	rm -rf data/*.data
+	rm -rf data/*.index
+	rm -rf data/*.indata
+	rm -rf data/*.schema.pb

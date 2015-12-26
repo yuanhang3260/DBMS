@@ -9,9 +9,11 @@ namespace DataBaseFiles {
 
 const int kPageSize = 4096;
 const int kSlotDirectoryEntrySize = 4;
+const char* const kDataDirectory = "data/";
 
 // File Type
 enum FileType {
+  UNKNOWN_FILETYPE,
   INDEX,
   INDEX_DATA,
   HEAPFILE,

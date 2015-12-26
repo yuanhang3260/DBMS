@@ -19,13 +19,13 @@ class RecordBase {
   }
 
   // Total size it takes as raw data.
-  int size() const;
+  virtual int size() const;
 
   // Number of fields this key contains.
   int NumFields() const { return fields_.size(); }
 
   // Print this record.
-  void Print() const;
+  virtual void Print() const;
 
   // Add a new fiild. This method takes ownership of SchemaFieldType pointer.
   void AddField(SchemaFieldType* new_field);
@@ -35,8 +35,8 @@ class RecordBase {
   static int CompareSchemaFields(const SchemaFieldType* field1,
                                  const SchemaFieldType* field2);
 
-  int DumpToMem(byte* buf) const;
-  int LoadFromMem(const byte* buf);
+  virtual int DumpToMem(byte* buf) const;
+  virtual int LoadFromMem(const byte* buf);
 
   // Overloading operators.
   bool operator<(const RecordBase& other) const;

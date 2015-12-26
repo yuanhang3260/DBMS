@@ -5,10 +5,13 @@
 #include <map>
 
 #include "Schema/Record.h"
+#include "Schema/DBTable_pb.h"
 #include "PageBase.h"
 #include "RecordPage.h"
 
 namespace DataBaseFiles {
+
+class BplusTreeTest;
 
 class TreeNodeRecord {
  public:
@@ -62,16 +65,23 @@ class BplusTree {
  public:
   BplusTree() = default;
   // Contruct B+ tree from an existing file.
-  BplusTree(std::string filename);
+  BplusTree(std::string tablename, std::vector<int> key_indexes);
+
+  // Destructor
   ~BplusTree();
 
   // Accessors
+  DEFINE_ACCESSOR(tablename, std::string);
   DEFINE_ACCESSOR(file, FILE*);
+  DEFINE_ACCESSOR(key_indexes, std::vector<int>);
+  DEFINE_ACCESSOR_ENUM(file_type, FileType);
   BplusTreeHeaderPage* meta() { return header_.get(); }
   RecordPage* root();
+  Schema::TableSchema* schema() { return schema_.get(); }
 
   // Create an index or index-data file based on B+ tree;
-  bool CreateFile(std::string filename, FileType file_type);
+  bool CreateFile(std::string tablename, std::vector<int> key_indexes,
+                  FileType file_type);
 
   // Load and save the B+ tree
   bool SaveToDisk() const;
@@ -80,27 +90,44 @@ class BplusTree {
   // BulkLoading data. Input is a list of Record consisting of various fields
   // defined in Schema/DataTypes. These records should be sorted first based
   // on a key which consists of fields from Record speficed from key_indexes.
-  bool BulkLoading(std::vector<Schema::Record>,
+  bool BulkLoading(std::vector<Schema::Record>& records,
                    const std::vector<int>& key_indexes);
 
   // Sort a list of records based on indexes that specified key.
   static void SortRecords(std::vector<Schema::Record>& records,
                           const std::vector<int>& key_indexes);
 
+  friend class BplusTreeTest;
+
  private:
+  // Generate B+ tree file name, based on table name, key indexes and file type.
+  std::string GenerateBplusTreeFilename(FileType file_type);
   // Load header page from disk.
   bool LoadHeaderPage();
   // Load root node from disk.
   bool LoadRootNode();
+  // Load table schema from schema file, which is a serialized protocal buffer
+  // raw file. It saves message TableSchema defined in Schema/DBTable.proto.
+  bool LoadSchema();
 
   // Allocate a new page in bulkloading.
   RecordPage* AllocateNewPage();
   // Insert a record to a leave node.
   bool InsertRecordToLeave(const Schema::Record& record, RecordPage* leave);
   // Insert a page to a parent node.
-  void InsertPageToParentNode(int page_id, RecordPage* parent);
+  void InsertPageToParentNode(RecordPage* page, RecordPage* parent);
 
+  std::string tablename_;
   FILE* file_ = nullptr;
+
+  // Index of fields in key.
+  std::vector<int> key_indexes_;
+
+  // FileType
+  FileType file_type_ = UNKNOWN_FILETYPE;
+
+  // Table Schema
+  std::unique_ptr<Schema::TableSchema> schema_;
 
   // Header page contains meta data of this B+ tree.
   std::unique_ptr<BplusTreeHeaderPage> header_;

@@ -1,3 +1,4 @@
+#include <sys/stat.h>
 #include <string.h>
 #include <algorithm>
 
@@ -194,23 +195,90 @@ bool BplusTreeHeaderPage::ConsistencyCheck(const char* op) const {
 
 // ****************************** BplusTree **********************************//
 BplusTree::~BplusTree() {
-  if (!file_) {
+  if (file_) {
     fflush(file_);
     fclose(file_);
   }
 }
 
-BplusTree::BplusTree(std::string filename) {
-  file_ = fopen(filename.c_str(), "a+");
+BplusTree::BplusTree(std::string tablename, std::vector<int> key_indexes) :
+    tablename_(tablename),
+    key_indexes_(key_indexes) {
+  std::string btree_filename = GenerateBplusTreeFilename(UNKNOWN_FILETYPE);
+
+  file_ = fopen(btree_filename.c_str(), "a+");
   if (!file_) {
-    LogERROR("file name %s", filename.c_str());
+    LogERROR("file name %s", btree_filename.c_str());
     throw std::runtime_error("Can't init B+ tree");
   }
 
-  // Load header page and root node.
+  // Load table schema, header page and root node.
   if (!LoadFromDisk()) {
     throw std::runtime_error("Can't init B+ tree");
   }
+}
+
+std::string BplusTree::GenerateBplusTreeFilename(FileType file_type) {
+  std::string filename = kDataDirectory + tablename_ + "(";
+  for (int index: key_indexes_) {
+    filename += std::to_string(index) + "_";
+  }
+  filename += ")";
+  
+  if (file_type == UNKNOWN_FILETYPE) {
+    // Check file type.
+    // Data file.
+    std::string fullname = filename + ".indata";
+    if (access(fullname.c_str(), F_OK) != -1) {
+      file_type_ = INDEX_DATA;
+      return fullname;
+    }
+
+    // Index file.
+    fullname = filename + ".index";
+    if (access(fullname.c_str(), F_OK) != -1) {
+      file_type_ = INDEX;
+      return fullname;
+    }
+  }
+  else if (file_type == INDEX_DATA) {
+    return filename + ".indata";
+  }
+  else if (file_type == INDEX) {
+    return filename + ".index";
+  }
+  return "unknown_filename";
+}
+
+bool BplusTree::LoadSchema() {
+  std::string schema_filename = kDataDirectory + tablename_ + ".schema.pb";
+
+  struct stat stat_buf;
+  int re = stat(schema_filename.c_str(), &stat_buf);
+  if (re < 0) {
+    LogERROR("Failed to stat schema file %s", schema_filename.c_str());
+    return false;
+  }
+
+  int size = stat_buf.st_size;
+  FILE* file = fopen(schema_filename.c_str(), "r");
+  if (!file) {
+    LogERROR("Failed to open schema file %s", schema_filename.c_str());
+    return false;
+  }
+  // Read schema file.
+  char buf[size];
+  re = fread(buf, 1, size, file);
+  if (re != size) {
+    LogERROR("Read schema file %s error, expect %d bytes, actual %d",
+             schema_filename.c_str(), size, re);
+    return false;
+  }
+  fclose(file);
+  // Parse TableSchema proto data.
+  schema_.reset(new Schema::TableSchema());
+  schema_->DeSerialize(buf, size);
+  return true;
 }
 
 bool BplusTree::LoadHeaderPage() {
@@ -262,9 +330,24 @@ RecordPage* BplusTree::root() {
   return nullptr;
 }
 
-bool BplusTree::CreateFile(std::string filename, FileType file_type) {
+bool BplusTree::CreateFile(std::string tablename,
+                           std::vector<int> key_indexes,
+                           FileType file_type) {
+  tablename_ = tablename;
+  key_indexes_ = key_indexes;
+  file_type_ = file_type;
+
+  if (!schema_) {
+    if (!LoadSchema()) {
+      LogERROR("Failed to load schema while creating new B+ tree for table %s",
+               tablename_.c_str());
+      return false;
+    }
+  }
+
+  std::string filename = GenerateBplusTreeFilename(file_type);
   if (file_) {
-    LogINFO("Existing B+ tree file, closing ...");
+    LogINFO("Existing B+ tree file, closing it ...");
     fclose(file_);
   }
 
@@ -291,6 +374,10 @@ bool BplusTree::SaveToDisk() const {
 }
 
 bool BplusTree::LoadFromDisk() {
+  if (!LoadSchema()) {
+    return false;
+  }
+
   if (!LoadHeaderPage()) {
     return false;
   }
@@ -335,12 +422,12 @@ bool BplusTree::InsertRecordToLeave(const Schema::Record& record,
   return false;
 }
 
-void BplusTree::InsertPageToParentNode(int page_id, RecordPage* parent) {
-
+void BplusTree::InsertPageToParentNode(RecordPage* page, RecordPage* parent) {
+  
 }
 
 // BulkLoading data
-bool BplusTree::BulkLoading(std::vector<Schema::Record> records,
+bool BplusTree::BulkLoading(std::vector<Schema::Record>& records,
                             const std::vector<int>& key_indexes) {
   if (records.size() <= 0) {
     return true;
@@ -351,9 +438,10 @@ bool BplusTree::BulkLoading(std::vector<Schema::Record> records,
 
   // Begin writing records to pages.
   for (const auto& record: records) {
-    // Allocate a new leave page if necessary.
+    // Allocate a new leave page if necessary, and add to page map to cache.
     if (!crt_leave) {
       crt_leave = AllocateNewPage();
+      page_map_[crt_leave->id()] = std::shared_ptr<RecordPage>(crt_leave);
     }
     // Try inserting the record to current leave page. If success, we continue.
     // Otherwise we need to add this leave page to a tree node (current active
@@ -361,13 +449,14 @@ bool BplusTree::BulkLoading(std::vector<Schema::Record> records,
     if (InsertRecordToLeave(record, crt_leave)) {
       continue;
     }
-    // Allocate a new tree node if necessary.
+    // Allocate a new tree node if necessary, and add to page map to cache.
     if (!crt_node) {
       crt_node = AllocateNewPage();
+      page_map_[crt_node->id()] = std::shared_ptr<RecordPage>(crt_node);
     }
     // Add current leave page to tree node. This function may lead to tree node
     // split, and possibly propagate split to upper tree nodes recursively.
-    InsertPageToParentNode(crt_leave->id(), crt_node);
+    InsertPageToParentNode(crt_leave, crt_node);
   }
 
   return true;

@@ -1,4 +1,4 @@
-package Schema.Table;
+package Schema;
 
 message TableField {
   enum Type {

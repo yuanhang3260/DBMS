@@ -19,13 +19,13 @@ std::shared_ptr<::proto::MessageReflection> TableSchema_reflection_;
 }  // namepsace
 
 void static_init_default_instances_home_hy_Desktop_Projects_DBMS_src_Schema_DBTable() {
-  if (Schema::Table::TableField::default_instance_ == NULL) {
-    Schema::Table::TableField::default_instance_ = new Schema::Table::TableField();
-    Schema::Table::TableField::default_instance_->InitAsDefaultInstance();
+  if (Schema::TableField::default_instance_ == NULL) {
+    Schema::TableField::default_instance_ = new Schema::TableField();
+    Schema::TableField::default_instance_->InitAsDefaultInstance();
   }
-  if (Schema::Table::TableSchema::default_instance_ == NULL) {
-    Schema::Table::TableSchema::default_instance_ = new Schema::Table::TableSchema();
-    Schema::Table::TableSchema::default_instance_->InitAsDefaultInstance();
+  if (Schema::TableSchema::default_instance_ == NULL) {
+    Schema::TableSchema::default_instance_ = new Schema::TableSchema();
+    Schema::TableSchema::default_instance_->InitAsDefaultInstance();
   }
 }
 
@@ -45,10 +45,10 @@ void static_init_home_hy_Desktop_Projects_DBMS_src_Schema_DBTable() {
   int i = 0;
   // static init for class TableField
   static const int TableField_offsets_[4] = {
-    PROTO_MESSAGE_FIELD_OFFSET(Schema::Table::TableField, name_),
-    PROTO_MESSAGE_FIELD_OFFSET(Schema::Table::TableField, index_),
-    PROTO_MESSAGE_FIELD_OFFSET(Schema::Table::TableField, type_),
-    PROTO_MESSAGE_FIELD_OFFSET(Schema::Table::TableField, size_),
+    PROTO_MESSAGE_FIELD_OFFSET(Schema::TableField, name_),
+    PROTO_MESSAGE_FIELD_OFFSET(Schema::TableField, index_),
+    PROTO_MESSAGE_FIELD_OFFSET(Schema::TableField, type_),
+    PROTO_MESSAGE_FIELD_OFFSET(Schema::TableField, size_),
   };
   i = 0;
   for (auto& field: parser.mutable_messages_list()[0]->mutable_fields_list()) {
@@ -58,15 +58,15 @@ void static_init_home_hy_Desktop_Projects_DBMS_src_Schema_DBTable() {
   TableField_reflection_.reset(
       new ::proto::MessageReflection(
           TableField_descriptor_,
-          Schema::Table::TableField::default_instance_,
-          PROTO_MESSAGE_FIELD_OFFSET(Schema::Table::TableField, has_bits_))
+          Schema::TableField::default_instance_,
+          PROTO_MESSAGE_FIELD_OFFSET(Schema::TableField, has_bits_))
   );
   ::proto::MessageFactory::RegisterGeneratedMessage(TableField_reflection_);
 
   // static init for class TableSchema
   static const int TableSchema_offsets_[2] = {
-    PROTO_MESSAGE_FIELD_OFFSET(Schema::Table::TableSchema, name_),
-    PROTO_MESSAGE_FIELD_OFFSET(Schema::Table::TableSchema, fields_),
+    PROTO_MESSAGE_FIELD_OFFSET(Schema::TableSchema, name_),
+    PROTO_MESSAGE_FIELD_OFFSET(Schema::TableSchema, fields_),
   };
   i = 0;
   for (auto& field: parser.mutable_messages_list()[1]->mutable_fields_list()) {
@@ -76,8 +76,8 @@ void static_init_home_hy_Desktop_Projects_DBMS_src_Schema_DBTable() {
   TableSchema_reflection_.reset(
       new ::proto::MessageReflection(
           TableSchema_descriptor_,
-          Schema::Table::TableSchema::default_instance_,
-          PROTO_MESSAGE_FIELD_OFFSET(Schema::Table::TableSchema, has_bits_))
+          Schema::TableSchema::default_instance_,
+          PROTO_MESSAGE_FIELD_OFFSET(Schema::TableSchema, has_bits_))
   );
   ::proto::MessageFactory::RegisterGeneratedMessage(TableSchema_reflection_);
 
@@ -92,7 +92,6 @@ struct static_init_forcer_home_hy_Desktop_Projects_DBMS_src_Schema_DBTable {
 
 
 namespace Schema {
-namespace Table {
 
 // ******************** TableField ******************** //
 // constructor
@@ -518,6 +517,5 @@ const ::proto::RepeatedPtrField<TableField>& TableSchema::fields() const {
   return fields_;
 }
 
-}  // namespace Table
 }  // namespace Schema
 

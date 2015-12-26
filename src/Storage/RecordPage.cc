@@ -1,6 +1,7 @@
 #include "Base/Log.h"
 #include "Base/Utils.h"
 
+#include "Common.h"
 #include "RecordPage.h"
 
 namespace DataBaseFiles {

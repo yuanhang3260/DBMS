@@ -12,7 +12,6 @@ void static_init_home_hy_Desktop_Projects_DBMS_src_Schema_DBTable();
 void static_init_default_instances_home_hy_Desktop_Projects_DBMS_src_Schema_DBTable();
 
 namespace Schema {
-namespace Table {
 
 class TableField: public ::proto::Message {
  public:
@@ -144,7 +143,6 @@ class TableSchema: public ::proto::Message {
   friend void ::static_init_default_instances_home_hy_Desktop_Projects_DBMS_src_Schema_DBTable();
 };
 
-}  // namespace Table
 }  // namespace Schema
 
 

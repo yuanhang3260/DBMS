@@ -10,13 +10,12 @@
 #include <memory>
 #include <string>
 
-#include "Common.h"
 #include "RecordData.h"
 
 namespace DataBaseFiles {
 
 enum PageType {
-  NONE = 0,
+  UNKNOW_PAGETYPE = 0,
   TREE_ROOT = 1,
   TREE_NODE = 2,
   TREE_LEAVE = 4,
@@ -95,7 +94,7 @@ class RecordPageMeta {
   int16 prev_page_ = -1;
   int16 parent_page_ = -1;
   int16 space_used_ = 0;  // total space that has been used.
-  PageType page_type_ = NONE;
+  PageType page_type_ = UNKNOW_PAGETYPE;
   std::vector<SlotDirectoryEntry> slot_directory_;
 
   // A set of empty slots id. It is created when loading a page. New record

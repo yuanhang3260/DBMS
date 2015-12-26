@@ -1,6 +1,7 @@
 #include "UnitTest/UnitTest.h"
 #include "Base/Utils.h"
 #include "Base/Log.h"
+#include "Common.h"
 #include "RecordPage.h"
 
 namespace DataBaseFiles {
