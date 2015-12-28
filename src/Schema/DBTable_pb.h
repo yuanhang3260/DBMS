@@ -40,6 +40,7 @@ class TableField: public ::proto::Message {
   ::proto::SerializedMessage* Serialize() const override;
   void DeSerialize(const char* buf, unsigned int size) override;
   static const TableField& default_instance();
+  void Print(int indent_num=0) const override;
 
   // --- Field accessors --- //
 
@@ -106,6 +107,7 @@ class TableSchema: public ::proto::Message {
   ::proto::SerializedMessage* Serialize() const override;
   void DeSerialize(const char* buf, unsigned int size) override;
   static const TableSchema& default_instance();
+  void Print(int indent_num=0) const override;
 
   // --- Field accessors --- //
 

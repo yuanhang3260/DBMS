@@ -194,7 +194,7 @@ class BoolType: public SchemaFieldType {
 
   DEFINE_ACCESSOR(value, bool);
   FieldType type() const override { return BOOL; }
-  int length() const override { return 4; }
+  int length() const override { return 1; }
 
   // Comparable
   bool operator<(const BoolType& other) const {

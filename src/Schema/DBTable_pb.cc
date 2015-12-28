@@ -185,6 +185,34 @@ void TableField::DeSerialize(const char* buf, unsigned int size) {
   TableField_reflection_->DeSerialize(this, buf, size);
 }
 
+// Print()
+void TableField::Print(int indent_num) const {
+  PrintIndent(indent_num);
+  std::cout << "TableField " << "{" << std::endl;
+  if (has_name()) {
+    PrintIndent(indent_num + 1);
+        std::cout << "name: " << "\"" << name_ << "\"" << std::endl;
+  }
+  if (has_index()) {
+    PrintIndent(indent_num + 1);
+        std::cout << "index: " << index_ << std::endl;
+  }
+  if (has_type()) {
+    PrintIndent(indent_num + 1);
+    std::string enum_value =
+        (reinterpret_cast<const proto::ProtoParser::EnumType*>(
+            TableField_descriptor_->FindFieldByName("type")->type_class()))
+                 ->EnumValueAsString(type_);
+    std::cout << "type: " << enum_value << std::endl;
+  }
+  if (has_size()) {
+    PrintIndent(indent_num + 1);
+        std::cout << "size: " << size_ << std::endl;
+  }
+  PrintIndent(indent_num);
+  std::cout << "}" << std::endl;
+}
+
 // InitAsDefaultInstance()
 void TableField::InitAsDefaultInstance() {
 }
@@ -410,6 +438,25 @@ bool TableSchema::Equals(const TableSchema& other) const {
 // DeSerialize()
 void TableSchema::DeSerialize(const char* buf, unsigned int size) {
   TableSchema_reflection_->DeSerialize(this, buf, size);
+}
+
+// Print()
+void TableSchema::Print(int indent_num) const {
+  PrintIndent(indent_num);
+  std::cout << "TableSchema " << "{" << std::endl;
+  if (has_name()) {
+    PrintIndent(indent_num + 1);
+        std::cout << "name: " << "\"" << name_ << "\"" << std::endl;
+  }
+  if (fields_size() > 0) {
+    PrintIndent(indent_num + 1);
+    std::cout << "fields: " << "[***]" << std::endl;
+    for (const auto& ele: fields_) {
+        ele.Print(indent_num + 1);
+    }
+  }
+  PrintIndent(indent_num);
+  std::cout << "}" << std::endl;
 }
 
 // InitAsDefaultInstance()

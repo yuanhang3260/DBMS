@@ -1,5 +1,7 @@
+#include <string.h>
 #include <iostream>
 #include <stdexcept>
+#include <algorithm>
 
 #include "Base/Utils.h"
 #include "Base/Log.h"
@@ -7,6 +9,30 @@
 
 namespace Schema {
 
+// ****************************** RecordID ********************************** //
+int RecordID::DumpToMem(byte* buf) const {
+  if (!buf) {
+    return -1;
+  }
+  memcpy(buf, &page_id_, sizeof(page_id_));
+  memcpy(buf + sizeof(page_id_), &slot_id_, sizeof(slot_id_));
+  return sizeof(page_id_) + sizeof(slot_id_);
+}
+
+int RecordID::LoadFromMem(const byte* buf) {
+  if (!buf) {
+    return -1;
+  }
+  memcpy(&page_id_, buf, sizeof(page_id_));
+  memcpy(&slot_id_, buf + sizeof(page_id_), sizeof(slot_id_));
+  return sizeof(page_id_) + sizeof(slot_id_);
+}
+
+void RecordID::Print() const {
+  std::cout << "rid = (" << page_id_ << ", " << slot_id_ << ")" << std::endl; 
+}
+
+// ****************************** RecordBase ******************************** //
 int RecordBase::size() const {
   int size = 0;
   for (const auto& field: fields_) {
@@ -16,12 +42,16 @@ int RecordBase::size() const {
 }
 
 void RecordBase::Print() const {
+  PrintImpl();
+  std::cout << std::endl;
+}
+
+void RecordBase::PrintImpl() const {
   std::cout << "Record: | ";
   for (auto& field: fields_) {
     std::cout << SchemaFieldType::FieldTypeAsString(field->type()) << ": "
               << field->AsString() << " | ";
   }
-  std::cout << std::endl;
 }
 
 void RecordBase::AddField(SchemaFieldType* new_field) {
@@ -85,11 +115,14 @@ bool RecordBase::operator==(const RecordBase& other) const {
   return true;
 }
 
-bool RecordBase::RecordComparator(const RecordBase& r1, const RecordBase& r2,
+bool RecordBase::RecordComparator(const std::shared_ptr<RecordBase> r1,
+                                  const std::shared_ptr<RecordBase> r2,
                                   const std::vector<int>& indexes) {
   for (int i = 0; i < (int)indexes.size(); i++) {
     int re = RecordBase::CompareSchemaFields(
-             r1.fields_.at(indexes[i]).get(), r2.fields_.at(indexes[i]).get());
+                 r1->fields_.at(indexes[i]).get(),
+                 r2->fields_.at(indexes[i]).get()
+             );
     if (re < 0) {
       return true;
     }
@@ -181,6 +214,74 @@ int RecordBase::LoadFromMem(const byte* buf) {
     offset += field->LoadFromMem(buf + offset);
   }
   return offset;
+}
+
+
+// ***************************** IndexRecord ******************************** //
+int IndexRecord::DumpToMem(byte* buf) const {
+  if (!buf) {
+    return -1;
+  }
+  int offset = RecordBase::DumpToMem(buf);
+  offset += rid_.DumpToMem(buf + offset);
+  return offset;
+}
+
+int IndexRecord::LoadFromMem(const byte* buf) {
+  if (!buf) {
+    return -1;
+  }
+  int offset = RecordBase::LoadFromMem(buf);
+  offset += rid_.LoadFromMem(buf + offset);
+  return offset;
+}
+
+void IndexRecord::Print() const {
+  RecordBase::PrintImpl();
+  rid_.Print(); 
+}
+
+// **************************** TreeNodeRecord ****************************** //
+int TreeNodeRecord::DumpToMem(byte* buf) const {
+  if (!buf) {
+    return -1;
+  }
+  int offset = RecordBase::DumpToMem(buf);
+  memcpy(buf + offset, &page_id_, sizeof(page_id_));
+  return offset + sizeof(page_id_);
+}
+
+int TreeNodeRecord::LoadFromMem(const byte* buf) {
+  if (!buf) {
+    return -1;
+  }
+  int offset = RecordBase::LoadFromMem(buf);
+  memcpy(&page_id_, buf + offset, sizeof(page_id_));
+  return offset + sizeof(page_id_);
+}
+
+void TreeNodeRecord::Print() const {
+  RecordBase::PrintImpl();
+  std::cout << "page_id = " << page_id_ << std::endl; 
+}
+
+
+// ************************** PageRecordsManager **************************** //
+// Sort records.
+void PageRecordsManager::SortRecords(
+         std::vector<std::shared_ptr<Schema::RecordBase>>& records,
+         const std::vector<int>& key_indexes) {
+  for (int i: key_indexes) {
+    if (i >= records[0]->NumFields()) {
+      LogERROR("key index = %d, records only has %d fields",
+               i, records[0]->NumFields());
+      throw std::out_of_range("key index out of range");
+    }
+  }
+  auto comparator = std::bind(RecordBase::RecordComparator,
+                              std::placeholders::_1, std::placeholders::_2,
+                              key_indexes);
+  std::sort(records.begin(), records.end(), comparator);
 }
 
 }  // namespace Schema

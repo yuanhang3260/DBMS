@@ -138,8 +138,13 @@ int CharArrayType::DumpToMem(byte* buf) const {
     return -1;
   }
   memcpy(buf, value_, length_);
-  buf[length_] = '\0';
-  return length_ + 1;
+  if (length_ < length_limit_) {
+    buf[length_] = '\0';
+    return length_ + 1;
+  }
+  else {
+    return length_;
+  }
 }
 
 // Dump to memory

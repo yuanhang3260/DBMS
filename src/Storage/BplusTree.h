@@ -13,24 +13,6 @@ namespace DataBaseFiles {
 
 class BplusTreeTest;
 
-class TreeNodeRecord {
- public:
-  TreeNodeRecord() = default;
-  ~TreeNodeRecord();
-
-  DEFINE_ACCESSOR(page_id, int);
-
-  int size() const { return key_->size() + sizeof(page_id_); }
-
-  int ParseFromMem(const byte* buf);
-  int DumpToMem(byte* buf) const;
-
- private:
-  std::shared_ptr<Schema::RecordKey> key_;
-  int page_id_ = -1;
-};
-
-
 class BplusTreeHeaderPage: public HeaderPage {
  public:
   BplusTreeHeaderPage() = default;
@@ -88,14 +70,10 @@ class BplusTree {
   bool LoadFromDisk();
 
   // BulkLoading data. Input is a list of Record consisting of various fields
-  // defined in Schema/DataTypes. These records should be sorted first based
+  // defined in Schema/DataTypes. These records must have been sorted based
   // on a key which consists of fields from Record speficed from key_indexes.
-  bool BulkLoading(std::vector<Schema::Record>& records,
+  bool BulkLoading(std::vector<Schema::DataRecord>& records,
                    const std::vector<int>& key_indexes);
-
-  // Sort a list of records based on indexes that specified key.
-  static void SortRecords(std::vector<Schema::Record>& records,
-                          const std::vector<int>& key_indexes);
 
   friend class BplusTreeTest;
 
@@ -113,7 +91,7 @@ class BplusTree {
   // Allocate a new page in bulkloading.
   RecordPage* AllocateNewPage();
   // Insert a record to a leave node.
-  bool InsertRecordToLeave(const Schema::Record& record, RecordPage* leave);
+  bool InsertRecordToLeave(const Schema::DataRecord& record, RecordPage* leave);
   // Insert a page to a parent node.
   void InsertPageToParentNode(RecordPage* page, RecordPage* parent);
 

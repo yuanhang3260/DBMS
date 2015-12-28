@@ -1,31 +1,11 @@
 #include <sys/stat.h>
 #include <string.h>
-#include <algorithm>
 
 #include "Base/Log.h"
 #include "Base/Utils.h"
 #include "BplusTree.h"
 
 namespace DataBaseFiles {
-
-// *************************** TreeNodeRecord ********************************//
-int TreeNodeRecord::ParseFromMem(const byte* buf) {
-  if (!buf) {
-    return -1;
-  }
-  int offset = key_->LoadFromMem(buf);
-  memcpy(&page_id_, buf + offset, sizeof(page_id_));
-  return offset + sizeof(page_id_);
-}
-
-int TreeNodeRecord::DumpToMem(byte* buf) const {
-  if (!buf) {
-    return -1;
-  }
-  int offset = key_->DumpToMem(buf);
-  memcpy(buf + offset, &page_id_, sizeof(page_id_));
-  return offset + sizeof(page_id_);
-}
 
 // ************************ BplusTreeHeaderPage ******************************//
 BplusTreeHeaderPage::BplusTreeHeaderPage(FileType file_type) :
@@ -390,27 +370,11 @@ bool BplusTree::LoadFromDisk() {
   return true;
 }
 
-// Sort records.
-void BplusTree::SortRecords(std::vector<Schema::Record>& records,
-                            const std::vector<int>& key_indexes) {
-  for (int i: key_indexes) {
-    if (i >= records[0].NumFields()) {
-      LogERROR("key index = %d, records only has %d fields",
-               i, records[0].NumFields());
-      throw std::out_of_range("key index out of range");
-    }
-  }
-  auto comparator = std::bind(Schema::RecordBase::RecordComparator,
-                              std::placeholders::_1, std::placeholders::_2,
-                              key_indexes);
-  std::sort(records.begin(), records.end(), comparator);
-}
-
 RecordPage* BplusTree::AllocateNewPage() {
   return new RecordPage(next_id++, file_);
 }
 
-bool BplusTree::InsertRecordToLeave(const Schema::Record& record,
+bool BplusTree::InsertRecordToLeave(const Schema::DataRecord& record,
                                     RecordPage* leave) {
   byte* buf = leave->InsertRecord(record.size());
   if (buf) {
@@ -427,14 +391,11 @@ void BplusTree::InsertPageToParentNode(RecordPage* page, RecordPage* parent) {
 }
 
 // BulkLoading data
-bool BplusTree::BulkLoading(std::vector<Schema::Record>& records,
+bool BplusTree::BulkLoading(std::vector<Schema::DataRecord>& records,
                             const std::vector<int>& key_indexes) {
   if (records.size() <= 0) {
     return true;
   }
-
-  // Sort input records.
-  SortRecords(records, key_indexes);
 
   // Begin writing records to pages.
   for (const auto& record: records) {
