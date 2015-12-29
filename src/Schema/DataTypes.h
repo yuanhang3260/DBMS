@@ -249,6 +249,7 @@ class StringType: public SchemaFieldType {
  public:
   StringType() = default;
   StringType(std::string str) : value_(str) {}
+  StringType(const char* buf, int size) : value_(buf, size) {}
 
   DEFINE_ACCESSOR(value, std::string);
   FieldType type() const override { return STRING; }
@@ -285,7 +286,7 @@ class CharArrayType: public SchemaFieldType {
 
   FieldType type() const override { return CHARARRAY; }
   int length() const override {
-    return length_ == length_limit_? length_limit_ : length_ + 1;
+    return length_limit_;
   }
   const char* value() { return value_; }
 

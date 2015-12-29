@@ -1,3 +1,4 @@
+#include "Base/Log.h"
 #include "DataTypes.h"
 
 namespace Schema {
@@ -70,13 +71,16 @@ CharArrayType::CharArrayType(const char* src, int length, int lenlimit) :
 }
 
 bool CharArrayType::SetData(const char* src, int length) {
-  if (!value_) {
-    value_ = new char[length_limit_];
-    memset(value_, 0, length_limit_);
-  }
   if (length > length_limit_) {
+    LogERROR("Can't SetData() for CharArrayType - length %d > length_limit %d",
+             length, length_limit_);
     return false;
   }
+
+  if (!value_) {
+    value_ = new char[length_limit_];
+  }
+  memset(value_, 0, length_limit_);
   memcpy(value_, src, length);
   length_ = length;
   return true;
@@ -137,14 +141,8 @@ int CharArrayType::DumpToMem(byte* buf) const {
   if (!buf) {
     return -1;
   }
-  memcpy(buf, value_, length_);
-  if (length_ < length_limit_) {
-    buf[length_] = '\0';
-    return length_ + 1;
-  }
-  else {
-    return length_;
-  }
+  memcpy(buf, value_, length_limit_);
+  return length_limit_;
 }
 
 // Dump to memory
@@ -152,21 +150,17 @@ int CharArrayType::LoadFromMem(const byte* buf) {
   if (!buf) {
     return -1;
   }
-
+  memset(value_, 0, length_limit_);
+  memcpy(value_, buf, length_limit_);
+  
   int i = 0;
   for (; i < length_limit_; i++) {
-    if ((char)buf[i] != '\0') {
-      value_[i] = buf[i];
-    }
-    else {
+    if (value_[i] == 0) {
       break;
     }
   }
   length_ = i;
-  // If i reaches length limit and we haven't incur '\0', stop loading and
-  // return the length. Otherwise since we load one more '\0', return
-  // length + 1;
-  return i == length_limit_ ? i : i + 1;
+  return length_limit_;
 }
 
 }  // namepsace Schema

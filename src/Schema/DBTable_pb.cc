@@ -18,7 +18,7 @@ std::shared_ptr<::proto::MessageReflection> TableSchema_reflection_;
 
 }  // namepsace
 
-void static_init_default_instances_home_hy_Desktop_Projects_DBMS_src_Schema_DBTable() {
+void static_init_default_instances_usr_local_google_home_hangyuan_Desktop_test_DBMS_src_Schema_DBTable() {
   if (Schema::TableField::default_instance_ == NULL) {
     Schema::TableField::default_instance_ = new Schema::TableField();
     Schema::TableField::default_instance_->InitAsDefaultInstance();
@@ -29,18 +29,18 @@ void static_init_default_instances_home_hy_Desktop_Projects_DBMS_src_Schema_DBTa
   }
 }
 
-void static_init_home_hy_Desktop_Projects_DBMS_src_Schema_DBTable() {
+void static_init_usr_local_google_home_hangyuan_Desktop_test_DBMS_src_Schema_DBTable() {
   static bool already_called = false;
   if (already_called) return;
   already_called = true;
 
   ::proto::ProtoParser::ProtoParser parser(
       ::proto::ProtoParser::CPP,
-      "/home/hy/Desktop/Projects/DBMS/src/Schema/DBTable.proto");
+      "/usr/local/google/home/hangyuan/Desktop/test/DBMS/src/Schema/DBTable.proto");
   CHECK(parser.ParseProto(),
-        "static class initialization for /home/hy/Desktop/Projects/DBMS/src/Schema/DBTable.proto failed");
+        "static class initialization for /usr/local/google/home/hangyuan/Desktop/test/DBMS/src/Schema/DBTable.proto failed");
 
-  static_init_default_instances_home_hy_Desktop_Projects_DBMS_src_Schema_DBTable();
+  static_init_default_instances_usr_local_google_home_hangyuan_Desktop_test_DBMS_src_Schema_DBTable();
 
   int i = 0;
   // static init for class TableField
@@ -83,12 +83,12 @@ void static_init_home_hy_Desktop_Projects_DBMS_src_Schema_DBTable() {
 
 }
 
-// Force static_init_home_hy_Desktop_Projects_DBMS_src_Schema_DBTable() to be called at initialization time.
-struct static_init_forcer_home_hy_Desktop_Projects_DBMS_src_Schema_DBTable {
-  static_init_forcer_home_hy_Desktop_Projects_DBMS_src_Schema_DBTable() {
-    static_init_home_hy_Desktop_Projects_DBMS_src_Schema_DBTable();
+// Force static_init_usr_local_google_home_hangyuan_Desktop_test_DBMS_src_Schema_DBTable() to be called at initialization time.
+struct static_init_forcer_usr_local_google_home_hangyuan_Desktop_test_DBMS_src_Schema_DBTable {
+  static_init_forcer_usr_local_google_home_hangyuan_Desktop_test_DBMS_src_Schema_DBTable() {
+    static_init_usr_local_google_home_hangyuan_Desktop_test_DBMS_src_Schema_DBTable();
   }
-} static_init_forcer_home_hy_Desktop_Projects_DBMS_src_Schema_DBTable_obj_;
+} static_init_forcer_usr_local_google_home_hangyuan_Desktop_test_DBMS_src_Schema_DBTable_obj_;
 
 
 namespace Schema {
@@ -191,11 +191,11 @@ void TableField::Print(int indent_num) const {
   std::cout << "TableField " << "{" << std::endl;
   if (has_name()) {
     PrintIndent(indent_num + 1);
-        std::cout << "name: " << "\"" << name_ << "\"" << std::endl;
+    std::cout << "name: " << "\"" << name_ << "\"" << std::endl;
   }
   if (has_index()) {
     PrintIndent(indent_num + 1);
-        std::cout << "index: " << index_ << std::endl;
+    std::cout << "index: " << index_ << std::endl;
   }
   if (has_type()) {
     PrintIndent(indent_num + 1);
@@ -207,7 +207,7 @@ void TableField::Print(int indent_num) const {
   }
   if (has_size()) {
     PrintIndent(indent_num + 1);
-        std::cout << "size: " << size_ << std::endl;
+    std::cout << "size: " << size_ << std::endl;
   }
   PrintIndent(indent_num);
   std::cout << "}" << std::endl;
@@ -253,7 +253,7 @@ void TableField::Swap(TableField* other) {
 // default_instance()
 const TableField& TableField::default_instance() {
   if (default_instance_ == NULL) {
-    static_init_default_instances_home_hy_Desktop_Projects_DBMS_src_Schema_DBTable();
+    static_init_default_instances_usr_local_google_home_hangyuan_Desktop_test_DBMS_src_Schema_DBTable();
   }
   return *default_instance_;
 }
@@ -446,7 +446,7 @@ void TableSchema::Print(int indent_num) const {
   std::cout << "TableSchema " << "{" << std::endl;
   if (has_name()) {
     PrintIndent(indent_num + 1);
-        std::cout << "name: " << "\"" << name_ << "\"" << std::endl;
+    std::cout << "name: " << "\"" << name_ << "\"" << std::endl;
   }
   if (fields_size() > 0) {
     PrintIndent(indent_num + 1);
@@ -491,7 +491,7 @@ void TableSchema::Swap(TableSchema* other) {
 // default_instance()
 const TableSchema& TableSchema::default_instance() {
   if (default_instance_ == NULL) {
-    static_init_default_instances_home_hy_Desktop_Projects_DBMS_src_Schema_DBTable();
+    static_init_default_instances_usr_local_google_home_hangyuan_Desktop_test_DBMS_src_Schema_DBTable();
   }
   return *default_instance_;
 }

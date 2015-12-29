@@ -125,10 +125,31 @@ class TreeNodeRecord: public RecordBase {
 // This class wraps a record loaded from page.
 class PageLoadedRecord {
  public:
+  PageLoadedRecord() = default;
+  PageLoadedRecord(int slot_id) : slot_id_(slot_id) {}
+  
   DEFINE_ACCESSOR(slot_id, int);
+  DEFINE_ACCESSOR_SMART_PTR(record, RecordBase);
+
+  // Generate internal record type for this PageLoadedRecord. The internal
+  // reocrd can be DataRecord, IndexRecord or TreeNodeRecord, depending on
+  // the specified file_type and page_type.
+  bool GenerateRecordPrototype(const TableSchema* schema,
+                               std::vector<int> key_indexes,
+                               DataBaseFiles::FileType file_type,
+                               DataBaseFiles::PageType page_type);
+
+  // Comparator
+  static bool Comparator(const PageLoadedRecord& r1, const PageLoadedRecord& r2,
+                         const std::vector<int>& indexes);
+
+  void Print() const {
+    std::cout << "slot[" << slot_id_ << "] ";
+    record_->Print();
+  }
 
  private:
-  std::unique_ptr<RecordBase> record_;
+  std::shared_ptr<RecordBase> record_;
   int slot_id_;
 };
 
@@ -136,18 +157,43 @@ class PageLoadedRecord {
 // in this page. The data structure is critical to processe a page.
 class PageRecordsManager {
  public:
+  PageRecordsManager(DataBaseFiles::RecordPage* page,
+                     TableSchema* schema,
+                     std::vector<int> key_indexes,
+                     DataBaseFiles::FileType file_type,
+                     DataBaseFiles::PageType page_type) :
+      page_(page),
+      schema_(schema),
+      key_indexes_(key_indexes),
+      file_type_(file_type),
+      page_type_(page_type) {}
+
+  // Accessors
   DEFINE_ACCESSOR(schema, TableSchema*);
   DEFINE_ACCESSOR(key_indexes, std::vector<int>);
+  DEFINE_ACCESSOR(page, DataBaseFiles::RecordPage*);
   DEFINE_ACCESSOR_ENUM(file_type, DataBaseFiles::FileType);
   DEFINE_ACCESSOR_ENUM(page_type, DataBaseFiles::PageType);
+
+  std::vector<PageLoadedRecord>& plrecords() { return plrecords_; }
 
   // Sort a list of records based on indexes that specified key.
   static void SortRecords(
       std::vector<std::shared_ptr<Schema::RecordBase>>& records,
       const std::vector<int>& key_indexes);
 
+  // Load all records from a page and sort it based on key.
+  bool LoadRecordsFromPage();
+
+  // Insert a Record to Page.
+  bool InsertRecordToPage(const RecordBase* record);
+
+  bool CheckSort() const;
+
  private:
-  std::vector<PageLoadedRecord> records;
+  DataBaseFiles::RecordPage* page_ = nullptr;
+
+  std::vector<PageLoadedRecord> plrecords_;
   TableSchema* schema_ = nullptr;
   std::vector<int> key_indexes_;
 
@@ -155,6 +201,6 @@ class PageRecordsManager {
   DataBaseFiles::PageType page_type_ = DataBaseFiles::UNKNOW_PAGETYPE;
 };
 
-}  // namespace RecordBase
+}  // namespace Schema
 
 #endif  /* SCHEMA_RECORD_KEY_ */

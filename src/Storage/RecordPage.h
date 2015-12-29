@@ -133,6 +133,8 @@ class RecordPage {
   // Re-organize records.
   bool ReorganizeRecords();
 
+  byte* Record(int slot_id) const;
+
   // Insert a record. This function only reserved space in page but no actual
   // record data will be copied yet.
   byte* InsertRecord(int length);

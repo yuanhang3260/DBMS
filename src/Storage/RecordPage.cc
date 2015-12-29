@@ -105,6 +105,11 @@ void RecordPageMeta::reset() {
 // Meta data is stored at the end of each page. The layout is reverse order of
 // as shown in RecordPage.h
 bool RecordPageMeta::SaveMetaToPage(byte* ppage) const {
+  if (!ppage) {
+    LogERROR("Can't save meta to page nullptr");
+    return false;
+  }
+
   if (num_slots_ != (int)slot_directory_.size()) {
     LogERROR("[Save page meta data error] - num_slots inconsistency (%d, %d)",
              num_slots_, slot_directory_.size());
@@ -174,6 +179,10 @@ bool RecordPageMeta::SaveMetaToPage(byte* ppage) const {
 }
 
 bool RecordPageMeta::LoadMetaFromPage(const byte* ppage) {
+  if (!ppage) {
+    LogERROR("Can't load meta from page nullptr");
+    return false;
+  }
   reset();
 
   int offset = kPageSize - sizeof(num_slots_);
@@ -347,6 +356,20 @@ bool RecordPage::ReorganizeRecords() {
   // (TODO: need this?) : save meta to the new page.
   //bool success = page_meta_->SaveMetaToPage(new_page);
   return true;
+}
+
+byte* RecordPage::Record(int slot_id) const {
+  auto& slot_directory = page_meta_->slot_directory();
+  if (slot_id < 0 || slot_id > (int)slot_directory.size()) {
+    LogERROR("Can't get Record from page - slot_id %d out of range [0 - %d]",
+             slot_id, slot_directory.size());
+    return nullptr;
+  }
+  if (slot_directory[slot_id].offset() < 0) {
+    LogERROR("Empty slot_id %d, won't load record", slot_id);
+    return nullptr;
+  }
+  return data_.get() + slot_directory[slot_id].offset();
 }
 
 bool RecordPage::InsertRecord(const byte* content, int length) {
