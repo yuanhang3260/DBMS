@@ -23,6 +23,8 @@ class RecordID {
   int DumpToMem(byte* buf) const;
   int LoadFromMem(const byte* buf);
 
+  int size() const { return sizeof(page_id_) + sizeof(slot_id_); }
+
   void Print() const;
 
  private:
@@ -70,6 +72,8 @@ class RecordBase {
                                const std::shared_ptr<RecordBase> r2,
                                const std::vector<int>& indexes);
 
+  bool InsertToRecordPage(DataBaseFiles::RecordPage* page);
+
  protected:
   void PrintImpl() const;
 
@@ -85,9 +89,7 @@ class DataRecord: public RecordBase {
   // are given in arg field_indexes.
   // Extracted RecordKey will not allocate space for nor take ownership of the
   // data from this Record. It just maintains shared pointers to original data.
-  bool ExtractKey(RecordBase* key, const std::vector<int>& field_indexes) {
-    return false;
-  }
+  bool ExtractKey(RecordBase* key, const std::vector<int>& field_indexes) const;
 };
 
 
@@ -96,6 +98,8 @@ class DataRecord: public RecordBase {
 class IndexRecord: public RecordBase {
  public:
   DEFINE_ACCESSOR(rid, RecordID);
+
+  int size() const override;
 
   int DumpToMem(byte* buf) const override;
   int LoadFromMem(const byte* buf) override;
@@ -111,6 +115,8 @@ class IndexRecord: public RecordBase {
 class TreeNodeRecord: public RecordBase {
  public:
   DEFINE_ACCESSOR(page_id, int);
+
+  int size() const override;
 
   int DumpToMem(byte* buf) const override;
   int LoadFromMem(const byte* buf) override;
@@ -130,6 +136,13 @@ class PageLoadedRecord {
   
   DEFINE_ACCESSOR(slot_id, int);
   DEFINE_ACCESSOR_SMART_PTR(record, RecordBase);
+
+  int NumFields() const {
+    if (!record_) {
+      return 0;
+    }
+    return record_->fields().size();
+  }
 
   // Generate internal record type for this PageLoadedRecord. The internal
   // reocrd can be DataRecord, IndexRecord or TreeNodeRecord, depending on
@@ -174,6 +187,7 @@ class PageRecordsManager {
   DEFINE_ACCESSOR(page, DataBaseFiles::RecordPage*);
   DEFINE_ACCESSOR_ENUM(file_type, DataBaseFiles::FileType);
   DEFINE_ACCESSOR_ENUM(page_type, DataBaseFiles::PageType);
+  DEFINE_ACCESSOR(total_size, int);
 
   std::vector<PageLoadedRecord>& plrecords() { return plrecords_; }
 
@@ -199,6 +213,8 @@ class PageRecordsManager {
 
   DataBaseFiles::FileType file_type_ = DataBaseFiles::UNKNOWN_FILETYPE;
   DataBaseFiles::PageType page_type_ = DataBaseFiles::UNKNOW_PAGETYPE;
+
+  int total_size_ = 0;
 };
 
 }  // namespace Schema

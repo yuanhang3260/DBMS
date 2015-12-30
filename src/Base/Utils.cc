@@ -28,6 +28,10 @@ int Utils::RandomNumber(int range) {
   return rand() % range;
 }
 
+std::vector<int> Utils::RandomListFromRange(int start, int end) {
+  return RandomListFromRange(start, end, end - start + 1);
+}
+
 std::vector<int> Utils::RandomListFromRange(int start, int end, int num) {
   std::vector<int> result;
   if (num <= 0 || end  - start + 1 < num) {

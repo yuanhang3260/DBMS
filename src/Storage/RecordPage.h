@@ -143,6 +143,8 @@ class RecordPage {
 
   // Delete a record
   bool DeleteRecord(int slotid);
+  // Delete a number of records.
+  bool DeleteRecords(int from, int end);
 
  private:
   int id_ = -1;  // page id

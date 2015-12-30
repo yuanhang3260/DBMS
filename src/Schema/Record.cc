@@ -222,6 +222,33 @@ int RecordBase::LoadFromMem(const byte* buf) {
   return offset;
 }
 
+bool RecordBase::InsertToRecordPage(DataBaseFiles::RecordPage* page) {
+  byte* buf = page->InsertRecord(size());
+  if (buf) {
+    // Write the record content to page.
+    DumpToMem(buf);
+    return true;
+  }
+  return false;
+}
+
+// ****************************** DataRecord ******************************** //
+bool DataRecord::ExtractKey(
+         RecordBase* key, const std::vector<int>& key_indexes) const {
+  if (!key) {
+    return false;
+  }
+  key->fields().clear();
+  for (int index: key_indexes) {
+    if (index > (int)fields_.size()) {
+      LogERROR("key_index %d > number of fields, won't fetch");
+      continue;
+    }
+    key->fields().push_back(fields_.at(index));
+  }
+  return true;
+}
+
 
 // ***************************** IndexRecord ******************************** //
 int IndexRecord::DumpToMem(byte* buf) const {
@@ -230,6 +257,10 @@ int IndexRecord::DumpToMem(byte* buf) const {
   }
   int offset = RecordBase::DumpToMem(buf);
   offset += rid_.DumpToMem(buf + offset);
+  if (offset != size()) {
+    LogFATAL("IndexRecord DumpToMem error - expect %d bytes, actual %d",
+             size(), offset);
+  }
   return offset;
 }
 
@@ -239,12 +270,20 @@ int IndexRecord::LoadFromMem(const byte* buf) {
   }
   int offset = RecordBase::LoadFromMem(buf);
   offset += rid_.LoadFromMem(buf + offset);
+  if (offset != size()) {
+    LogFATAL("IndexRecord LoadFromMem error - expect %d bytes, actual %d",
+             size(), offset);
+  }
   return offset;
 }
 
 void IndexRecord::Print() const {
   RecordBase::PrintImpl();
   rid_.Print(); 
+}
+
+int IndexRecord::size() const {
+  return RecordBase::size() + rid_.size();
 }
 
 // **************************** TreeNodeRecord ****************************** //
@@ -254,6 +293,10 @@ int TreeNodeRecord::DumpToMem(byte* buf) const {
   }
   int offset = RecordBase::DumpToMem(buf);
   memcpy(buf + offset, &page_id_, sizeof(page_id_));
+  if (offset != size()) {
+    LogFATAL("TreeNodeRecord DumpToMem error - expect %d bytes, actual %d",
+             size(), offset);
+  }
   return offset + sizeof(page_id_);
 }
 
@@ -263,12 +306,20 @@ int TreeNodeRecord::LoadFromMem(const byte* buf) {
   }
   int offset = RecordBase::LoadFromMem(buf);
   memcpy(&page_id_, buf + offset, sizeof(page_id_));
+  if (offset != size()) {
+    LogFATAL("TreeNodeRecord LoadFromMem error - expect %d bytes, actual %d",
+             size(), offset);
+  }
   return offset + sizeof(page_id_);
 }
 
 void TreeNodeRecord::Print() const {
   RecordBase::PrintImpl();
   std::cout << "page_id = " << page_id_ << std::endl; 
+}
+
+int TreeNodeRecord::size() const {
+  return RecordBase::size() + sizeof(page_id_);
 }
 
 
@@ -377,6 +428,7 @@ bool PageRecordsManager::LoadRecordsFromPage() {
                slot_id, length, load_size);
       return false;
     }
+    total_size_ += load_size;
   }
 
   // Sort records
@@ -399,10 +451,23 @@ bool PageRecordsManager::InsertRecordToPage(const RecordBase* record) {
 }
 
 bool PageRecordsManager::CheckSort() const {
+  if (plrecords_.empty()) {
+    return true;
+  }
+
+  std::vector<int> check_indexes = key_indexes_;
+  if (!(file_type_ == DataBaseFiles::INDEX_DATA &&
+        page_type_ == DataBaseFiles::TREE_LEAVE)) {
+    check_indexes.clear();
+    for (int i = 0; i < (int)plrecords_.at(0).NumFields(); i++) {
+      check_indexes.push_back(i);
+    }
+  }
+
   for (int i = 0; i < (int)plrecords_.size() - 1; i++) {
-    const auto& r1 = plrecords_[i];
-    const auto& r2 = plrecords_[i + 1];
-    for (int index: key_indexes_) {
+    const auto& r1 = plrecords_.at(i);
+    const auto& r2 = plrecords_.at(i + 1);
+    for (int index: check_indexes) {
       int re = RecordBase::CompareSchemaFields(
                    (r1.record()->fields())[index].get(),
                    (r2.record()->fields())[index].get());

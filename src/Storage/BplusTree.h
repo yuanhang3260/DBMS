@@ -89,7 +89,7 @@ class BplusTree {
   bool LoadSchema();
 
   // Allocate a new page in bulkloading.
-  RecordPage* AllocateNewPage();
+  RecordPage* AllocateNewPage(PageType page_type);
   // Insert a record to a leave node.
   bool InsertRecordToLeave(const Schema::DataRecord& record, RecordPage* leave);
   // Insert a page to a parent node.
@@ -121,6 +121,7 @@ class BplusTree {
   RecordPage* crt_leave = nullptr;
   RecordPage* crt_node = nullptr;
   int next_id = 1;
+  int prev_leave_id = -1;
 };
 
 }

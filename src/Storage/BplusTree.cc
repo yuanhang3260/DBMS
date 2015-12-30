@@ -370,8 +370,10 @@ bool BplusTree::LoadFromDisk() {
   return true;
 }
 
-RecordPage* BplusTree::AllocateNewPage() {
-  return new RecordPage(next_id++, file_);
+RecordPage* BplusTree::AllocateNewPage(PageType page_type) {
+  RecordPage* page =  new RecordPage(next_id++, file_);
+  page->Meta()->set_page_type(page_type);
+  return page;
 }
 
 bool BplusTree::InsertRecordToLeave(const Schema::DataRecord& record,
@@ -387,7 +389,84 @@ bool BplusTree::InsertRecordToLeave(const Schema::DataRecord& record,
 }
 
 void BplusTree::InsertPageToParentNode(RecordPage* page, RecordPage* parent) {
+  // Fetch the smallest record stored in this page and extract key. 
+  // We're sure it's record at index 0 because it's a newly filled page (never
+  // had any deletion operation).
+
+  // Create record based on current page type.
+  Schema::RecordBase* first_record = nullptr;
+  if (page->Meta()->page_type() == TREE_LEAVE) {
+    first_record = new Schema::DataRecord();
+  }
+  else if (page->Meta()->page_type() == TREE_NODE) {
+    first_record = new Schema::TreeNodeRecord();
+  }
+  // Load first record from the page.
+  int load_size = first_record->LoadFromMem(page->Record(0));
+  if (load_size != page->Meta()->slot_directory()[0].length()) {
+    LogFATAL("Load first record from page %d - expect %d bytes, actual %d",
+             page->Meta()->slot_directory()[0].length(), load_size);
+  }
+  // Create a new TreeNodeRecord to insert to parent.
+  Schema::TreeNodeRecord new_tn_record;
+  if (page->Meta()->page_type() == TREE_LEAVE) {
+    reinterpret_cast<Schema::DataRecord*>(first_record)->
+        ExtractKey(&new_tn_record, key_indexes_);
+  }
+  else if (page->Meta()->page_type() == TREE_NODE) {
+    new_tn_record.fields().assign(first_record->fields().begin(),
+                                  first_record->fields().end());
+  }
+  new_tn_record.set_page_id(page->id());
   
+  // Insert the new TreeNodeRecord to parent node.
+  byte* buf = parent->InsertRecord(new_tn_record.size());
+  if (buf) {
+    // Success, and we're done.
+    new_tn_record.DumpToMem(buf);
+    page->Meta()->set_parent_page(parent->id());
+    // If it's leave page, set prev leave page id for it, and we can save it
+    // to disk now because it won't be modified again in bulk loading. Also
+    // remove it from page map cache.
+    if (page->Meta()->page_type() == TREE_LEAVE) {
+      page->Meta()->set_prev_page(prev_leave_id);
+      prev_leave_id = page->id();
+    }
+    return;
+  }
+  // The parent is full and needs to be split.
+  Schema::PageRecordsManager prmanager(parent, schema_.get(), key_indexes_,
+                                       file_type_, parent->Meta()->page_type());
+  if (!prmanager.LoadRecordsFromPage()) {
+    LogFATAL("Load page record failed");
+  }
+  int total_size = prmanager.total_size() + new_tn_record.size();
+  int acc_size = 0, middle_index = 0;
+  for (const auto& plrecord: prmanager.plrecords()) {
+    acc_size += plrecord.record()->size();
+    if (acc_size >= total_size / 2) {
+      break;
+    }
+    middle_index++;
+  }
+  // Allocate a new TreeNoe page and move the second half of current TreeNode
+  // records to the new one.
+  RecordPage* new_tree_node = AllocateNewPage(TREE_NODE);
+  page_map_[new_tree_node->id()] = std::shared_ptr<RecordPage>(new_tree_node);
+  const auto& slot_directory = parent->Meta()->slot_directory();
+  for (int index = middle_index + 1;
+       index < (int)slot_directory.size();
+       index++) {
+    new_tree_node->InsertRecord(parent->Record(index),
+                                slot_directory.at(index).length());
+  }
+  if (!new_tn_record.InsertToRecordPage(new_tree_node)) {
+    LogFATAL("Insert new TreeNode record to RecordPage failed");
+  }
+  parent->DeleteRecords(middle_index + 1, slot_directory.size());
+  if (parent->Meta()->parent_page() < 0) {
+    
+  }
 }
 
 // BulkLoading data
@@ -401,18 +480,18 @@ bool BplusTree::BulkLoading(std::vector<Schema::DataRecord>& records,
   for (const auto& record: records) {
     // Allocate a new leave page if necessary, and add to page map to cache.
     if (!crt_leave) {
-      crt_leave = AllocateNewPage();
+      crt_leave = AllocateNewPage(TREE_LEAVE);
       page_map_[crt_leave->id()] = std::shared_ptr<RecordPage>(crt_leave);
     }
     // Try inserting the record to current leave page. If success, we continue.
     // Otherwise we need to add this leave page to a tree node (current active
-    // tree node).
+    // tree node), and then allocate a new leave page.
     if (InsertRecordToLeave(record, crt_leave)) {
       continue;
     }
     // Allocate a new tree node if necessary, and add to page map to cache.
     if (!crt_node) {
-      crt_node = AllocateNewPage();
+      crt_node = AllocateNewPage(TREE_NODE);
       page_map_[crt_node->id()] = std::shared_ptr<RecordPage>(crt_node);
     }
     // Add current leave page to tree node. This function may lead to tree node

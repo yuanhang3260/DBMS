@@ -12,7 +12,9 @@ namespace Schema {
 
 class RecordTest: public UnitTest {
  private:
-  std::map<int, std::shared_ptr<RecordBase>> record_resource;
+  std::map<int, std::shared_ptr<DataRecord>> record_resource;
+  std::map<int, std::shared_ptr<IndexRecord>> indexrecord_resource;
+  std::map<int, std::shared_ptr<TreeNodeRecord>> treenoderecord_resource;
   const int kNumRecordsSource = 1000;
   TableSchema schema;
   std::vector<int> key_indexes = std::vector<int>{1, 0};
@@ -26,6 +28,7 @@ class RecordTest: public UnitTest {
 
   void setup() {
     InitSchema();
+    InitRecordResource();
   }
 
   void InitSchema() {
@@ -64,23 +67,10 @@ class RecordTest: public UnitTest {
     field->set_size(20);
   }
 
-  void InitRecordResource(RecordType type) {
+  void InitRecordResource() {
     record_resource.clear();
     for (int i = 0; i < kNumRecordsSource; i++) {
-      if (type == DATARECORD) {
-        record_resource.emplace(i, std::make_shared<DataRecord>());
-      }
-      if (type == INDEXRECORD) {
-        IndexRecord* record = new IndexRecord();
-        record->set_rid(RecordID(Utils::RandomNumber(1000),
-                                Utils::RandomNumber(1000)));
-        record_resource.emplace(i, std::shared_ptr<RecordBase>(record));
-      }
-      if (type == TREENODERECORD) {
-        TreeNodeRecord* record = new TreeNodeRecord();
-        record->set_page_id(Utils::RandomNumber(1000));
-        record_resource.emplace(i, std::shared_ptr<RecordBase>(record));
-      }
+      record_resource.emplace(i, std::make_shared<DataRecord>());
 
       // Init fields to records.
       // name
@@ -113,6 +103,30 @@ class RecordTest: public UnitTest {
         }
         record_resource.at(i)->AddField(
             new CharArrayType(buf, str_len, len_limit));
+      }
+    }
+  }
+
+  void GenerateBplusTreePageRecord(RecordType type) {
+    if (record_resource.empty()) {
+      return;
+    }
+    if (type == INDEXRECORD) {
+      for (int i = 0; i < kNumRecordsSource; i++) {
+        IndexRecord* record = new IndexRecord();
+        record->set_rid(RecordID(Utils::RandomNumber(1000),
+                                 Utils::RandomNumber(1000)));
+        record_resource.at(i)->ExtractKey(record, key_indexes);
+        indexrecord_resource.emplace(i, std::shared_ptr<IndexRecord>(record));
+      }
+    }
+    if (type == TREENODERECORD) {
+      for (int i = 0; i < kNumRecordsSource; i++) {
+        TreeNodeRecord* record = new TreeNodeRecord();
+        record->set_page_id(Utils::RandomNumber(1000));
+        record_resource.at(i)->ExtractKey(record, key_indexes);
+        treenoderecord_resource.emplace(
+            i, std::shared_ptr<TreeNodeRecord>(record));
       }
     }
   }
@@ -253,7 +267,6 @@ class RecordTest: public UnitTest {
   }
 
   void Test_PageRecords() {
-    InitRecordResource(DATARECORD);
     // Create a record page.
     DataBaseFiles::RecordPage page(1);
     page.InitInMemoryPage();
@@ -261,10 +274,9 @@ class RecordTest: public UnitTest {
                                  DataBaseFiles::INDEX_DATA,
                                  DataBaseFiles::TREE_LEAVE);
 
-    // Insert records to it.
     for (int iteration = 0; iteration < 10000; iteration++) {
-      auto list = Utils::RandomListFromRange(0, record_resource.size() - 1,
-                                           record_resource.size() - 1);
+      // Insert records to it.
+      auto list = Utils::RandomListFromRange(0, kNumRecordsSource - 1);
       int i = 0;
       while (1) {
         int re = prmanager.InsertRecordToPage(
@@ -297,10 +309,23 @@ class RecordTest: public UnitTest {
         int index = reinterpret_cast<LongIntType*>(
                         plrecord.record()->fields()[2].get())
                             ->value();
-        AssertTrue(*(plrecord.record()) == *(record_resource.at(index)));
+        AssertTrue(*(plrecord.record()) ==
+                   *reinterpret_cast<RecordBase*>(
+                        record_resource.at(index).get()));
         //plrecord.Print();
       }
     }
+  }
+
+  void Test_ExtractKey() {
+    GenerateBplusTreePageRecord(INDEXRECORD);
+    GenerateBplusTreePageRecord(TREENODERECORD);
+    // for (const auto& entry: indexrecord_resource) {
+    //   entry.second->Print();
+    // }
+    // for (const auto& entry: treenoderecord_resource) {
+    //   entry.second->Print();
+    // }
   }
 };
 
@@ -313,6 +338,7 @@ int main() {
   test.Test_Record_LoadDump();
   test.Test_SortRecords();
   test.Test_PageRecords();
+  test.Test_ExtractKey();
   test.teardown();
 
   std::cout << "\033[2;32mPassed ^_^\033[0m" << std::endl;

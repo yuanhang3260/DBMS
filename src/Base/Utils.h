@@ -24,6 +24,7 @@ class Utils {
   static void PrintMemoryBytes(const char* buf, int size);
   static void PrintMemoryChars(const char* buf, int size);
 
+  static std::vector<int> RandomListFromRange(int start, int end);
   static std::vector<int> RandomListFromRange(int start, int end, int num);
 
  private:

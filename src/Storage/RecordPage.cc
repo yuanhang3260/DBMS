@@ -77,6 +77,7 @@ bool RecordPageMeta::ReleaseSlot(int slot_id) {
   return false;
 }
 
+
 bool RecordPageMeta::AddEmptySlot(int slot_id) {
   if (slot_directory_[slot_id].offset() >= 0) {
     LogERROR("[Can't add to empty slot list] - slot[%d] has offset %d >= 0",
@@ -443,6 +444,24 @@ bool RecordPage::DeleteRecord(int slot_id) {
     return false;
   }
 
+  return true;
+}
+
+bool RecordPage::DeleteRecords(int from, int end) {
+  for (int slot_id = from; slot_id <= end; slot_id++) {
+    if (slot_id < 0 || slot_id >= (int)page_meta_->slot_directory().size()) {
+      LogERROR("Slot id %d out of range [0, %d], won't delete",
+               slot_id, (int)page_meta_->slot_directory().size() - 1);
+      continue;
+    }
+    if (!page_meta_->ReleaseSlot(slot_id)) {
+      return false;
+    }
+  }
+  // (TODO: need this?) Re-write meta data to page.
+  if (!page_meta_->SaveMetaToPage(data_.get())) {
+    return false;
+  }
   return true;
 }
 
