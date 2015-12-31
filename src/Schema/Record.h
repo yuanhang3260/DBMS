@@ -40,6 +40,8 @@ class RecordBase {
     return fields_;
   }
 
+  virtual ~RecordBase() { /*printf("deleting RecordBase\n");*/ }
+
   // Total size it takes as raw data.
   virtual int size() const;
 
@@ -52,6 +54,14 @@ class RecordBase {
   // Add a new fiild. This method takes ownership of SchemaFieldType pointer.
   void AddField(SchemaFieldType* new_field);
 
+  // Reset all fields to minimum.
+  virtual void reset();
+
+  bool InitRecordFields(const TableSchema* schema,
+                        std::vector<int> key_indexes,
+                        DataBaseFiles::FileType file_type,
+                        DataBaseFiles::PageType page_type);
+
   // Compare 2 Schema fields. We first compare field type and then the value
   // if the field types are same.
   static int CompareSchemaFields(const SchemaFieldType* field1,
@@ -59,6 +69,8 @@ class RecordBase {
 
   virtual int DumpToMem(byte* buf) const;
   virtual int LoadFromMem(const byte* buf);
+
+  virtual RecordBase* Duplicate() const;
 
   // Overloading operators.
   bool operator<(const RecordBase& other) const;
@@ -72,7 +84,7 @@ class RecordBase {
                                const std::shared_ptr<RecordBase> r2,
                                const std::vector<int>& indexes);
 
-  bool InsertToRecordPage(DataBaseFiles::RecordPage* page);
+  bool InsertToRecordPage(DataBaseFiles::RecordPage* page) const;
 
  protected:
   void PrintImpl() const;
@@ -85,6 +97,8 @@ class RecordBase {
 // index-data B+ tree file leave nodes.
 class DataRecord: public RecordBase {
  public:
+  virtual ~DataRecord() {}
+
   // Extract key data to a RecordKey object. The fields to extract as key
   // are given in arg field_indexes.
   // Extracted RecordKey will not allocate space for nor take ownership of the
@@ -97,6 +111,8 @@ class DataRecord: public RecordBase {
 // tree leave nodes, consisting of (Record_key, Record_id).
 class IndexRecord: public RecordBase {
  public:
+  virtual ~IndexRecord() {}
+
   DEFINE_ACCESSOR(rid, RecordID);
 
   int size() const override;
@@ -106,6 +122,10 @@ class IndexRecord: public RecordBase {
 
   void Print() const override;
 
+  RecordBase* Duplicate() const override;
+
+  void reset() override;
+
  private:
   RecordID rid_;
 };
@@ -114,6 +134,8 @@ class IndexRecord: public RecordBase {
 // B+ tree node record, consisting of (Record_key, page_id).
 class TreeNodeRecord: public RecordBase {
  public:
+  virtual ~TreeNodeRecord() {}
+
   DEFINE_ACCESSOR(page_id, int);
 
   int size() const override;
@@ -122,6 +144,10 @@ class TreeNodeRecord: public RecordBase {
   int LoadFromMem(const byte* buf) override;
 
   void Print() const override;
+
+  RecordBase* Duplicate() const override;
+
+  void reset() override;
 
  private:
   int page_id_ = -1;
@@ -163,7 +189,7 @@ class PageLoadedRecord {
 
  private:
   std::shared_ptr<RecordBase> record_;
-  int slot_id_;
+  int slot_id_ = -1;
 };
 
 // Page Records Manager provide service to load a page and parse records stored
@@ -190,6 +216,7 @@ class PageRecordsManager {
   DEFINE_ACCESSOR(total_size, int);
 
   std::vector<PageLoadedRecord>& plrecords() { return plrecords_; }
+  RecordBase* Record(int index) const;
 
   // Sort a list of records based on indexes that specified key.
   static void SortRecords(
@@ -202,7 +229,20 @@ class PageRecordsManager {
   // Insert a Record to Page.
   bool InsertRecordToPage(const RecordBase* record);
 
+  // Check sorted list of PageLoadedRecords, based on given key.
   bool CheckSort() const;
+
+  // Produce list of indexes of fields to compare 2 records. If the page is a
+  // tree leave of an index-data file, it should return key_indexes.
+  // Otherwise the PageLoadedRecord already contains only key fields, and thus
+  // each field needs to be compared one by one.
+  std::vector<int> ProduceIndexesToCompare() const;
+
+  // Insert a new record to the plrecords list. This function is only called
+  // in splitting this page. It won't take owner ship of the record passed.
+  // It returns the middle point that splits all recors equally in respect of
+  // space they take.
+  int InsertRecordAndSplitPage(RecordBase* record);
 
  private:
   DataBaseFiles::RecordPage* page_ = nullptr;

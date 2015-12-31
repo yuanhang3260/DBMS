@@ -163,4 +163,13 @@ int CharArrayType::LoadFromMem(const byte* buf) {
   return length_limit_;
 }
 
+void CharArrayType::reset() {
+  if (!value_) {
+    return;
+  }
+
+  memset(value_, 0, length_limit_);
+  length_ = 0;
+}
+
 }  // namepsace Schema

@@ -177,9 +177,9 @@ class RecordTest: public UnitTest {
     (reinterpret_cast<StringType*>(fields[4].get()))->set_value("abc");
 
     // change CharArray key field.
-    (reinterpret_cast<CharArrayType*>(fields[4].get()))->SetData("abcd", 3);
+    (reinterpret_cast<CharArrayType*>(fields[5].get()))->SetData("acde", 3);
     AssertTrue(key1 == key2, "CharArray");
-    (reinterpret_cast<CharArrayType*>(fields[4].get()))->SetData("abc", 3);
+    (reinterpret_cast<CharArrayType*>(fields[5].get()))->SetData("acd", 3);
 
     fields.pop_back();
     AssertTrue(key1 > key2, "length diff");

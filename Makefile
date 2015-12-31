@@ -4,7 +4,7 @@
 # Hang Yuan <yuanhang3260@gmail.com>
 #
 CC=g++ -std=c++11
-CFLAGS=-Wall -Werror -O2
+CFLAGS=-Wall -Werror -O2 -g
 LFLAGS=-pthread
 IFLAGS=-Isrc/ -I../ProtoBuf/src/
 ProtoBufLib=../ProtoBuf/libproto.a

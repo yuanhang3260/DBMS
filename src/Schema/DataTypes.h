@@ -66,6 +66,8 @@ class IntType: public SchemaFieldType {
     return sizeof(int);
   }
 
+  void reset() override { value_ = LONG_MIN; }
+
  private:
   int value_ = LONG_MIN;
 };
@@ -123,6 +125,8 @@ class LongIntType: public SchemaFieldType {
     memcpy(&value_, buf, sizeof(int64));
     return sizeof(int64);
   }
+
+  void reset() override { value_ = LLONG_MIN; }
 
  private:
   int64 value_ = LLONG_MIN;
@@ -182,6 +186,8 @@ class DoubleType: public SchemaFieldType {
     return sizeof(double);
   }
 
+  void reset() override { value_ = -DBL_MAX; }
+
  private:
   double value_ = -DBL_MAX;
 };
@@ -240,6 +246,8 @@ class BoolType: public SchemaFieldType {
     return sizeof(bool);
   }
 
+  void reset() override { value_ = false; }
+
  private:
   bool value_ = false;
 };
@@ -268,6 +276,8 @@ class StringType: public SchemaFieldType {
   int LoadFromMem(const byte* buf) override;
 
   std::string AsString() const override { return value_; }
+
+  void reset() override { value_.clear(); }
 
  private:
   std::string value_;
@@ -303,6 +313,8 @@ class CharArrayType: public SchemaFieldType {
   // Dump to memory
   int DumpToMem(byte* buf) const override;
   int LoadFromMem(const byte* buf) override;
+
+  void reset() override;
 
  private:
   char* value_ = nullptr;

@@ -204,7 +204,7 @@ int RecordBase::DumpToMem(byte* buf) const {
     offset += field->DumpToMem(buf + offset);
   }
 
-  if (offset != size()) {
+  if (offset != RecordBase::size()) {
     LogFATAL("Record dump %d byte, record.size() = %d", offset, size());
   }
   return offset;
@@ -219,10 +219,14 @@ int RecordBase::LoadFromMem(const byte* buf) {
   for (const auto& field: fields_) {
     offset += field->LoadFromMem(buf + offset);
   }
+
+  if (offset != RecordBase::size()) {
+    LogFATAL("Record load %d byte, record.size() = %d", offset, size());
+  }
   return offset;
 }
 
-bool RecordBase::InsertToRecordPage(DataBaseFiles::RecordPage* page) {
+bool RecordBase::InsertToRecordPage(DataBaseFiles::RecordPage* page) const {
   byte* buf = page->InsertRecord(size());
   if (buf) {
     // Write the record content to page.
@@ -230,6 +234,56 @@ bool RecordBase::InsertToRecordPage(DataBaseFiles::RecordPage* page) {
     return true;
   }
   return false;
+}
+
+RecordBase* RecordBase::Duplicate() const {
+  RecordBase* new_record = new RecordBase();
+  new_record->fields_ = fields_;
+  return new_record;
+}
+
+void RecordBase::reset() {
+  for (auto& field: fields_) {
+    field->reset();
+  }
+}
+
+bool RecordBase::InitRecordFields(const TableSchema* schema,
+                                  std::vector<int> key_indexes,
+                                  DataBaseFiles::FileType file_type,
+                                  DataBaseFiles::PageType page_type) {
+  // Create record based on file tpye and page type
+  if (file_type == DataBaseFiles::INDEX_DATA &&
+      page_type == DataBaseFiles::TREE_LEAVE) {
+    // DataRecord should contain all fields.
+    key_indexes.resize(schema->fields_size());
+    for (int i = 0; i < (int)key_indexes.size(); i++) {
+      key_indexes[i] = i;
+    }
+  }
+
+  for (int index: key_indexes) {
+    auto type = schema->fields(index).type();
+    if (type == TableField::INTEGER) {
+      AddField(new IntType());
+    }
+    if (type == TableField::LLONG) {
+      AddField(new LongIntType());
+    }
+    if (type == TableField::DOUBLE) {
+      AddField(new DoubleType());
+    }
+    if (type == TableField::BOOL) {
+      AddField(new BoolType());
+    }
+    if (type == TableField::STRING) {
+      AddField(new StringType());
+    }
+    if (type == TableField::CHARARR) {
+      AddField(new CharArrayType(schema->fields(index).size()));
+    }
+  }
+  return true;
 }
 
 // ****************************** DataRecord ******************************** //
@@ -286,6 +340,19 @@ int IndexRecord::size() const {
   return RecordBase::size() + rid_.size();
 }
 
+RecordBase* IndexRecord::Duplicate() const {
+  IndexRecord* new_record = new IndexRecord();
+  new_record->fields_ = fields_;
+  new_record->rid_ = rid_;
+  return new_record;
+}
+
+void IndexRecord::reset() {
+  RecordBase::reset();
+  rid_.set_page_id(-1);
+  rid_.set_slot_id(-1);
+}
+
 // **************************** TreeNodeRecord ****************************** //
 int TreeNodeRecord::DumpToMem(byte* buf) const {
   if (!buf) {
@@ -293,11 +360,12 @@ int TreeNodeRecord::DumpToMem(byte* buf) const {
   }
   int offset = RecordBase::DumpToMem(buf);
   memcpy(buf + offset, &page_id_, sizeof(page_id_));
+  offset += sizeof(page_id_);
   if (offset != size()) {
     LogFATAL("TreeNodeRecord DumpToMem error - expect %d bytes, actual %d",
              size(), offset);
   }
-  return offset + sizeof(page_id_);
+  return offset;
 }
 
 int TreeNodeRecord::LoadFromMem(const byte* buf) {
@@ -306,11 +374,12 @@ int TreeNodeRecord::LoadFromMem(const byte* buf) {
   }
   int offset = RecordBase::LoadFromMem(buf);
   memcpy(&page_id_, buf + offset, sizeof(page_id_));
+  offset += sizeof(page_id_);
   if (offset != size()) {
     LogFATAL("TreeNodeRecord LoadFromMem error - expect %d bytes, actual %d",
              size(), offset);
   }
-  return offset + sizeof(page_id_);
+  return offset;
 }
 
 void TreeNodeRecord::Print() const {
@@ -322,6 +391,17 @@ int TreeNodeRecord::size() const {
   return RecordBase::size() + sizeof(page_id_);
 }
 
+RecordBase* TreeNodeRecord::Duplicate() const {
+  TreeNodeRecord* new_record = new TreeNodeRecord();
+  new_record->fields_ = fields_;
+  new_record->page_id_ = page_id_;
+  return new_record;
+}
+
+void TreeNodeRecord::reset() {
+  RecordBase::reset();
+  page_id_ = -1;
+}
 
 // **************************** PageLoadedRecord **************************** //
 bool PageLoadedRecord::GenerateRecordPrototype(
@@ -333,11 +413,6 @@ bool PageLoadedRecord::GenerateRecordPrototype(
   if (file_type == DataBaseFiles::INDEX_DATA &&
       page_type == DataBaseFiles::TREE_LEAVE) {
     record_.reset(new DataRecord());
-    // DataRecord should contain all fields.
-    key_indexes.resize(schema->fields_size());
-    for (int i = 0; i < (int)key_indexes.size(); i++) {
-      key_indexes[i] = i;
-    }
   }
   else if (file_type == DataBaseFiles::INDEX &&
       page_type == DataBaseFiles::TREE_LEAVE) {
@@ -353,27 +428,7 @@ bool PageLoadedRecord::GenerateRecordPrototype(
     return false;
   }
 
-  for (int index: key_indexes) {
-    auto type = schema->fields(index).type();
-    if (type == TableField::INTEGER) {
-      record_->AddField(new IntType());
-    }
-    if (type == TableField::LLONG) {
-      record_->AddField(new LongIntType());
-    }
-    if (type == TableField::DOUBLE) {
-      record_->AddField(new DoubleType());
-    }
-    if (type == TableField::BOOL) {
-      record_->AddField(new BoolType());
-    }
-    if (type == TableField::STRING) {
-      record_->AddField(new StringType());
-    }
-    if (type == TableField::CHARARR) {
-      record_->AddField(new CharArrayType(schema->fields(index).size()));
-    }
-  }
+  record_->InitRecordFields(schema, key_indexes, file_type, page_type);
   return true;
 }
 
@@ -431,10 +486,14 @@ bool PageRecordsManager::LoadRecordsFromPage() {
     total_size_ += load_size;
   }
 
+  if (plrecords_.empty()) {
+    return true;  // Got empty page.
+  }
+
   // Sort records
   auto comparator = std::bind(PageLoadedRecord::Comparator,
                               std::placeholders::_1, std::placeholders::_2,
-                              key_indexes_);
+                              ProduceIndexesToCompare());
   std::sort(plrecords_.begin(), plrecords_.end(), comparator);
 
   return true;
@@ -450,20 +509,26 @@ bool PageRecordsManager::InsertRecordToPage(const RecordBase* record) {
   return false;
 }
 
+std::vector<int> PageRecordsManager::ProduceIndexesToCompare() const {
+  std::vector<int> indexes;
+  if (file_type_ == DataBaseFiles::INDEX_DATA &&
+      page_type_ == DataBaseFiles::TREE_LEAVE) {
+    indexes = key_indexes_;
+  }
+  else {
+    for (int i = 0; i < (int)key_indexes_.size(); i++) {
+      indexes.push_back(i);
+    }
+  }
+  return indexes;
+}
+
 bool PageRecordsManager::CheckSort() const {
   if (plrecords_.empty()) {
     return true;
   }
 
-  std::vector<int> check_indexes = key_indexes_;
-  if (!(file_type_ == DataBaseFiles::INDEX_DATA &&
-        page_type_ == DataBaseFiles::TREE_LEAVE)) {
-    check_indexes.clear();
-    for (int i = 0; i < (int)plrecords_.at(0).NumFields(); i++) {
-      check_indexes.push_back(i);
-    }
-  }
-
+  std::vector<int> check_indexes = ProduceIndexesToCompare();
   for (int i = 0; i < (int)plrecords_.size() - 1; i++) {
     const auto& r1 = plrecords_.at(i);
     const auto& r2 = plrecords_.at(i + 1);
@@ -480,6 +545,54 @@ bool PageRecordsManager::CheckSort() const {
     }
   }
   return true;
+}
+
+int PageRecordsManager::InsertRecordAndSplitPage(RecordBase* record) {
+  if (plrecords_.empty()) {
+    LogERROR("Won't add the record - This PageRecordsManager has not loaded "
+             "any PageLoadedRecord");
+    return -1;
+  }
+  if (record->NumFields() != plrecords_[0].NumFields()) {
+    LogERROR("Can't insert a new reocrd to PageRecordsManager - record "
+             "has mismatching number of fields with that of this page");
+    return -1;
+  }
+
+  // Create a new PageLoadedRecord with this record. We need to duplicate
+  // the record and pass it to PageLoadedRecord so that it won't take ownership
+  // of the original one.
+  PageLoadedRecord new_plrecord;
+  new_plrecord.set_record(record->Duplicate());
+  int i = plrecords_.size() - 1;
+  for (; i >= 0; i--) {
+    if (PageLoadedRecord::Comparator(plrecords_.at(i), new_plrecord,
+                                     ProduceIndexesToCompare())) {
+      break;
+    }
+  }
+  plrecords_.insert(plrecords_.begin() + 1 + i, new_plrecord);
+  total_size_ += record->size();
+
+  int acc_size = 0;
+  for (i = 0; i < (int)plrecords_.size(); i++) {
+    acc_size += plrecords_.at(i).record()->size();
+    if (acc_size > total_size_ / 2) {
+      break;
+    }
+  }
+  if (acc_size - total_size_ / 2 >
+      total_size_ / 2 - acc_size + (int)plrecords_.at(i).record()->size()) {
+    i--;
+  }
+  return i + 1;
+}
+
+RecordBase* PageRecordsManager::Record(int index) const {
+  if (index >= (int)plrecords_.size()) {
+    return nullptr;
+  }
+  return plrecords_.at(index).record();
 }
 
 }  // namespace Schema

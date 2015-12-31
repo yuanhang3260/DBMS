@@ -268,6 +268,7 @@ bool RecordPageMeta::LoadMetaFromPage(const byte* ppage) {
 
 // **************************** RecordPage ********************************** //
 RecordPage::~RecordPage() {
+  //printf("deleting record page\n");
 }
 
 int RecordPage::FreeSize() const {

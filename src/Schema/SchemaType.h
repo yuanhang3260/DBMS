@@ -29,6 +29,8 @@ class SchemaFieldType {
 
   virtual std::string AsString() const = 0;
 
+  virtual void reset() = 0;
+
   static std::string FieldTypeAsString(FieldType type);
 
  protected:

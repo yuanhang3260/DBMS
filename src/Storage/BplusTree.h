@@ -72,8 +72,7 @@ class BplusTree {
   // BulkLoading data. Input is a list of Record consisting of various fields
   // defined in Schema/DataTypes. These records must have been sorted based
   // on a key which consists of fields from Record speficed from key_indexes.
-  bool BulkLoading(std::vector<Schema::DataRecord>& records,
-                   const std::vector<int>& key_indexes);
+  bool BulkLoadRecord(Schema::DataRecord* record);
 
   friend class BplusTreeTest;
 
@@ -91,9 +90,17 @@ class BplusTree {
   // Allocate a new page in bulkloading.
   RecordPage* AllocateNewPage(PageType page_type);
   // Insert a record to a leave node.
-  bool InsertRecordToLeave(const Schema::DataRecord& record, RecordPage* leave);
+  bool InsertRecordToLeave(const Schema::DataRecord* record, RecordPage* leave);
   // Insert a page to a parent node.
-  void InsertPageToParentNode(RecordPage* page, RecordPage* parent);
+  bool AddLeaveToTree(RecordPage* leave);
+  // Insert a new TreeNodeRecord to tree node page.
+  bool InsertTreeNodeRecord(Schema::TreeNodeRecord* tn_record,
+                            RecordPage* tn_page);
+
+  // Fetch a page, either from page map or load it from disk.
+  RecordPage* FetchPage(int page_id);
+  // Save page to disk and de-cache it from page map.
+  bool CheckoutPage(int page_id);
 
   std::string tablename_;
   FILE* file_ = nullptr;
@@ -119,7 +126,7 @@ class BplusTree {
 
   // helper variables for bulkloading
   RecordPage* crt_leave = nullptr;
-  RecordPage* crt_node = nullptr;
+  RecordPage* prev_leave = nullptr;
   int next_id = 1;
   int prev_leave_id = -1;
 };
