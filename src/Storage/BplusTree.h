@@ -3,6 +3,7 @@
 
 #include <memory>
 #include <map>
+#include <queue>
 
 #include "Schema/Record.h"
 #include "Schema/DBTable_pb.h"
@@ -22,7 +23,9 @@ class BplusTreeHeaderPage: public HeaderPage {
 
   DEFINE_ACCESSOR(root_page, int);
   DEFINE_ACCESSOR(num_leaves, int);
+  DEFINE_INCREMENTOR_DECREMENTOR(num_leaves, int);
   DEFINE_ACCESSOR(depth, int);
+  DEFINE_INCREMENTOR_DECREMENTOR(depth, int);
 
   // Dump header page to memory.
   bool DumpToMem(byte* buf) const override;
@@ -74,6 +77,9 @@ class BplusTree {
   // on a key which consists of fields from Record speficed from key_indexes.
   bool BulkLoadRecord(Schema::DataRecord* record);
 
+  // Validity check for the B+ tree.
+  bool ValidityCheck();
+
   friend class BplusTreeTest;
 
  private:
@@ -101,6 +107,17 @@ class BplusTree {
   RecordPage* FetchPage(int page_id);
   // Save page to disk and de-cache it from page map.
   bool CheckoutPage(int page_id);
+
+  // Consistency check for a tree node. It loads and sorts all TreeNodeRecords
+  // from this tree node, and verify each child node within the range of every
+  // two successive records.
+  bool CheckTreeNodeValid(RecordPage* page);
+  // Verify a child node records are within range given from parent node.
+  bool VerifyChildRecordsRange(RecordPage* child_page,
+                               Schema::RecordBase* left_bound,
+                               Schema::RecordBase* right_bound);
+  // Enqueue children tree nodes, used in level-traversing B+ tree.
+  bool EqueueChildNodes(RecordPage* page, std::queue<RecordPage*>* page_q);
 
   std::string tablename_;
   FILE* file_ = nullptr;

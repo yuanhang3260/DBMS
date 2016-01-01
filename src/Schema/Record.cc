@@ -454,7 +454,7 @@ void PageRecordsManager::SortRecords(
   auto comparator = std::bind(RecordBase::RecordComparator,
                               std::placeholders::_1, std::placeholders::_2,
                               key_indexes);
-  std::sort(records.begin(), records.end(), comparator);
+  std::stable_sort(records.begin(), records.end(), comparator);
 }
 
 bool PageRecordsManager::LoadRecordsFromPage() {
@@ -490,11 +490,21 @@ bool PageRecordsManager::LoadRecordsFromPage() {
     return true;  // Got empty page.
   }
 
+  // printf("before sort: size = %d\n", plrecords_.size());
+  // for (auto& r: plrecords_) {
+  //   r.record()->Print();
+  // }
+
   // Sort records
   auto comparator = std::bind(PageLoadedRecord::Comparator,
                               std::placeholders::_1, std::placeholders::_2,
                               ProduceIndexesToCompare());
-  std::sort(plrecords_.begin(), plrecords_.end(), comparator);
+  std::stable_sort(plrecords_.begin(), plrecords_.end(), comparator);
+
+  // printf("after sort: size = %d\n", plrecords_.size());
+  // for (auto& r: plrecords_) {
+  //   r.record()->Print();
+  // }
 
   return true;
 }

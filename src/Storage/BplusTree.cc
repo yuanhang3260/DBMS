@@ -140,7 +140,7 @@ bool BplusTreeHeaderPage::LoadFromDisk() {
   }
 
   if (!ParseFromMem(buf)) {
-    LogERROR("ParseFromMem(buf)");
+    LogERROR("Parse B+ tree header page failed");
     return false;
   }
   return true;
@@ -148,7 +148,7 @@ bool BplusTreeHeaderPage::LoadFromDisk() {
 
 bool BplusTreeHeaderPage::ConsistencyCheck(const char* op) const {
   if (num_pages_ != num_free_pages_ + num_used_pages_) {
-    LogERROR("num_pages !=  num_used_pages_ + num_free_pages_, "
+    LogERROR("%s: num_pages !=  num_used_pages_ + num_free_pages_, "
              "(%d != %d + %d)", op,
              num_pages_, num_used_pages_, num_free_pages_);
     return false;
@@ -156,15 +156,13 @@ bool BplusTreeHeaderPage::ConsistencyCheck(const char* op) const {
 
   if ((num_free_pages_ > 0 && free_page_ < 0) ||
       (num_free_pages_ <= 0 && free_page_ >= 0)) {
-    LogERROR(""
-             "num_free_pages_ = %d, first_free_page_id = %d", op,
+    LogERROR("%s: num_free_pages_ = %d, first_free_page_id = %d", op,
              num_free_pages_, free_page_);
     return false;
   }
 
   if (root_page_ < 0 && (num_leaves_ > 0 || depth_ > 0)) {
-    LogERROR(""
-             "Empty tree, but num_leaves_ = %d, depth_ = %d", op,
+    LogERROR("%s: Empty tree, but num_leaves_ = %d, depth_ = %d", op,
              num_leaves_, depth_);
     return false;
   }
@@ -384,6 +382,11 @@ RecordPage* BplusTree::AllocateNewPage(PageType page_type) {
   page->InitInMemoryPage();
   page->Meta()->set_page_type(page_type);
   page_map_[page->id()] = std::shared_ptr<RecordPage>(page);
+  header_->increment_num_pages(1);
+  header_->increment_num_used_pages(1);
+  if (page_type == TREE_LEAVE) {
+    header_->increment_num_leaves(1);
+  }
   return page;
 }
 
@@ -433,6 +436,7 @@ bool BplusTree::InsertTreeNodeRecord(Schema::TreeNodeRecord* tn_record,
     return false;
   }
   
+  tn_record->Print();
   if (tn_record->InsertToRecordPage(tn_page)) {
     // Success, and we're done. Get the child page related with this new
     // TreeNode record and set its parent page id as this tree node.
@@ -460,21 +464,6 @@ bool BplusTree::InsertTreeNodeRecord(Schema::TreeNodeRecord* tn_record,
   // records to the new one.
   RecordPage* new_tree_node = AllocateNewPage(TREE_NODE);
   const auto& plrecords = prmanager.plrecords();
-  // Left-half records stay in the original tree node.
-  for (int i = 0; i < mid_index; i++) {
-    if (plrecords.at(i).slot_id() < 0) {
-      // It's the inserted new TreeNodeRecord. Now we inserted it to RecordPage.
-      if (!tn_record->InsertToRecordPage(tn_page)) {
-        LogERROR("Insert to TreeNodeRecord to left-half tree node failed");
-        return false;
-      }
-      RecordPage* child_page = FetchPage(tn_record->page_id());
-      if (child_page) {
-        child_page->Meta()->set_parent_page(tn_page->id());
-      }
-    }
-  }
-
   // Rigth-half records go to new (split out) tree node.
   for (int i = mid_index; i < (int)plrecords.size(); i++) {
     if (!prmanager.Record(i)->InsertToRecordPage(new_tree_node)) {
@@ -495,12 +484,34 @@ bool BplusTree::InsertTreeNodeRecord(Schema::TreeNodeRecord* tn_record,
     }
   }
 
+  // Left-half records stay in the original tree node.
+  for (int i = 0; i < mid_index; i++) {
+    if (plrecords.at(i).slot_id() < 0) {
+      // It's the inserted new TreeNodeRecord. Now we inserted it to RecordPage.
+      if (!tn_record->InsertToRecordPage(tn_page)) {
+        LogERROR("Insert to TreeNodeRecord to left-half tree node failed");
+        return false;
+      }
+      RecordPage* child_page = FetchPage(tn_record->page_id());
+      if (child_page) {
+        child_page->Meta()->set_parent_page(tn_page->id());
+      }
+    }
+    // After split, left half child nodes will not be modified later, and we
+    // can check them out to disk.
+    // int child_page_id =
+    //     reinterpret_cast<Schema::TreeNodeRecord*>(prmanager.Record(i))
+    //         ->page_id();
+    // CheckoutPage(child_page_id);
+  }
+
   // Add the middle TreeNodeRecord to parent tree node.
   if (tn_page->Meta()->parent_page() < 0) {
     // Current tree node is root, so create new root and we need to add both
     // tree nodes to the root.
     RecordPage* new_root = AllocateNewPage(TREE_NODE);
     header_->set_root_page(new_root->id());
+    printf("creating new root %d\n", new_root->id());
 
     Schema::TreeNodeRecord left_upper_tn_record =
         *reinterpret_cast<Schema::TreeNodeRecord*>(prmanager.Record(0));
@@ -540,7 +551,7 @@ bool BplusTree::AddLeaveToTree(RecordPage* leave) {
     LogFATAL("Load first record from leave %d - expect %d bytes, actual %d",
              leave->id(),leave->Meta()->slot_directory()[0].length(),load_size);
   }
-  // first_data_record.Print();
+  //first_data_record.Print();
 
   // Create a new TreeNodeRecord to insert to node.
   Schema::TreeNodeRecord new_tn_record;
@@ -605,6 +616,168 @@ bool BplusTree::BulkLoadRecord(Schema::DataRecord* record) {
     return false;
   }
 
+  return true;
+}
+
+bool BplusTree::ValidityCheck() {
+  if (header_->root_page() < 0) {
+    LogINFO("No root node. Empty B+ tree");
+    return true;
+  }
+
+  // Level-iterate the B+ tree.
+  std::queue<RecordPage*> page_q;
+  RecordPage* root = FetchPage(header_->root_page());
+  page_q.push(root);
+  while (!page_q.empty()) {
+    RecordPage* crt_page = page_q.front();
+    page_q.pop();
+
+    // Verify this page.
+    if (crt_page->Meta()->page_type() == TREE_NODE) {
+      if (!CheckTreeNodeValid(crt_page)) {
+        LogERROR("CheckTreeNodeValid failed for page %d", crt_page->id());
+        return false;
+      }
+      // Enqueue all child nodes of current node.
+      if (!EqueueChildNodes(crt_page, &page_q)) {
+        LogERROR("Enqueue children nodes failed for node %d", crt_page->id());
+        return false;
+      }
+    }
+  }
+
+  return true;
+}
+
+bool BplusTree::CheckTreeNodeValid(RecordPage* page) {
+  if (page->Meta()->page_type() != TREE_NODE) {
+    LogERROR("Wrong node type - not tree node");
+    return false;
+  }
+
+  Schema::PageRecordsManager prmanager(page, schema_.get(), key_indexes_,
+                                       file_type_, TREE_NODE);
+  if (!prmanager.LoadRecordsFromPage()) {
+    LogFATAL("Load page record failed");
+  }
+  for (int i = 0; i < prmanager.NumRecords(); i++) {
+    auto tn_record = prmanager.GetRecord<Schema::TreeNodeRecord>(i);
+    int child_page_id = tn_record->page_id();
+
+    Schema::TreeNodeRecord* next_record = nullptr;
+    if (i < prmanager.NumRecords() - 1) {
+      next_record = prmanager.GetRecord<Schema::TreeNodeRecord>(i + 1);
+    }
+    if (!VerifyChildRecordsRange(FetchPage(child_page_id),
+                                 tn_record, next_record)) {
+      LogERROR("Verify child page %d range failed", child_page_id);
+      return false;
+    }
+  }
+
+  return true;
+}
+
+bool BplusTree::VerifyChildRecordsRange(RecordPage* child_page,
+                                        Schema::RecordBase* left_bound,
+                                        Schema::RecordBase* right_bound) {
+  Schema::PageRecordsManager prmanager(child_page, schema_.get(), key_indexes_,
+                                       file_type_,
+                                       child_page->Meta()->page_type());
+  if (!prmanager.LoadRecordsFromPage()) {
+    LogFATAL("Load child page record failed");
+  }
+  if (prmanager.NumRecords() <= 0) {
+    LogINFO("No records in child page, skip VerifyChildRecordsRange");
+    return true;
+  }
+
+// printf("left_bound = ");
+// left_bound->Print();
+// if (right_bound) {
+//   printf("right_bound = ");
+//   right_bound->Print();
+// }
+// for (auto& r: prmanager.plrecords()) {
+//   r.record()->Print();
+// }
+// printf("done\n");
+
+  // Check the first record >= left bound.
+  Schema::RecordBase first_record_key;
+  if (file_type_== INDEX_DATA &&
+      child_page->Meta()->page_type() == TREE_LEAVE) {
+    // If child is leave of index-data file, record is DataRecord. We need to
+    // extract key from it.
+    auto first_data_record = prmanager.GetRecord<Schema::DataRecord>(0);
+    first_data_record->ExtractKey(&first_record_key, key_indexes_);
+  }
+  else {
+    first_record_key = *prmanager.GetRecord<Schema::RecordBase>(0);
+  }
+  if (first_record_key < *left_bound) {
+    LogERROR("First record key of child < left bound");
+    return false;
+  }
+
+  // Check the last record <= right bound.
+  if (!right_bound) {
+    // No right bound, it's last child.
+    return true;
+  }
+  Schema::RecordBase last_record_key;
+  int last_index = prmanager.NumRecords() - 1;
+  if (file_type_== INDEX_DATA &&
+      child_page->Meta()->page_type() == TREE_LEAVE) {
+    // If child is leave of index-data file, record is DataRecord. We need to
+    // extract key from it.
+    auto last_data_record = prmanager.GetRecord<Schema::DataRecord>(last_index);
+    last_data_record->ExtractKey(&last_record_key, key_indexes_);
+  }
+  else {
+    last_record_key = *prmanager.GetRecord<Schema::RecordBase>(last_index);
+  }
+  if (last_record_key > *right_bound) {
+    LogERROR("last record key of child > right bound, happens on page type %d", child_page->Meta()->page_type());
+    last_record_key.Print();
+    right_bound->Print();
+    return false;
+  }
+
+  return true;
+}
+
+bool BplusTree::EqueueChildNodes(RecordPage* page,
+                                 std::queue<RecordPage*>* page_q) {
+  if (page->Meta()->page_type() != TREE_NODE) {
+    LogERROR("Wrong node type - not tree node, no child node");
+    return false;
+  }
+
+  Schema::PageRecordsManager prmanager(page, schema_.get(), key_indexes_,
+                                       file_type_, TREE_NODE);
+  if (!prmanager.LoadRecordsFromPage()) {
+    LogFATAL("Load page %d records failed", page->id());
+  }
+  bool children_are_leave = false;
+  for (int i = 0; i < prmanager.NumRecords(); i++) {
+    auto tn_record = prmanager.GetRecord<Schema::TreeNodeRecord>(i);
+    RecordPage* child_page = FetchPage(tn_record->page_id());
+    if (child_page->Meta()->page_type() == TREE_LEAVE) {
+      // Don't enqueue tree leave.
+      children_are_leave = true;
+    }
+    else {
+      if (children_are_leave) {
+        LogERROR("Children nodes have inconsistency types");
+        return false;
+      }
+      if (child_page) {
+        page_q->push(child_page);
+      }
+    }
+  }
   return true;
 }
 

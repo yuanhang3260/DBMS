@@ -5,11 +5,11 @@ namespace Schema {
 
 // Comparable
 bool StringType::operator<(const StringType& other) const {
-  return strcmp(value_.c_str(), other.value_.c_str()) < 0;
+  return value_ < other.value_;
 }
 
 bool StringType::operator>(const StringType& other) const {
-  return strcmp(value_.c_str(), other.value_.c_str()) > 0;
+  return value_ > other.value_;
 }
 
 bool StringType::operator<=(const StringType& other) const {
@@ -21,7 +21,7 @@ bool StringType::operator>=(const StringType& other) const {
 }
 
 bool StringType::operator==(const StringType& other) const {
-  return strcmp(value_.c_str(), other.value_.c_str()) == 0;
+  return value_ == other.value_;
 }
 
 bool StringType::operator!=(const StringType& other) const {

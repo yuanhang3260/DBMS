@@ -192,6 +192,7 @@ class PageLoadedRecord {
   int slot_id_ = -1;
 };
 
+
 // Page Records Manager provide service to load a page and parse records stored
 // in this page. The data structure is critical to processe a page.
 class PageRecordsManager {
@@ -215,8 +216,14 @@ class PageRecordsManager {
   DEFINE_ACCESSOR_ENUM(page_type, DataBaseFiles::PageType);
   DEFINE_ACCESSOR(total_size, int);
 
+  int NumRecords() const { return plrecords_.size(); }
   std::vector<PageLoadedRecord>& plrecords() { return plrecords_; }
   RecordBase* Record(int index) const;
+  template<class T>
+  T* GetRecord(int index) {
+    return reinterpret_cast<T*>(Record(index));
+  }
+
 
   // Sort a list of records based on indexes that specified key.
   static void SortRecords(

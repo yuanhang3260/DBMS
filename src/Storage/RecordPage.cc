@@ -285,6 +285,7 @@ double RecordPage::Occupation() const {
 void RecordPage::InitInMemoryPage() {
   page_meta_.reset(new RecordPageMeta());
   data_.reset(new byte[kPageSize]);
+  memset(data_.get(), 0, kPageSize);
 }
 
 bool RecordPage::DumpPageData() {

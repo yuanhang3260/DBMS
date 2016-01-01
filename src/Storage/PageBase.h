@@ -24,8 +24,11 @@ class HeaderPage {
   DEFINE_ACCESSOR(file, FILE*);
   DEFINE_ACCESSOR_ENUM(file_type, FileType);
   DEFINE_ACCESSOR(num_pages, int);
+  DEFINE_INCREMENTOR_DECREMENTOR(num_pages, int);
   DEFINE_ACCESSOR(num_free_pages, int);
+  DEFINE_INCREMENTOR_DECREMENTOR(num_free_pages, int);
   DEFINE_ACCESSOR(num_used_pages, int);
+  DEFINE_INCREMENTOR_DECREMENTOR(num_used_pages, int);
   DEFINE_ACCESSOR(free_page, int);
 
   // Dump page to memory

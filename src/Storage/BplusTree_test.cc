@@ -13,7 +13,7 @@ class BplusTreeTest: public UnitTest {
   std::vector<int> key_indexes;
   Schema::TableSchema* schema = nullptr;
   std::map<int, std::shared_ptr<Schema::DataRecord>> record_resource;
-  const int kNumRecordsSource = 1000;
+  const int kNumRecordsSource = 10000;
 
  public:
   void InitSchema() {
@@ -75,7 +75,7 @@ class BplusTreeTest: public UnitTest {
       int rand_int = Utils::RandomNumber(20);
       record_resource.at(i)->AddField(new Schema::IntType(rand_int));
       // money (we use this field as key for record resource map).
-      record_resource.at(i)->AddField(new Schema::LongIntType(i));
+      record_resource.at(i)->AddField(new Schema::LongIntType(1));
       // weight
       double rand_double = 1.0 * Utils::RandomNumber() / Utils::RandomNumber();
       record_resource.at(i)->AddField(new Schema::DoubleType(rand_double));
@@ -194,14 +194,30 @@ class BplusTreeTest: public UnitTest {
     }
   }
 
+  void CheckBplusTree() {
+    BplusTree tree(tablename, key_indexes);
+    AssertTrue(tree.ValidityCheck(), "Check B+ tree failed");
+    printf("Good B+ Tree!\n");
+  }
+
   void Test_BulkLoading() {
+    std::vector<std::shared_ptr<Schema::RecordBase>> v;
+    for (auto& entry: record_resource) {
+      v.push_back(entry.second);
+    }
+    Schema::PageRecordsManager::SortRecords(v, key_indexes);
+    // for (auto& i: v) {
+    //   i->Print();
+    // }
+
     BplusTree tree;
     AssertTrue(tree.CreateFile(tablename, key_indexes, INDEX_DATA),
                "Create B+ tree file faild");
-    for (int i = 0; i < 1; i++) {
-      tree.BulkLoadRecord(record_resource.at(i).get());
+    for (int i = 0; i < kNumRecordsSource; i++) {
+      tree.BulkLoadRecord((Schema::DataRecord*)v.at(i).get());
     }
   }
+
 };
 
 }  // namespace DataBaseFiles
@@ -212,7 +228,10 @@ int main() {
   test.Test_SchemaFile();
   // test.Test_Header_Page_Consistency_Check();
   // test.Test_Create_Load_Empty_Tree();
-  test.Test_BulkLoading();
+  for (int i = 0; i < 1; i++) {
+    test.Test_BulkLoading();
+    test.CheckBplusTree();
+  }
   test.teardown();
 
   std::cout << "\033[2;32mAll Passed ^_^\033[0m" << std::endl;

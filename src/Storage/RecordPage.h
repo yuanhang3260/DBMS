@@ -18,7 +18,7 @@ enum PageType {
   UNKNOW_PAGETYPE = 0,
   TREE_ROOT = 1,
   TREE_NODE = 2,
-  TREE_LEAVE = 4,
+  TREE_LEAVE = 3,
 };
 
 // entry of slot directory.
@@ -93,7 +93,7 @@ class RecordPageMeta {
   int16 next_page_ = -1;
   int16 prev_page_ = -1;
   int16 parent_page_ = -1;
-  int16 space_used_ = 0;  // total space that has been used.
+  int16 space_used_ = 0;  // total space that has been used for record.
   PageType page_type_ = UNKNOW_PAGETYPE;
   std::vector<SlotDirectoryEntry> slot_directory_;
 
