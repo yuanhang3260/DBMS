@@ -106,7 +106,7 @@ class BplusTree {
   // Fetch a page, either from page map or load it from disk.
   RecordPage* FetchPage(int page_id);
   // Save page to disk and de-cache it from page map.
-  bool CheckoutPage(int page_id);
+  bool CheckoutPage(int page_id, bool write_to_disk=true);
 
   // Consistency check for a tree node. It loads and sorts all TreeNodeRecords
   // from this tree node, and verify each child node within the range of every

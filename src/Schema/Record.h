@@ -245,11 +245,11 @@ class PageRecordsManager {
   // each field needs to be compared one by one.
   std::vector<int> ProduceIndexesToCompare() const;
 
-  // Insert a new record to the plrecords list. This function is only called
+  // Append a new record to the plrecords list. This function is only called
   // in splitting this page. It won't take owner ship of the record passed.
   // It returns the middle point that splits all recors equally in respect of
   // space they take.
-  int InsertRecordAndSplitPage(RecordBase* record);
+  int AppendRecordAndSplitPage(RecordBase* record);
 
  private:
   DataBaseFiles::RecordPage* page_ = nullptr;

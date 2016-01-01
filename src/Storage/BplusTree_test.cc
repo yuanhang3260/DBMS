@@ -75,7 +75,8 @@ class BplusTreeTest: public UnitTest {
       int rand_int = Utils::RandomNumber(20);
       record_resource.at(i)->AddField(new Schema::IntType(rand_int));
       // money (we use this field as key for record resource map).
-      record_resource.at(i)->AddField(new Schema::LongIntType(1));
+      int rand_long = Utils::RandomNumber(100);
+      record_resource.at(i)->AddField(new Schema::LongIntType(rand_long));
       // weight
       double rand_double = 1.0 * Utils::RandomNumber() / Utils::RandomNumber();
       record_resource.at(i)->AddField(new Schema::DoubleType(rand_double));
@@ -206,9 +207,6 @@ class BplusTreeTest: public UnitTest {
       v.push_back(entry.second);
     }
     Schema::PageRecordsManager::SortRecords(v, key_indexes);
-    // for (auto& i: v) {
-    //   i->Print();
-    // }
 
     BplusTree tree;
     AssertTrue(tree.CreateFile(tablename, key_indexes, INDEX_DATA),
@@ -226,8 +224,8 @@ int main() {
   DataBaseFiles::BplusTreeTest test;
   test.setup();
   test.Test_SchemaFile();
-  // test.Test_Header_Page_Consistency_Check();
-  // test.Test_Create_Load_Empty_Tree();
+  test.Test_Header_Page_Consistency_Check();
+  test.Test_Create_Load_Empty_Tree();
   for (int i = 0; i < 1; i++) {
     test.Test_BulkLoading();
     test.CheckBplusTree();

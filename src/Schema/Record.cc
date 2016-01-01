@@ -490,21 +490,11 @@ bool PageRecordsManager::LoadRecordsFromPage() {
     return true;  // Got empty page.
   }
 
-  // printf("before sort: size = %d\n", plrecords_.size());
-  // for (auto& r: plrecords_) {
-  //   r.record()->Print();
-  // }
-
   // Sort records
   auto comparator = std::bind(PageLoadedRecord::Comparator,
                               std::placeholders::_1, std::placeholders::_2,
                               ProduceIndexesToCompare());
   std::stable_sort(plrecords_.begin(), plrecords_.end(), comparator);
-
-  // printf("after sort: size = %d\n", plrecords_.size());
-  // for (auto& r: plrecords_) {
-  //   r.record()->Print();
-  // }
 
   return true;
 }
@@ -557,7 +547,7 @@ bool PageRecordsManager::CheckSort() const {
   return true;
 }
 
-int PageRecordsManager::InsertRecordAndSplitPage(RecordBase* record) {
+int PageRecordsManager::AppendRecordAndSplitPage(RecordBase* record) {
   if (plrecords_.empty()) {
     LogERROR("Won't add the record - This PageRecordsManager has not loaded "
              "any PageLoadedRecord");
@@ -574,18 +564,16 @@ int PageRecordsManager::InsertRecordAndSplitPage(RecordBase* record) {
   // of the original one.
   PageLoadedRecord new_plrecord;
   new_plrecord.set_record(record->Duplicate());
-  int i = plrecords_.size() - 1;
-  for (; i >= 0; i--) {
-    if (PageLoadedRecord::Comparator(plrecords_.at(i), new_plrecord,
-                                     ProduceIndexesToCompare())) {
-      break;
-    }
-  }
-  plrecords_.insert(plrecords_.begin() + 1 + i, new_plrecord);
+  plrecords_.insert(plrecords_.end(), new_plrecord);
+  auto comparator = std::bind(PageLoadedRecord::Comparator,
+                              std::placeholders::_1, std::placeholders::_2,
+                              ProduceIndexesToCompare());
+  std::stable_sort(plrecords_.begin(), plrecords_.end(), comparator);
   total_size_ += record->size();
 
   int acc_size = 0;
-  for (i = 0; i < (int)plrecords_.size(); i++) {
+  int i = 0;
+  for (; i < (int)plrecords_.size(); i++) {
     acc_size += plrecords_.at(i).record()->size();
     if (acc_size > total_size_ / 2) {
       break;

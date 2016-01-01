@@ -176,6 +176,7 @@ BplusTree::~BplusTree() {
   if (file_) {
     // Checkout all remaining pages. We don't call CheckoutPage() since it
     // involves map.erase() operation internally which is tricky.
+    //printf("Checking out %d pags\n", page_map_.size());
     for (auto& entry: page_map_) {
       if (!entry.second->DumpPageData()) {
         LogERROR("Save page %d to disk failed", entry.first);
@@ -193,7 +194,7 @@ BplusTree::BplusTree(std::string tablename, std::vector<int> key_indexes) :
     key_indexes_(key_indexes) {
   std::string btree_filename = GenerateBplusTreeFilename(UNKNOWN_FILETYPE);
 
-  file_ = fopen(btree_filename.c_str(), "a+");
+  file_ = fopen(btree_filename.c_str(), "r+");
   if (!file_) {
     LogERROR("file name %s", btree_filename.c_str());
     throw std::runtime_error("Can't init B+ tree");
@@ -406,12 +407,12 @@ RecordPage* BplusTree::FetchPage(int page_id) {
   }
 }
 
-bool BplusTree::CheckoutPage(int page_id) {
+bool BplusTree::CheckoutPage(int page_id, bool write_to_disk) {
   if (page_map_.find(page_id) == page_map_.end()) {
     LogINFO("page %d not in page map, won't checkout");
     return false;
   }
-  if (!page_map_.at(page_id)->DumpPageData()) {
+  if (write_to_disk && !page_map_.at(page_id)->DumpPageData()) {
     LogERROR("Save page %d to disk failed", page_id);
     return false;
   }
@@ -454,7 +455,7 @@ bool BplusTree::InsertTreeNodeRecord(Schema::TreeNodeRecord* tn_record,
     LogFATAL("Load page record failed");
   }
 
-  int mid_index = prmanager.InsertRecordAndSplitPage(tn_record);
+  int mid_index = prmanager.AppendRecordAndSplitPage(tn_record);
   if (mid_index < 0) {
     LogERROR("Failed to add new TreeNodeRecord to page");
     return false;
@@ -470,15 +471,14 @@ bool BplusTree::InsertTreeNodeRecord(Schema::TreeNodeRecord* tn_record,
       LogERROR("Move slot %d TreeNodeRecord to new tree node failed");
       return false;
     }
-    // Set new parent.
-    int child_page_id =
-        reinterpret_cast<Schema::TreeNodeRecord*>(prmanager.Record(i))
-            ->page_id();
+    // Reset new parent for right half children nodes.
+    auto tn_record = prmanager.GetRecord<Schema::TreeNodeRecord>(i);
+    int child_page_id = tn_record->page_id();
     RecordPage* child_page = FetchPage(child_page_id);
     if (child_page) {
       child_page->Meta()->set_parent_page(new_tree_node->id());
     }
-    // Remove the TreeNodeRecord from the original tree node (left one).
+    // Remove the child TreeNodeRecord from the original tree node (left one).
     if (plrecords.at(i).slot_id() >= 0) {
       tn_page->DeleteRecord(plrecords.at(i).slot_id());
     }
@@ -497,12 +497,14 @@ bool BplusTree::InsertTreeNodeRecord(Schema::TreeNodeRecord* tn_record,
         child_page->Meta()->set_parent_page(tn_page->id());
       }
     }
-    // After split, left half child nodes will not be modified later, and we
-    // can check them out to disk.
-    // int child_page_id =
-    //     reinterpret_cast<Schema::TreeNodeRecord*>(prmanager.Record(i))
-    //         ->page_id();
-    // CheckoutPage(child_page_id);
+    else {
+      // After split, left half child nodes will not be modified later, and we
+      // can check them out to disk.
+      int child_page_id =
+          reinterpret_cast<Schema::TreeNodeRecord*>(prmanager.Record(i))
+              ->page_id();
+      CheckoutPage(child_page_id);
+    }
   }
 
   // Add the middle TreeNodeRecord to parent tree node.
@@ -513,10 +515,9 @@ bool BplusTree::InsertTreeNodeRecord(Schema::TreeNodeRecord* tn_record,
     header_->set_root_page(new_root->id());
     printf("creating new root %d\n", new_root->id());
 
-    Schema::TreeNodeRecord left_upper_tn_record =
-        *reinterpret_cast<Schema::TreeNodeRecord*>(prmanager.Record(0));
-    left_upper_tn_record.set_page_id(tn_page->id());
-    if (!InsertTreeNodeRecord(&left_upper_tn_record, new_root)) {
+    auto left_upper_tn_record = prmanager.GetRecord<Schema::TreeNodeRecord>(0);
+    left_upper_tn_record->set_page_id(tn_page->id());
+    if (!InsertTreeNodeRecord(left_upper_tn_record, new_root)) {
       LogERROR("Add left half child to new root node failed");
       return false;
     }
@@ -524,11 +525,10 @@ bool BplusTree::InsertTreeNodeRecord(Schema::TreeNodeRecord* tn_record,
 
   // Add new tree node to parent by inserting a TreeNodeRecord with key of
   // the mid_index record, and page id of the new tree node.
-  Schema::TreeNodeRecord right_upper_tn_record =
-      *reinterpret_cast<Schema::TreeNodeRecord*>(prmanager.Record(mid_index));
-  right_upper_tn_record.set_page_id(new_tree_node->id());
+  auto right_upper_tn_record = prmanager.GetRecord<Schema::TreeNodeRecord>(mid_index);
+  right_upper_tn_record->set_page_id(new_tree_node->id());
   RecordPage* parent_node = FetchPage(tn_page->Meta()->parent_page());
-  if (!InsertTreeNodeRecord(&right_upper_tn_record, parent_node)) {
+  if (!InsertTreeNodeRecord(right_upper_tn_record, parent_node)) {
     LogERROR("Add new tree node to parent node failed");
     return false;
   }
@@ -645,6 +645,8 @@ bool BplusTree::ValidityCheck() {
         return false;
       }
     }
+
+    CheckoutPage(crt_page->id(), false);
   }
 
   return true;
@@ -693,17 +695,6 @@ bool BplusTree::VerifyChildRecordsRange(RecordPage* child_page,
     return true;
   }
 
-// printf("left_bound = ");
-// left_bound->Print();
-// if (right_bound) {
-//   printf("right_bound = ");
-//   right_bound->Print();
-// }
-// for (auto& r: prmanager.plrecords()) {
-//   r.record()->Print();
-// }
-// printf("done\n");
-
   // Check the first record >= left bound.
   Schema::RecordBase first_record_key;
   if (file_type_== INDEX_DATA &&
@@ -739,7 +730,8 @@ bool BplusTree::VerifyChildRecordsRange(RecordPage* child_page,
     last_record_key = *prmanager.GetRecord<Schema::RecordBase>(last_index);
   }
   if (last_record_key > *right_bound) {
-    LogERROR("last record key of child > right bound, happens on page type %d", child_page->Meta()->page_type());
+    LogERROR("last record key of child > right bound, "
+             "happens on page type %d", child_page->Meta()->page_type());
     last_record_key.Print();
     right_bound->Print();
     return false;
@@ -767,6 +759,7 @@ bool BplusTree::EqueueChildNodes(RecordPage* page,
     if (child_page->Meta()->page_type() == TREE_LEAVE) {
       // Don't enqueue tree leave.
       children_are_leave = true;
+      CheckoutPage(tn_record->page_id(), false);
     }
     else {
       if (children_are_leave) {
