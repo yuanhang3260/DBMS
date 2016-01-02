@@ -379,7 +379,7 @@ bool BplusTree::LoadFromDisk() {
 }
 
 RecordPage* BplusTree::AllocateNewPage(PageType page_type) {
-  RecordPage* page = new RecordPage(next_id++, file_);
+  RecordPage* page = new RecordPage(bl_status_.next_id++, file_);
   page->InitInMemoryPage();
   page->Meta()->set_page_type(page_type);
   page_map_[page->id()] = std::shared_ptr<RecordPage>(page);
@@ -513,6 +513,7 @@ bool BplusTree::InsertTreeNodeRecord(Schema::TreeNodeRecord* tn_record,
     // tree nodes to the root.
     RecordPage* new_root = AllocateNewPage(TREE_NODE);
     header_->set_root_page(new_root->id());
+    header_->increment_depth(1);
     printf("creating new root %d\n", new_root->id());
 
     auto left_upper_tn_record = prmanager.GetRecord<Schema::TreeNodeRecord>(0);
@@ -560,19 +561,21 @@ bool BplusTree::AddLeaveToTree(RecordPage* leave) {
 
   // Get the tree node to insert.
   RecordPage* tree_node = nullptr;
-  if (prev_leave) {
-    tree_node = FetchPage(prev_leave->Meta()->parent_page());
+  if (bl_status_.prev_leave) {
+    tree_node = FetchPage(bl_status_.prev_leave->Meta()->parent_page());
     if (!tree_node) {
-      LogERROR("Can't find parent of prev leave %d", prev_leave_id);
+      LogERROR("Can't find parent of prev leave %d",
+               bl_status_.prev_leave->id());
       return false;
     }
   }
   else {
     // First leave and also first tree node. We need to allocate a tree node
-    // which is also root node. The TreeNodeRecord to insert must be reset (all
+    // which is root node. The TreeNodeRecord to insert must be reset (all
     // fields clear) as minimum value.
     tree_node = AllocateNewPage(TREE_NODE);
     header_->set_root_page(tree_node->id());
+    header_->set_depth(1);
     new_tn_record.reset();
     new_tn_record.set_page_id(leave->id());
   }
@@ -591,27 +594,28 @@ bool BplusTree::BulkLoadRecord(Schema::DataRecord* record) {
   // Otherwise it is possible that current leave is nullptr (empty B+ tree,
   // no record ever inserted), or current leave is full. In either case, we
   // need to allocate a new leave page and continue inserting.
-  if (crt_leave && InsertRecordToLeave(record, crt_leave)) {
+  if (bl_status_.crt_leave &&
+      InsertRecordToLeave(record, bl_status_.crt_leave)) {
     return true;
   }
 
   // Allocate a new leave node.
   RecordPage* new_leave = AllocateNewPage(TREE_LEAVE);
-  if (crt_leave) {
-    new_leave->Meta()->set_prev_page(crt_leave->id());
-    crt_leave->Meta()->set_next_page(new_leave->id());
-    prev_leave = crt_leave;
+  if (bl_status_.crt_leave) {
+    new_leave->Meta()->set_prev_page(bl_status_.crt_leave->id());
+    bl_status_.crt_leave->Meta()->set_next_page(new_leave->id());
+    bl_status_.prev_leave = bl_status_.crt_leave;
   }
-  crt_leave = new_leave;
+  bl_status_.crt_leave = new_leave;
   // Now we have a new leave node, we insert the record.
-  if (!InsertRecordToLeave(record, crt_leave)) {
+  if (!InsertRecordToLeave(record, bl_status_.crt_leave)) {
     LogFATAL("Failed to insert record to new leave node");
     return false;
   }
   // We add this new leave node with one record, to a upper tree node. Note that
   // we only do this when having allocated a new leave node and had just first
   // record inserted to it.
-  if (!AddLeaveToTree(crt_leave)) {
+  if (!AddLeaveToTree(bl_status_.crt_leave)) {
     LogFATAL("Failed to add leave to B+ tree node");
     return false;
   }
@@ -629,6 +633,8 @@ bool BplusTree::ValidityCheck() {
   std::queue<RecordPage*> page_q;
   RecordPage* root = FetchPage(header_->root_page());
   page_q.push(root);
+  vc_status_.count_num_pages = 1;
+  vc_status_.count_num_used_pages = 1;
   while (!page_q.empty()) {
     RecordPage* crt_page = page_q.front();
     page_q.pop();
@@ -647,6 +653,10 @@ bool BplusTree::ValidityCheck() {
     }
 
     CheckoutPage(crt_page->id(), false);
+  }
+
+  if (!MetaConsistencyCheck()) {
+    return false;
   }
 
   return true;
@@ -687,6 +697,9 @@ bool BplusTree::VerifyChildRecordsRange(RecordPage* child_page,
   Schema::PageRecordsManager prmanager(child_page, schema_.get(), key_indexes_,
                                        file_type_,
                                        child_page->Meta()->page_type());
+  if (!child_page) {
+    LogFATAL("Child page is nullptr, can't verify it's range");
+  }
   if (!prmanager.LoadRecordsFromPage()) {
     LogFATAL("Load child page record failed");
   }
@@ -753,12 +766,35 @@ bool BplusTree::EqueueChildNodes(RecordPage* page,
     LogFATAL("Load page %d records failed", page->id());
   }
   bool children_are_leave = false;
+  vc_status_.count_num_pages += prmanager.NumRecords();
+  vc_status_.count_num_used_pages += prmanager.NumRecords();
   for (int i = 0; i < prmanager.NumRecords(); i++) {
     auto tn_record = prmanager.GetRecord<Schema::TreeNodeRecord>(i);
     RecordPage* child_page = FetchPage(tn_record->page_id());
+    if (!child_page) {
+      LogFATAL("Can't fetching child page while enqueuing");
+    }
     if (child_page->Meta()->page_type() == TREE_LEAVE) {
       // Don't enqueue tree leave.
       children_are_leave = true;
+      vc_status_.count_num_leaves++;
+      // Check prev_leave <-- crt_leave.prev
+      if (vc_status_.prev_leave_id != child_page->Meta()->prev_page()) {
+        LogERROR("Leave connnecting verification failed - "
+                 "curent leave's prev = %d, while prev_leave_id = %d",
+                 child_page->Meta()->prev_page(), vc_status_.prev_leave_id);
+        return false;
+      }
+      // Check prev_leave.next --> crt_leave
+      vc_status_.prev_leave_id = child_page->id();
+      if (vc_status_.prev_leave_next > 0 &&
+          vc_status_.prev_leave_next != child_page->id()) {
+        LogERROR("Leave connnecting verification failed - "
+                 "prev leave's next = %d, while crt_leave_id = %d",
+                 vc_status_.prev_leave_next, child_page->id());
+        return false;
+      }
+      vc_status_.prev_leave_next = child_page->Meta()->next_page();
       CheckoutPage(tn_record->page_id(), false);
     }
     else {
@@ -771,6 +807,34 @@ bool BplusTree::EqueueChildNodes(RecordPage* page,
       }
     }
   }
+  return true;
+}
+
+bool BplusTree::MetaConsistencyCheck() const {
+  if (vc_status_.count_num_pages != header_->num_pages()) {
+    LogERROR("num_pages inconsistent - expect %d, actual %d",
+             header_->num_pages(), vc_status_.count_num_pages);
+    return false;
+  }
+
+  if (vc_status_.count_num_used_pages != header_->num_used_pages()) {
+    LogERROR("num_used_pages inconsistent - expect %d, actual %d",
+             header_->num_used_pages(), vc_status_.count_num_used_pages);
+    return false;
+  }
+
+  if (vc_status_.count_num_free_pages != header_->num_free_pages()) {
+    LogERROR("num_free_pages inconsistent - expect %d, actual %d",
+             header_->num_free_pages(), vc_status_.count_num_free_pages);
+    return false;
+  }
+
+  if (vc_status_.count_num_leaves != header_->num_leaves()) {
+    LogERROR("num_leaves inconsistent - expect %d, actual %d",
+             header_->num_leaves(), vc_status_.count_num_leaves);
+    return false;
+  }
+
   return true;
 }
 

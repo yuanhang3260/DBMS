@@ -119,6 +119,9 @@ class BplusTree {
   // Enqueue children tree nodes, used in level-traversing B+ tree.
   bool EqueueChildNodes(RecordPage* page, std::queue<RecordPage*>* page_q);
 
+  // Check meta data consistency in ValidityCheck().
+  bool MetaConsistencyCheck() const;
+
   std::string tablename_;
   FILE* file_ = nullptr;
 
@@ -134,18 +137,35 @@ class BplusTree {
   // Header page contains meta data of this B+ tree.
   std::unique_ptr<BplusTreeHeaderPage> header_;
 
-  // PageMap: <page_id ==> RecordPage>
+  // PageMap: <page_id --> RecordPage>
   // This is a page cache for active pages that are being processed. Root node
   // page should always reside in this cache. Whenever a page is removed from
   // cache, it must be written to disk file.
   using PageMap = std::map<int, std::shared_ptr<RecordPage>>;
   PageMap page_map_;
 
-  // helper variables for bulkloading
-  RecordPage* crt_leave = nullptr;
-  RecordPage* prev_leave = nullptr;
-  int next_id = 1;
-  int prev_leave_id = -1;
+  // Helper class for bulkloading and validity check.
+  class BulkLoadingStatus {
+   public:
+    RecordPage* crt_leave = nullptr;
+    RecordPage* prev_leave = nullptr;
+    int next_id = 1;
+  };
+
+  BulkLoadingStatus bl_status_;
+
+  class ValidityCheckStatus {
+   public:
+    int count_num_pages = 0;
+    int count_num_used_pages = 0;
+    int count_num_free_pages = 0;
+    int count_num_leaves = 0;
+    int count_depth = 0;
+    int prev_leave_id = -1;
+    int prev_leave_next = -1;
+  };
+
+  ValidityCheckStatus vc_status_;
 };
 
 }
