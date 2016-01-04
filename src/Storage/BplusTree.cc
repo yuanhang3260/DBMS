@@ -647,6 +647,11 @@ bool BplusTree::BulkLoadRecord(Schema::DataRecord* record) {
 }
 
 bool BplusTree::CheckBoundaryDuplication(Schema::RecordBase* record) {
+  // Try inserting first
+  if (record->InsertToRecordPage(bl_status_.crt_leave)) {
+    return true;
+  }
+
   // Load curret leave records and find the first duplicate with the new record
   // to be insert.
   Schema::PageRecordsManager prmanager(bl_status_.crt_leave,
@@ -667,7 +672,6 @@ bool BplusTree::CheckBoundaryDuplication(Schema::RecordBase* record) {
   // If index == 0, this leave is filled with all same records. Then we don't
   // allocate new leave, but append overflow pages immediately.
   if (index > 0) {
-    printf("index = %d\n", index);
     // From plrecord[index], records of current leave are duplicates.
     RecordPage* new_leave = CreateNewLeave();
     const auto& plrecords = prmanager.plrecords();

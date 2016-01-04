@@ -179,24 +179,24 @@ class RecordPageTest: public UnitTest {
       while (true) {
         int key = Utils::RandomNumber(records_source_.size());
         FakeRecord& record = records_source_[key];
-        int free_size_after_delete = free_size;
+        int free_size_after_insert = free_size;
         bool reuse_slot = false;
         if (empty_slots > 0) {
           empty_slots--;
           reuse_slot = true;
-          free_size_after_delete -= record.size();
+          free_size_after_insert -= record.size();
         }
         else {
-          free_size_after_delete -= (record.size() + kSlotDirectoryEntrySize);
+          free_size_after_insert -= (record.size() + kSlotDirectoryEntrySize);
         }
-        bool expect_success = free_size_after_delete >= 0;
+        bool expect_success = free_size_after_insert >= 0;
         AssertEqual(expect_success,
                     page_->InsertRecord(record.data(), record.size()),
                     "InsertRecord result unexpected");
 
         if (expect_success) {
           number_records++;
-          free_size = free_size_after_delete;
+          free_size = free_size_after_insert;
         }
         else {
           if (reuse_slot) {

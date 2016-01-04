@@ -374,6 +374,13 @@ bool RecordPage::ReorganizeRecords() {
   return true;
 }
 
+bool RecordPage::PreCheckCanInsert(int num_records, int total_size) {
+  int num_slots_deficit = num_records - page_meta_->NumEmptySlots();
+  int num_new_slots_needed = num_slots_deficit > 0 ? num_slots_deficit : 0;
+  return num_new_slots_needed * kSlotDirectoryEntrySize + page_meta_->size() +
+         total_size + page_meta_->space_used() <= kPageSize;
+}
+
 byte* RecordPage::Record(int slot_id) const {
   auto& slot_directory = page_meta_->slot_directory();
   if (slot_id < 0 || slot_id > (int)slot_directory.size()) {
@@ -399,6 +406,10 @@ bool RecordPage::InsertRecord(const byte* content, int length) {
 }
 
 byte* RecordPage::InsertRecord(int length) {
+  if (!PreCheckCanInsert(1, length)) {
+    return nullptr;
+  }
+
   // Allocate a slot id for the new record.
   int slot_id = page_meta_->AllocateSlotAvailable();
   bool reorganized = false;
