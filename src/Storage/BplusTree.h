@@ -141,6 +141,13 @@ class BplusTree {
   // Check meta data consistency in ValidityCheck().
   bool MetaConsistencyCheck() const;
 
+  // Check overflow page.
+  bool VerifyOverflowPage(RecordPage* page);
+
+  // Serach records by a key. Returns all records that matches this key.
+  bool SearchByKey(const Schema::RecordBase* key,
+                   std::vector<std::shared_ptr<Schema::RecordBase>> result);
+
   std::string tablename_;
   FILE* file_ = nullptr;
 

@@ -94,6 +94,7 @@ test/%.out: $(OBJ_DIR)/Schema/%.o library
 
 clean:
 	rm -rf libDBMS.a
+	rm -rf out
 	rm -rf $(OBJ_DIR)/*.o
 	rm -rf $(OBJ_DIR)/Base/*.o
 	rm -rf $(OBJ_DIR)/Log/*.o

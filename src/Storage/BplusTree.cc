@@ -617,7 +617,7 @@ bool BplusTree::BulkLoadRecord(Schema::DataRecord* record) {
 
   // Check boundary duplication. If new record equals last record at the end of
   // its leave, we need to move these duplicates to new leave.
-  if (bl_status_.last_record &&
+  if (bl_status_.crt_leave && bl_status_.last_record &&
       Schema::RecordBase::CompareRecordsWithKey(
           record, bl_status_.last_record.get(),
           key_indexes_) == 0) {
@@ -629,14 +629,12 @@ bool BplusTree::BulkLoadRecord(Schema::DataRecord* record) {
   RecordPage* new_leave = CreateNewLeave();
   if (!record->InsertToRecordPage(new_leave)) {
     LogFATAL("Failed to insert record to new leave node");
-    return false;
   }
   // We add this new leave node with one record, to a upper tree node. Note that
   // we only do this when having allocated a new leave node and had just first
   // record inserted to it.
   if (!AddLeaveToTree(new_leave)) {
     LogFATAL("Failed to add leave to B+ tree node");
-    return false;
   }
 
   // Keep a copy of last inserted record. We need this copy to check record
@@ -889,6 +887,9 @@ bool BplusTree::EqueueChildNodes(RecordPage* page,
           }
           vc_status_.count_num_pages++;
           vc_status_.count_num_used_pages++;
+          if (!VerifyOverflowPage(child_page)) {
+            LogFATAL("Verify overflow page failed");
+          }
         }
         else {
           child_page = nullptr;
@@ -906,6 +907,24 @@ bool BplusTree::EqueueChildNodes(RecordPage* page,
       }
     }
   }
+  return true;
+}
+
+bool BplusTree::VerifyOverflowPage(RecordPage* page) {
+  Schema::PageRecordsManager prmanager(page, schema_.get(), key_indexes_,
+                                       file_type_, TREE_LEAVE);
+  if (!prmanager.LoadRecordsFromPage()) {
+    LogFATAL("Load page %d records failed", page->id());
+  }
+  for (int i = 1; i < prmanager.NumRecords(); i++) {
+    if (Schema::RecordBase::CompareRecordsWithKey(
+            prmanager.Record(0), prmanager.Record(i),
+            key_indexes_) != 0) {
+      LogERROR("Records in overflow page inconsistent!");
+      return false;
+    }
+  }
+
   return true;
 }
 
@@ -936,6 +955,11 @@ bool BplusTree::MetaConsistencyCheck() const {
 
   printf("count_num_records = %d\n", vc_status_.count_num_records);
 
+  return true;
+}
+
+bool BplusTree::SearchByKey(const Schema::RecordBase* key,
+                            std::vector<std::shared_ptr<Schema::RecordBase>> result) {
   return true;
 }
 
