@@ -80,6 +80,9 @@ class RecordBase {
   bool operator==(const RecordBase& other) const;
   bool operator!=(const RecordBase& other) const;
 
+  static int CompareRecordsWithKey(const RecordBase* r1, const RecordBase* r2,
+                                   const std::vector<int>& indexes);
+
   static bool RecordComparator(const std::shared_ptr<RecordBase> r1,
                                const std::shared_ptr<RecordBase> r2,
                                const std::vector<int>& indexes);

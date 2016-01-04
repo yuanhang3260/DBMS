@@ -420,9 +420,8 @@ bool BplusTree::CheckoutPage(int page_id, bool write_to_disk) {
   return true;
 }
 
-bool BplusTree::InsertRecordToLeave(const Schema::DataRecord* record,
-                                    RecordPage* leave) {
-  return record->InsertToRecordPage(leave);
+bool BplusTree::InsertRecordToLeave(const Schema::DataRecord* record) {
+  return false;  
 }
 
 bool BplusTree::InsertTreeNodeRecord(Schema::TreeNodeRecord* tn_record,
@@ -587,19 +586,7 @@ bool BplusTree::AddLeaveToTree(RecordPage* leave) {
   return true;
 }
 
-
-// BulkLoading data
-bool BplusTree::BulkLoadRecord(Schema::DataRecord* record) {
-  // Try inserting the record to current leave page. If success, we continue.
-  // Otherwise it is possible that current leave is nullptr (empty B+ tree,
-  // no record ever inserted), or current leave is full. In either case, we
-  // need to allocate a new leave page and continue inserting.
-  if (bl_status_.crt_leave &&
-      InsertRecordToLeave(record, bl_status_.crt_leave)) {
-    return true;
-  }
-
-  // Allocate a new leave node.
+RecordPage* BplusTree::CreateNewLeave() {
   RecordPage* new_leave = AllocateNewPage(TREE_LEAVE);
   if (bl_status_.crt_leave) {
     new_leave->Meta()->set_prev_page(bl_status_.crt_leave->id());
@@ -607,16 +594,110 @@ bool BplusTree::BulkLoadRecord(Schema::DataRecord* record) {
     bl_status_.prev_leave = bl_status_.crt_leave;
   }
   bl_status_.crt_leave = new_leave;
-  // Now we have a new leave node, we insert the record.
-  if (!InsertRecordToLeave(record, bl_status_.crt_leave)) {
+  return new_leave;
+}
+
+// BulkLoading data
+bool BplusTree::BulkLoadRecord(Schema::DataRecord* record) {
+  if (!record) {
+    LogERROR("Record to insert is nullptr");
+    return false;
+  }
+
+  // Try inserting the record to current leave page. If success, we continue.
+  // Otherwise it is possible that current leave is nullptr (empty B+ tree,
+  // no record ever inserted), or current leave is full. In either case, we
+  // need to allocate a new leave page and continue inserting.
+  if (bl_status_.crt_leave &&
+      bl_status_.crt_leave->Meta()->is_overflow_page() == 0 &&
+      record->InsertToRecordPage(bl_status_.crt_leave)) {
+    bl_status_.last_record.reset(record->Duplicate());
+    return true;
+  }
+
+  // Check boundary duplication. If new record equals last record at the end of
+  // its leave, we need to move these duplicates to new leave.
+  if (bl_status_.last_record &&
+      Schema::RecordBase::CompareRecordsWithKey(
+          record, bl_status_.last_record.get(),
+          key_indexes_) == 0) {
+    bl_status_.last_record.reset(record->Duplicate());
+    return CheckBoundaryDuplication(record);
+  }
+
+  // Normal insertion. Allocate a new leave node and insert the record.
+  RecordPage* new_leave = CreateNewLeave();
+  if (!record->InsertToRecordPage(new_leave)) {
     LogFATAL("Failed to insert record to new leave node");
     return false;
   }
   // We add this new leave node with one record, to a upper tree node. Note that
   // we only do this when having allocated a new leave node and had just first
   // record inserted to it.
-  if (!AddLeaveToTree(bl_status_.crt_leave)) {
+  if (!AddLeaveToTree(new_leave)) {
     LogFATAL("Failed to add leave to B+ tree node");
+    return false;
+  }
+
+  // Keep a copy of last inserted record. We need this copy to check record
+  // duplication in 
+  bl_status_.last_record.reset(record->Duplicate());
+
+  return true;
+}
+
+bool BplusTree::CheckBoundaryDuplication(Schema::RecordBase* record) {
+  // Load curret leave records and find the first duplicate with the new record
+  // to be insert.
+  Schema::PageRecordsManager prmanager(bl_status_.crt_leave,
+                                       schema_.get(), key_indexes_,
+                                       file_type_, TREE_LEAVE);
+  if (!prmanager.LoadRecordsFromPage()) {
+    LogFATAL("Load page record failed");
+  }
+  int index = prmanager.NumRecords() - 1;
+  for (; index >= 0; index--) {
+    if (Schema::RecordBase::CompareRecordsWithKey(
+            record, bl_status_.last_record.get(),
+            key_indexes_) != 0) {
+      break;
+    }
+  }
+  index++;
+  // If index == 0, this leave is filled with all same records. Then we don't
+  // allocate new leave, but append overflow pages immediately.
+  if (index > 0) {
+    printf("index = %d\n", index);
+    // From plrecord[index], records of current leave are duplicates.
+    RecordPage* new_leave = CreateNewLeave();
+    const auto& plrecords = prmanager.plrecords();
+    for (int i = index; i < (int)plrecords.size(); i++) {
+      if (!prmanager.Record(i)->InsertToRecordPage(new_leave)) {
+        LogFATAL("Move slot %d TreeNodeRecord to new tree node failed");
+      }
+      // Remove the records from the original leave.
+      bl_status_.prev_leave->DeleteRecord(plrecords.at(i).slot_id());
+    }
+
+    if (!AddLeaveToTree(bl_status_.crt_leave)) {
+      LogFATAL("Failed to add leave to B+ tree node");
+      return false;
+    }
+    // Re-try inserting record to new crt_leave.
+    if (record->InsertToRecordPage(new_leave)) {
+      return true;
+    }
+  }
+
+  LogINFO("New duplicated record needs a new overflow page.");
+  RecordPage* new_leave = CreateNewLeave();
+  new_leave->Meta()->set_parent_page(bl_status_.prev_leave->Meta()->
+                                                                parent_page());
+  new_leave->Meta()->set_is_overflow_page(1);
+  bl_status_.prev_leave->Meta()->set_overflow_page(new_leave->id());
+  if (!record->InsertToRecordPage(new_leave)) {
+    LogFATAL("Insert first duplicated record to overflow page faield - "
+             "This should not happen!");
     return false;
   }
 
@@ -651,7 +732,6 @@ bool BplusTree::ValidityCheck() {
         return false;
       }
     }
-
     CheckoutPage(crt_page->id(), false);
   }
 
@@ -742,7 +822,7 @@ bool BplusTree::VerifyChildRecordsRange(RecordPage* child_page,
   else {
     last_record_key = *prmanager.GetRecord<Schema::RecordBase>(last_index);
   }
-  if (last_record_key > *right_bound) {
+  if (last_record_key >= *right_bound) {  // right boundary is open interval
     LogERROR("last record key of child > right bound, "
              "happens on page type %d", child_page->Meta()->page_type());
     last_record_key.Print();
@@ -775,26 +855,41 @@ bool BplusTree::EqueueChildNodes(RecordPage* page,
       LogFATAL("Can't fetching child page while enqueuing");
     }
     if (child_page->Meta()->page_type() == TREE_LEAVE) {
-      // Don't enqueue tree leave.
-      children_are_leave = true;
-      vc_status_.count_num_leaves++;
-      // Check prev_leave <-- crt_leave.prev
-      if (vc_status_.prev_leave_id != child_page->Meta()->prev_page()) {
-        LogERROR("Leave connnecting verification failed - "
-                 "curent leave's prev = %d, while prev_leave_id = %d",
-                 child_page->Meta()->prev_page(), vc_status_.prev_leave_id);
-        return false;
+      while (child_page) {
+        // Don't enqueue tree leave.
+        children_are_leave = true;
+        vc_status_.count_num_leaves++;
+        vc_status_.count_num_records += child_page->Meta()->num_records();
+        // Check prev_leave <-- crt_leave.prev
+        if (vc_status_.prev_leave_id != child_page->Meta()->prev_page()) {
+          LogERROR("Leave connnecting verification failed - "
+                   "curent leave's prev = %d, while prev_leave_id = %d",
+                   child_page->Meta()->prev_page(), vc_status_.prev_leave_id);
+          return false;
+        }
+        // Check prev_leave.next --> crt_leave
+        vc_status_.prev_leave_id = child_page->id();
+        if (vc_status_.prev_leave_next > 0 &&
+            vc_status_.prev_leave_next != child_page->id()) {
+          LogERROR("Leave connnecting verification failed - "
+                   "prev leave's next = %d, while crt_leave_id = %d",
+                   vc_status_.prev_leave_next, child_page->id());
+          return false;
+        }
+        vc_status_.prev_leave_next = child_page->Meta()->next_page();
+        // Find overflow page.
+        if (child_page->Meta()->overflow_page() >= 0) {
+          child_page = FetchPage(child_page->Meta()->overflow_page());
+          if (!child_page) {
+            LogFATAL("Can't fetching overflow child page while enqueuing");
+          }
+          vc_status_.count_num_pages++;
+          vc_status_.count_num_used_pages++;
+        }
+        else {
+          child_page = nullptr;
+        }
       }
-      // Check prev_leave.next --> crt_leave
-      vc_status_.prev_leave_id = child_page->id();
-      if (vc_status_.prev_leave_next > 0 &&
-          vc_status_.prev_leave_next != child_page->id()) {
-        LogERROR("Leave connnecting verification failed - "
-                 "prev leave's next = %d, while crt_leave_id = %d",
-                 vc_status_.prev_leave_next, child_page->id());
-        return false;
-      }
-      vc_status_.prev_leave_next = child_page->Meta()->next_page();
       CheckoutPage(tn_record->page_id(), false);
     }
     else {
@@ -834,6 +929,8 @@ bool BplusTree::MetaConsistencyCheck() const {
              header_->num_leaves(), vc_status_.count_num_leaves);
     return false;
   }
+
+  printf("count_num_records = %d\n", vc_status_.count_num_records);
 
   return true;
 }

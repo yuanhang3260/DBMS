@@ -90,7 +90,8 @@ bool RecordPageMeta::AddEmptySlot(int slot_id) {
 
 int RecordPageMeta::size() const {
   // Slot directory entry size = 2 * sizeof(int)
-  return (sizeof(int16) * 8) + kSlotDirectoryEntrySize * slot_directory_.size();
+  return (sizeof(int16) * 10) +
+          kSlotDirectoryEntrySize * slot_directory_.size();
 }
 
 void RecordPageMeta::reset() {
@@ -140,6 +141,12 @@ bool RecordPageMeta::SaveMetaToPage(byte* ppage) const {
 
   offset -= sizeof(parent_page_);
   memcpy(ppage + offset, &parent_page_, sizeof(parent_page_));
+
+  offset -= sizeof(is_overflow_page_);
+  memcpy(ppage + offset, &is_overflow_page_, sizeof(is_overflow_page_));
+
+  offset -= sizeof(overflow_page_);
+  memcpy(ppage + offset, &overflow_page_, sizeof(overflow_page_));
 
   offset -= sizeof(space_used_);
   memcpy(ppage + offset, &space_used_, sizeof(space_used_));
@@ -209,6 +216,12 @@ bool RecordPageMeta::LoadMetaFromPage(const byte* ppage) {
 
   offset -= sizeof(parent_page_);
   memcpy(&parent_page_, ppage + offset, sizeof(parent_page_));
+
+  offset -= sizeof(is_overflow_page_);
+  memcpy(&is_overflow_page_, ppage + offset, sizeof(is_overflow_page_));
+
+  offset -= sizeof(overflow_page_);
+  memcpy(&overflow_page_, ppage + offset, sizeof(overflow_page_));
 
   offset -= sizeof(space_used_);
   memcpy(&space_used_, ppage + offset, sizeof(space_used_));

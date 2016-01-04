@@ -61,6 +61,8 @@ class RecordPageMeta {
   DEFINE_ACCESSOR(next_page, int16);
   DEFINE_ACCESSOR(prev_page, int16);
   DEFINE_ACCESSOR(parent_page, int16);
+  DEFINE_ACCESSOR(is_overflow_page, int16);
+  DEFINE_ACCESSOR(overflow_page, int16);
   DEFINE_ACCESSOR(space_used, int16);
   DEFINE_INCREMENTOR_DECREMENTOR(space_used, int16);
   DEFINE_ACCESSOR_ENUM(page_type, PageType);
@@ -93,6 +95,8 @@ class RecordPageMeta {
   int16 next_page_ = -1;
   int16 prev_page_ = -1;
   int16 parent_page_ = -1;
+  int16 is_overflow_page_ = 0;
+  int16 overflow_page_ = -1;
   int16 space_used_ = 0;  // total space that has been used for record.
   PageType page_type_ = UNKNOW_PAGETYPE;
   std::vector<SlotDirectoryEntry> slot_directory_;

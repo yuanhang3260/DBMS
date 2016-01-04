@@ -96,12 +96,31 @@ class BplusTree {
   // Allocate a new page in bulkloading.
   RecordPage* AllocateNewPage(PageType page_type);
   // Insert a record to a leave node.
-  bool InsertRecordToLeave(const Schema::DataRecord* record, RecordPage* leave);
+  bool InsertRecordToLeave(const Schema::DataRecord* record);
   // Insert a page to a parent node.
   bool AddLeaveToTree(RecordPage* leave);
   // Insert a new TreeNodeRecord to tree node page.
   bool InsertTreeNodeRecord(Schema::TreeNodeRecord* tn_record,
                             RecordPage* tn_page);
+  // Create a new leave in bulkloading.
+  RecordPage* CreateNewLeave();
+  // Used in bulk loading. We don't allow records with same key are spread
+  // to 2 successive pages. Same keys must be merged into a single page and
+  // possibly, into overflow pages if there are many duplicates.
+  // More specifically, below is not allowd:
+  //
+  //                        parent node
+  //                      | 1   5   X....|
+  //              ____________|   |_______
+  //             |                        |
+  //         leave N                   leave N+1
+  // | 1, 2, 3, 4, 5, 5, 5 |        | 5, 5, 5, ... |
+  //
+  // Because this violates that all records of leave N < right boundary given
+  // by its parent which is 5 where the range should be [1, 5). It can easily
+  // happen in bulkloading. We need to move all 5 in leave N to leave N + 1
+  // before the first 5 is inserted into leave N + 1.
+  bool CheckBoundaryDuplication(Schema::RecordBase* record);
 
   // Fetch a page, either from page map or load it from disk.
   RecordPage* FetchPage(int page_id);
@@ -150,6 +169,7 @@ class BplusTree {
     RecordPage* crt_leave = nullptr;
     RecordPage* prev_leave = nullptr;
     int next_id = 1;
+    std::shared_ptr<Schema::RecordBase> last_record;
   };
 
   BulkLoadingStatus bl_status_;
@@ -163,6 +183,7 @@ class BplusTree {
     int count_depth = 0;
     int prev_leave_id = -1;
     int prev_leave_next = -1;
+    int count_num_records = 0;
   };
 
   ValidityCheckStatus vc_status_;

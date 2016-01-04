@@ -67,7 +67,8 @@ class RecordPageTest: public UnitTest {
     page_->InitInMemoryPage();
     InitRecordSource();
     int num_records_inserted = 0;
-    int total_size = 8 * sizeof(int16); // size of meta data excluding slot directory.
+    // size of meta data excluding slot directory.
+    int total_size = 10 * sizeof(int16);
 
     // Begin inserting records until the page is full.
     while (true) {
