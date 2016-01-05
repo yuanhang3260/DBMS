@@ -64,7 +64,7 @@ class BplusTreeTest: public UnitTest {
       // Init fields to records.
       // name
       {
-        if (i >= 2 && i <= 4) {
+        if (i >= 2 && i <= 6) {
           record_resource.at(i)->AddField(new Schema::StringType("hello"));
         }
         else {
@@ -80,8 +80,8 @@ class BplusTreeTest: public UnitTest {
       int rand_int = Utils::RandomNumber(20);
       record_resource.at(i)->AddField(new Schema::IntType(rand_int));
       // money (we use this field as key for record resource map).
-      int rand_long = Utils::RandomNumber(100);
-      if (i >= 2 && i <= 4) {
+      int rand_long = Utils::RandomNumber(10);
+      if (i >= 2 && i <= 6) {
         record_resource.at(i)->AddField(new Schema::LongIntType(-1));
       }
       else {
@@ -235,8 +235,41 @@ class BplusTreeTest: public UnitTest {
     std::vector<std::shared_ptr<Schema::RecordBase>> result;
     tree.SearchByKey(&key, &result);
 
-    printf("Searched %d matched results\n", result.size());
+    printf("Searched %d records matching key (-1, \"hello\")\n", result.size());
+
+    // Scan all records and search one by one.
+    // First merge records with the same key.
+    std::vector<std::shared_ptr<Schema::RecordBase>> v;
+    for (auto& entry: record_resource) {
+      v.push_back(entry.second);
+    }
+    Schema::PageRecordsManager::SortRecords(v, key_indexes);
+    std::vector<int> start_list;
+    start_list.push_back(0);
+    key.clear();
+    ((Schema::DataRecord*)v[0].get())->ExtractKey(&key, key_indexes);
+    for (int i = 1; i < (int)v.size(); i++) {
+      if (Schema::RecordBase::CompareRecordWithKey(
+              &key, v[i].get(), key_indexes) == 0) {
+        continue;
+      }
+      key.clear();
+      ((Schema::DataRecord*)v[i].get())->ExtractKey(&key, key_indexes);
+      start_list.push_back(i);
+    }
+    printf("%d different keys\n", start_list.size());
+    start_list.push_back(kNumRecordsSource);
+    for (int i = 0; i < (int)start_list.size() - 1; i++) {
+      key.clear();
+      int start = start_list[i];
+      ((Schema::DataRecord*)v[start].get())->ExtractKey(&key, key_indexes);
+      
+      result.clear();
+      AssertEqual(start_list[i + 1] - start_list[i],
+                  tree.SearchByKey(&key, &result), "Search result differs");
+    }
   }
+
 
 };
 

@@ -993,25 +993,26 @@ int BplusTree::FetchResultsFromLeave(
     // Fetch all matching records in this leave.
     int index = 0;
     int num_matching_records = 0;
+    bool last_is_match = false;
     for (; index < prmanager.NumRecords(); index++) {
       if (Schema::RecordBase::CompareRecordWithKey(
             key, prmanager.Record(index),
             key_indexes_) == 0) {
         result->push_back(prmanager.plrecords().at(index).Record());
         num_matching_records++;
-      }
-      else if (leave->Meta()->is_overflow_page()) {
-        // Overflow page must have all same records that match the key we're
-        // searching for.
-        LogFATAL("Overflow page stores inconsistent records!");
+        last_is_match = true;
       }
       else {
-        break;
+        if (leave->Meta()->is_overflow_page()) {
+          // Overflow page must have all same records that match the key we're
+          // searching for.
+          LogFATAL("Overflow page stores inconsistent records!");
+        }
+        last_is_match = false;
       }
     }
     // If index reaches the end of all records, check overflow page.
-    if (index == prmanager.NumRecords() &&
-        leave->Meta()->overflow_page() >= 0) {
+    if (last_is_match && leave->Meta()->overflow_page() >= 0) {
       if (num_matching_records == 0) {
         LogERROR("No records matched found on leave %d", leave->id());
       }

@@ -57,6 +57,8 @@ class RecordBase {
   // Reset all fields to minimum.
   virtual void reset();
 
+  virtual void clear();
+
   bool InitRecordFields(const TableSchema* schema,
                         std::vector<int> key_indexes,
                         DataBaseFiles::FileType file_type,

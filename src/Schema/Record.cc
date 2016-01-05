@@ -272,6 +272,10 @@ void RecordBase::reset() {
   }
 }
 
+void RecordBase::clear() {
+  fields_.clear();
+}
+
 bool RecordBase::InitRecordFields(const TableSchema* schema,
                                   std::vector<int> key_indexes,
                                   DataBaseFiles::FileType file_type,
