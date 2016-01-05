@@ -66,7 +66,7 @@ class IntType: public SchemaFieldType {
     return sizeof(int);
   }
 
-  void reset() override { value_ = LONG_MIN; }
+  void reset() override { value_ = INT_MIN; }
 
  private:
   int value_ = LONG_MIN;

@@ -166,6 +166,8 @@ class PageLoadedRecord {
   DEFINE_ACCESSOR(slot_id, int);
   DEFINE_ACCESSOR_SMART_PTR(record, RecordBase);
 
+  std::shared_ptr<RecordBase> Record() { return record_; }
+
   int NumFields() const {
     if (!record_) {
       return 0;
@@ -253,6 +255,10 @@ class PageRecordsManager {
   // It returns the middle point that splits all recors equally in respect of
   // space they take.
   int AppendRecordAndSplitPage(RecordBase* record);
+
+  // Search for a key, returns the left boundary index this key should reside
+  // in a B+ tree node.
+  int SearchForKey(const RecordBase* record) const;
 
  private:
   DataBaseFiles::RecordPage* page_ = nullptr;

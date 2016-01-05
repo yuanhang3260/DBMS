@@ -400,6 +400,7 @@ RecordPage* BplusTree::FetchPage(int page_id) {
     RecordPage* new_page = new RecordPage(page_id, file_);
     if (!new_page->LoadPageData()) {
       LogERROR("Fetch page %d from disk failed", page_id);
+      delete new_page;
       return nullptr;
     }
     page_map_.emplace(page_id, std::shared_ptr<RecordPage>(new_page));
@@ -525,7 +526,8 @@ bool BplusTree::InsertTreeNodeRecord(Schema::TreeNodeRecord* tn_record,
 
   // Add new tree node to parent by inserting a TreeNodeRecord with key of
   // the mid_index record, and page id of the new tree node.
-  auto right_upper_tn_record = prmanager.GetRecord<Schema::TreeNodeRecord>(mid_index);
+  auto right_upper_tn_record =
+      prmanager.GetRecord<Schema::TreeNodeRecord>(mid_index);
   right_upper_tn_record->set_page_id(new_tree_node->id());
   RecordPage* parent_node = FetchPage(tn_page->Meta()->parent_page());
   if (!InsertTreeNodeRecord(right_upper_tn_record, parent_node)) {
@@ -586,7 +588,7 @@ bool BplusTree::AddLeaveToTree(RecordPage* leave) {
   return true;
 }
 
-RecordPage* BplusTree::CreateNewLeave() {
+RecordPage* BplusTree::AppendNewLeave() {
   RecordPage* new_leave = AllocateNewPage(TREE_LEAVE);
   if (bl_status_.crt_leave) {
     new_leave->Meta()->set_prev_page(bl_status_.crt_leave->id());
@@ -594,6 +596,15 @@ RecordPage* BplusTree::CreateNewLeave() {
     bl_status_.prev_leave = bl_status_.crt_leave;
   }
   bl_status_.crt_leave = new_leave;
+  return new_leave;
+}
+
+RecordPage* BplusTree::AppendNewOverflowLeave() {
+  RecordPage* new_leave = AppendNewLeave();
+  new_leave->Meta()->
+      set_parent_page(bl_status_.prev_leave->Meta()->parent_page());
+  new_leave->Meta()->set_is_overflow_page(1);
+  bl_status_.prev_leave->Meta()->set_overflow_page(new_leave->id());
   return new_leave;
 }
 
@@ -626,7 +637,7 @@ bool BplusTree::BulkLoadRecord(Schema::DataRecord* record) {
   }
 
   // Normal insertion. Allocate a new leave node and insert the record.
-  RecordPage* new_leave = CreateNewLeave();
+  RecordPage* new_leave = AppendNewLeave();
   if (!record->InsertToRecordPage(new_leave)) {
     LogFATAL("Failed to insert record to new leave node");
   }
@@ -645,7 +656,7 @@ bool BplusTree::BulkLoadRecord(Schema::DataRecord* record) {
 }
 
 bool BplusTree::CheckBoundaryDuplication(Schema::RecordBase* record) {
-  // Try inserting first
+  // Try inserting first. This deals with a non-full overflow page.
   if (record->InsertToRecordPage(bl_status_.crt_leave)) {
     return true;
   }
@@ -671,18 +682,18 @@ bool BplusTree::CheckBoundaryDuplication(Schema::RecordBase* record) {
   // allocate new leave, but append overflow pages immediately.
   if (index > 0) {
     // From plrecord[index], records of current leave are duplicates.
-    RecordPage* new_leave = CreateNewLeave();
+    RecordPage* new_leave = AppendNewLeave();
     const auto& plrecords = prmanager.plrecords();
     for (int i = index; i < (int)plrecords.size(); i++) {
       if (!prmanager.Record(i)->InsertToRecordPage(new_leave)) {
-        LogFATAL("Move slot %d TreeNodeRecord to new tree node failed");
+        LogFATAL("Faield to move slot %d TreeNodeRecord to new tree node");
       }
       // Remove the records from the original leave.
       bl_status_.prev_leave->DeleteRecord(plrecords.at(i).slot_id());
     }
 
     if (!AddLeaveToTree(bl_status_.crt_leave)) {
-      LogFATAL("Failed to add leave to B+ tree node");
+      LogFATAL("Failed to add leave to B+ tree");
       return false;
     }
     // Re-try inserting record to new crt_leave.
@@ -692,12 +703,8 @@ bool BplusTree::CheckBoundaryDuplication(Schema::RecordBase* record) {
   }
 
   LogINFO("New duplicated record needs a new overflow page.");
-  RecordPage* new_leave = CreateNewLeave();
-  new_leave->Meta()->set_parent_page(bl_status_.prev_leave->Meta()->
-                                                                parent_page());
-  new_leave->Meta()->set_is_overflow_page(1);
-  bl_status_.prev_leave->Meta()->set_overflow_page(new_leave->id());
-  if (!record->InsertToRecordPage(new_leave)) {
+  RecordPage* overflow_leave = AppendNewOverflowLeave();
+  if (!record->InsertToRecordPage(overflow_leave)) {
     LogFATAL("Insert first duplicated record to overflow page faield - "
              "This should not happen!");
     return false;
@@ -712,7 +719,7 @@ bool BplusTree::ValidityCheck() {
     return true;
   }
 
-  // Level-iterate the B+ tree.
+  // Level-traverse the B+ tree.
   std::queue<RecordPage*> page_q;
   RecordPage* root = FetchPage(header_->root_page());
   page_q.push(root);
@@ -958,9 +965,91 @@ bool BplusTree::MetaConsistencyCheck() const {
   return true;
 }
 
-bool BplusTree::SearchByKey(const Schema::RecordBase* key,
-                            std::vector<std::shared_ptr<Schema::RecordBase>> result) {
+bool BplusTree::SearchByKey(
+         const Schema::RecordBase* key,
+         std::vector<std::shared_ptr<Schema::RecordBase>>* result) {
+  if (!key || !result) {
+    LogERROR("Nullptr input to SearchByKey");
+    return false;
+  }
+  result->clear();
+
+  RecordPage* crt_page = FetchPage(header_->root_page());
+  while (crt_page && crt_page->Meta()->page_type() == TREE_NODE) {
+    crt_page = SearchToNextLevel(crt_page, key);
+  }
+
+  if (!crt_page) {
+    LogERROR("Failed to search for key");
+    key->Print();
+    return false;
+  }
+
+  FetchResultsFromLeave(crt_page, key, result);
+
   return true;
+}
+
+int BplusTree::FetchResultsFromLeave(
+         RecordPage* leave,
+         const Schema::RecordBase* key,
+         std::vector<std::shared_ptr<Schema::RecordBase>>* result) {
+  if (!leave || !key || !result) {
+    LogERROR("Nullptr input to FetchResultsFromLeave");
+    return -1;
+  }
+
+  Schema::PageRecordsManager prmanager(leave, schema_.get(), key_indexes_,
+                                       file_type_, leave->Meta()->page_type());
+  if (!prmanager.LoadRecordsFromPage()) {
+    LogFATAL("Load page %d records failed", leave->id());
+  }
+
+  int index = prmanager.SearchForKey(key);
+  if (index < 0) {
+    LogERROR("Search for key in page %d failed - key is:", leave->id());
+    return -1;
+  }
+
+  while (leave) {
+    if (Schema::RecordBase::CompareRecordsWithKey(
+          key, prmanager.Record(index),
+          key_indexes_) == 0) {
+      result->push_back(prmanager.plrecords().at(index).Record());
+      index++;
+    }
+    else if (leave->Meta()->is_overflow_page()) {
+      // Overflow page must have all same records that match the key we're
+      // searching for.
+      LogFATAL("Overflow page stores inconsistent records!");
+    }
+    // If index reaches the end of all records, check overflow page.
+    if (index == prmanager.NumRecords() &&
+        leave->Meta()->overflow_page() >= 0) {
+      leave = FetchPage(leave->Meta()->overflow_page());
+    }
+  }
+
+  return result->size();
+}
+
+RecordPage* BplusTree::SearchToNextLevel(RecordPage* page,
+                                         const Schema::RecordBase* key) {
+  Schema::PageRecordsManager prmanager(page, schema_.get(), key_indexes_,
+                                       file_type_, page->Meta()->page_type());
+  if (!prmanager.LoadRecordsFromPage()) {
+    LogFATAL("Load page %d records failed", page->id());
+  }
+
+  int index = prmanager.SearchForKey(key);
+  if (index < 0) {
+    LogERROR("Search for key in page %d failed - key is:", page->id());
+    return nullptr;
+  }
+
+  auto tn_record = prmanager.GetRecord<Schema::TreeNodeRecord>(index);
+  RecordPage* next_level_page = FetchPage(tn_record->page_id());
+  return next_level_page;
 }
 
 }  // namespace DataBaseFiles

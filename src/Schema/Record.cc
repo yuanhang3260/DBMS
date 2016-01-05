@@ -599,4 +599,32 @@ RecordBase* PageRecordsManager::Record(int index) const {
   return plrecords_.at(index).record();
 }
 
+int PageRecordsManager::SearchForKey(const RecordBase* record) const {
+  if (!record) {
+    LogERROR("key to search for is nullptr");
+    return -1;
+  }
+
+  if (plrecords_.empty()) {
+    LogERROR("Empty page, won't search");
+    return -1;
+  }
+
+  int index = 0;
+  for (; index < (int)plrecords_.size(); index++) {
+    if (RecordBase::CompareRecordsWithKey(
+            record, Record(index), ProduceIndexesToCompare()) < 0) {
+      break;
+    }
+  }
+  index--;
+  if (index < 0) {
+    LogFATAL("Search for key less than all record keys of this page");
+    record->Print();
+    Record(0)->Print();
+  }
+
+  return index;
+}
+
 }  // namespace Schema

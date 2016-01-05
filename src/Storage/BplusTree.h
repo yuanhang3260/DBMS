@@ -80,6 +80,10 @@ class BplusTree {
   // Validity check for the B+ tree.
   bool ValidityCheck();
 
+  // Serach records by a key. Returns all records that matches this key.
+  bool SearchByKey(const Schema::RecordBase* key,
+                   std::vector<std::shared_ptr<Schema::RecordBase>>* result);
+
   friend class BplusTreeTest;
 
  private:
@@ -103,7 +107,9 @@ class BplusTree {
   bool InsertTreeNodeRecord(Schema::TreeNodeRecord* tn_record,
                             RecordPage* tn_page);
   // Create a new leave in bulkloading.
-  RecordPage* CreateNewLeave();
+  RecordPage* AppendNewLeave();
+  // Create a new overflow leave in bulkloading.
+  RecordPage* AppendNewOverflowLeave();
   // Used in bulk loading. We don't allow records with same key are spread
   // to 2 successive pages. Same keys must be merged into a single page and
   // possibly, into overflow pages if there are many duplicates.
@@ -117,7 +123,7 @@ class BplusTree {
   // | 1, 2, 3, 4, 5, 5, 5 |        | 5, 5, 5, ... |
   //
   // Because this violates that all records of leave N < right boundary given
-  // by its parent which is 5 where the range should be [1, 5). It can easily
+  // by its parent (which is 5), where the range is [1, 5). It can easily
   // happen in bulkloading. We need to move all 5 in leave N to leave N + 1
   // before the first 5 is inserted into leave N + 1.
   bool CheckBoundaryDuplication(Schema::RecordBase* record);
@@ -128,8 +134,8 @@ class BplusTree {
   bool CheckoutPage(int page_id, bool write_to_disk=true);
 
   // Consistency check for a tree node. It loads and sorts all TreeNodeRecords
-  // from this tree node, and verify each child node within the range of every
-  // two successive records.
+  // from this tree node, and verify each child node within the interval of
+  // every two tree node record boundaries.
   bool CheckTreeNodeValid(RecordPage* page);
   // Verify a child node records are within range given from parent node.
   bool VerifyChildRecordsRange(RecordPage* child_page,
@@ -144,9 +150,15 @@ class BplusTree {
   // Check overflow page.
   bool VerifyOverflowPage(RecordPage* page);
 
-  // Serach records by a key. Returns all records that matches this key.
-  bool SearchByKey(const Schema::RecordBase* key,
-                   std::vector<std::shared_ptr<Schema::RecordBase>> result);
+  // Search for a key in the page and returns next level page this key
+  // should reside in.
+  RecordPage* SearchToNextLevel(RecordPage* page,
+                                const Schema::RecordBase* key);
+
+  int FetchResultsFromLeave(
+          RecordPage* leave,
+          const Schema::RecordBase* key,
+          std::vector<std::shared_ptr<Schema::RecordBase>>* result);
 
   std::string tablename_;
   FILE* file_ = nullptr;
