@@ -451,9 +451,6 @@ bool BplusTree::InsertTreeNodeRecord(Schema::TreeNodeRecord* tn_record,
                                        schema_.get(), key_indexes_,
                                        file_type_,
                                        tn_page->Meta()->page_type());
-  if (!prmanager.LoadRecordsFromPage()) {
-    LogFATAL("Load page record failed");
-  }
 
   int mid_index = prmanager.AppendRecordAndSplitPage(tn_record);
   if (mid_index < 0) {
@@ -629,7 +626,7 @@ bool BplusTree::BulkLoadRecord(Schema::DataRecord* record) {
   // Check boundary duplication. If new record equals last record at the end of
   // its leave, we need to move these duplicates to new leave.
   if (bl_status_.crt_leave && bl_status_.last_record &&
-      Schema::RecordBase::CompareRecordsWithKey(
+      Schema::RecordBase::CompareRecordsBasedOnKey(
           record, bl_status_.last_record.get(),
           key_indexes_) == 0) {
     bl_status_.last_record.reset(record->Duplicate());
@@ -666,12 +663,10 @@ bool BplusTree::CheckBoundaryDuplication(Schema::RecordBase* record) {
   Schema::PageRecordsManager prmanager(bl_status_.crt_leave,
                                        schema_.get(), key_indexes_,
                                        file_type_, TREE_LEAVE);
-  if (!prmanager.LoadRecordsFromPage()) {
-    LogFATAL("Load page record failed");
-  }
+
   int index = prmanager.NumRecords() - 1;
   for (; index >= 0; index--) {
-    if (Schema::RecordBase::CompareRecordsWithKey(
+    if (Schema::RecordBase::CompareRecordsBasedOnKey(
             record, bl_status_.last_record.get(),
             key_indexes_) != 0) {
       break;
@@ -759,9 +754,7 @@ bool BplusTree::CheckTreeNodeValid(RecordPage* page) {
 
   Schema::PageRecordsManager prmanager(page, schema_.get(), key_indexes_,
                                        file_type_, TREE_NODE);
-  if (!prmanager.LoadRecordsFromPage()) {
-    LogFATAL("Load page record failed");
-  }
+  
   for (int i = 0; i < prmanager.NumRecords(); i++) {
     auto tn_record = prmanager.GetRecord<Schema::TreeNodeRecord>(i);
     int child_page_id = tn_record->page_id();
@@ -783,15 +776,14 @@ bool BplusTree::CheckTreeNodeValid(RecordPage* page) {
 bool BplusTree::VerifyChildRecordsRange(RecordPage* child_page,
                                         Schema::RecordBase* left_bound,
                                         Schema::RecordBase* right_bound) {
-  Schema::PageRecordsManager prmanager(child_page, schema_.get(), key_indexes_,
-                                       file_type_,
-                                       child_page->Meta()->page_type());
   if (!child_page) {
     LogFATAL("Child page is nullptr, can't verify it's range");
   }
-  if (!prmanager.LoadRecordsFromPage()) {
-    LogFATAL("Load child page record failed");
-  }
+
+  Schema::PageRecordsManager prmanager(child_page, schema_.get(), key_indexes_,
+                                       file_type_,
+                                       child_page->Meta()->page_type());
+
   if (prmanager.NumRecords() <= 0) {
     LogINFO("No records in child page, skip VerifyChildRecordsRange");
     return true;
@@ -851,9 +843,7 @@ bool BplusTree::EqueueChildNodes(RecordPage* page,
 
   Schema::PageRecordsManager prmanager(page, schema_.get(), key_indexes_,
                                        file_type_, TREE_NODE);
-  if (!prmanager.LoadRecordsFromPage()) {
-    LogFATAL("Load page %d records failed", page->id());
-  }
+  
   bool children_are_leave = false;
   vc_status_.count_num_pages += prmanager.NumRecords();
   vc_status_.count_num_used_pages += prmanager.NumRecords();
@@ -920,11 +910,9 @@ bool BplusTree::EqueueChildNodes(RecordPage* page,
 bool BplusTree::VerifyOverflowPage(RecordPage* page) {
   Schema::PageRecordsManager prmanager(page, schema_.get(), key_indexes_,
                                        file_type_, TREE_LEAVE);
-  if (!prmanager.LoadRecordsFromPage()) {
-    LogFATAL("Load page %d records failed", page->id());
-  }
+  
   for (int i = 1; i < prmanager.NumRecords(); i++) {
-    if (Schema::RecordBase::CompareRecordsWithKey(
+    if (Schema::RecordBase::CompareRecordsBasedOnKey(
             prmanager.Record(0), prmanager.Record(i),
             key_indexes_) != 0) {
       LogERROR("Records in overflow page inconsistent!");
@@ -965,12 +953,12 @@ bool BplusTree::MetaConsistencyCheck() const {
   return true;
 }
 
-bool BplusTree::SearchByKey(
+int BplusTree::SearchByKey(
          const Schema::RecordBase* key,
          std::vector<std::shared_ptr<Schema::RecordBase>>* result) {
   if (!key || !result) {
     LogERROR("Nullptr input to SearchByKey");
-    return false;
+    return -1;
   }
   result->clear();
 
@@ -982,12 +970,11 @@ bool BplusTree::SearchByKey(
   if (!crt_page) {
     LogERROR("Failed to search for key");
     key->Print();
-    return false;
+    return -1;
   }
 
   FetchResultsFromLeave(crt_page, key, result);
-
-  return true;
+  return result->size();
 }
 
 int BplusTree::FetchResultsFromLeave(
@@ -999,34 +986,39 @@ int BplusTree::FetchResultsFromLeave(
     return -1;
   }
 
-  Schema::PageRecordsManager prmanager(leave, schema_.get(), key_indexes_,
-                                       file_type_, leave->Meta()->page_type());
-  if (!prmanager.LoadRecordsFromPage()) {
-    LogFATAL("Load page %d records failed", leave->id());
-  }
-
-  int index = prmanager.SearchForKey(key);
-  if (index < 0) {
-    LogERROR("Search for key in page %d failed - key is:", leave->id());
-    return -1;
-  }
-
   while (leave) {
-    if (Schema::RecordBase::CompareRecordsWithKey(
-          key, prmanager.Record(index),
-          key_indexes_) == 0) {
-      result->push_back(prmanager.plrecords().at(index).Record());
-      index++;
-    }
-    else if (leave->Meta()->is_overflow_page()) {
-      // Overflow page must have all same records that match the key we're
-      // searching for.
-      LogFATAL("Overflow page stores inconsistent records!");
+    Schema::PageRecordsManager prmanager(leave, schema_.get(), key_indexes_,
+                                         file_type_,
+                                         leave->Meta()->page_type());
+    // Fetch all matching records in this leave.
+    int index = 0;
+    int num_matching_records = 0;
+    for (; index < prmanager.NumRecords(); index++) {
+      if (Schema::RecordBase::CompareRecordWithKey(
+            key, prmanager.Record(index),
+            key_indexes_) == 0) {
+        result->push_back(prmanager.plrecords().at(index).Record());
+        num_matching_records++;
+      }
+      else if (leave->Meta()->is_overflow_page()) {
+        // Overflow page must have all same records that match the key we're
+        // searching for.
+        LogFATAL("Overflow page stores inconsistent records!");
+      }
+      else {
+        break;
+      }
     }
     // If index reaches the end of all records, check overflow page.
     if (index == prmanager.NumRecords() &&
         leave->Meta()->overflow_page() >= 0) {
+      if (num_matching_records == 0) {
+        LogERROR("No records matched found on leave %d", leave->id());
+      }
       leave = FetchPage(leave->Meta()->overflow_page());
+    }
+    else {
+      break;
     }
   }
 
@@ -1037,9 +1029,6 @@ RecordPage* BplusTree::SearchToNextLevel(RecordPage* page,
                                          const Schema::RecordBase* key) {
   Schema::PageRecordsManager prmanager(page, schema_.get(), key_indexes_,
                                        file_type_, page->Meta()->page_type());
-  if (!prmanager.LoadRecordsFromPage()) {
-    LogFATAL("Load page %d records failed", page->id());
-  }
 
   int index = prmanager.SearchForKey(key);
   if (index < 0) {

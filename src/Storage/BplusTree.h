@@ -81,8 +81,8 @@ class BplusTree {
   bool ValidityCheck();
 
   // Serach records by a key. Returns all records that matches this key.
-  bool SearchByKey(const Schema::RecordBase* key,
-                   std::vector<std::shared_ptr<Schema::RecordBase>>* result);
+  int SearchByKey(const Schema::RecordBase* key,
+                  std::vector<std::shared_ptr<Schema::RecordBase>>* result);
 
   friend class BplusTreeTest;
 

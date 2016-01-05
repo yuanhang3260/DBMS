@@ -121,9 +121,9 @@ bool RecordBase::operator==(const RecordBase& other) const {
   return true;
 }
 
-int RecordBase::CompareRecordsWithKey(const RecordBase* r1,
-                                      const RecordBase* r2,
-                                      const std::vector<int>& indexes) {
+int RecordBase::CompareRecordsBasedOnKey(const RecordBase* r1,
+                                         const RecordBase* r2,
+                                         const std::vector<int>& indexes) {
   for (int i = 0; i < (int)indexes.size(); i++) {
     int re = RecordBase::CompareSchemaFields(
                  r1->fields_.at(indexes[i]).get(),
@@ -142,7 +142,25 @@ int RecordBase::CompareRecordsWithKey(const RecordBase* r1,
 bool RecordBase::RecordComparator(const std::shared_ptr<RecordBase> r1,
                                   const std::shared_ptr<RecordBase> r2,
                                   const std::vector<int>& indexes) {
-  return CompareRecordsWithKey(r1.get(), r2.get(), indexes) < 0;
+  return CompareRecordsBasedOnKey(r1.get(), r2.get(), indexes) < 0;
+}
+
+int RecordBase::CompareRecordWithKey(const RecordBase* key,
+                                     const RecordBase* record,
+                                     const std::vector<int>& indexes) {
+  for (int i = 0; i < (int)indexes.size(); i++) {
+    int re = RecordBase::CompareSchemaFields(
+                 key->fields_.at(i).get(),
+                 record->fields_.at(indexes[i]).get()
+             );
+    if (re < 0) {
+      return -1;
+    }
+    else if (re > 0) {
+      return 1;
+    }
+  }
+  return 0;
 }
 
 bool RecordBase::operator!=(const RecordBase& other) const {
@@ -447,6 +465,29 @@ bool PageLoadedRecord::Comparator(const PageLoadedRecord& r1,
 
 
 // ************************** PageRecordsManager **************************** //
+PageRecordsManager::PageRecordsManager(DataBaseFiles::RecordPage* page,
+                                       TableSchema* schema,
+                                       std::vector<int> key_indexes,
+                                       DataBaseFiles::FileType file_type,
+                                       DataBaseFiles::PageType page_type) :
+    page_(page),
+    schema_(schema),
+    key_indexes_(key_indexes),
+    file_type_(file_type),
+    page_type_(page_type) {
+  if (!page) {
+    LogFATAL("Can't init PageRecordsManager with page nullptr");
+  }
+  if (!schema) {
+    LogFATAL("Can't init PageRecordsManager with schema nullptr");
+  }
+
+  if (!LoadRecordsFromPage()) {
+    LogFATAL("Load page %d records failed", page->id());
+  }
+}
+
+
 void PageRecordsManager::SortRecords(
          std::vector<std::shared_ptr<Schema::RecordBase>>& records,
          const std::vector<int>& key_indexes) {
@@ -599,8 +640,21 @@ RecordBase* PageRecordsManager::Record(int index) const {
   return plrecords_.at(index).record();
 }
 
-int PageRecordsManager::SearchForKey(const RecordBase* record) const {
-  if (!record) {
+int PageRecordsManager::CompareRecordWithKey(const RecordBase* key,
+                                             const RecordBase* record) const {
+  if (page_type_ == DataBaseFiles::TREE_NODE ||
+      file_type_ == DataBaseFiles::INDEX) {
+    return RecordBase::CompareRecordsBasedOnKey(key, record,
+                                                ProduceIndexesToCompare());
+  }
+  else {
+    // file_type = INDEX_DATA && page_type = TREE_LEAVE
+    return RecordBase::CompareRecordWithKey(key, record, key_indexes_);
+  }
+}
+
+int PageRecordsManager::SearchForKey(const RecordBase* key) const {
+  if (!key) {
     LogERROR("key to search for is nullptr");
     return -1;
   }
@@ -612,15 +666,14 @@ int PageRecordsManager::SearchForKey(const RecordBase* record) const {
 
   int index = 0;
   for (; index < (int)plrecords_.size(); index++) {
-    if (RecordBase::CompareRecordsWithKey(
-            record, Record(index), ProduceIndexesToCompare()) < 0) {
+    if (CompareRecordWithKey(key, Record(index)) < 0) {
       break;
     }
   }
   index--;
   if (index < 0) {
     LogFATAL("Search for key less than all record keys of this page");
-    record->Print();
+    key->Print();
     Record(0)->Print();
   }
 

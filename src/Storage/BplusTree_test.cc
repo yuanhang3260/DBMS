@@ -64,19 +64,29 @@ class BplusTreeTest: public UnitTest {
       // Init fields to records.
       // name
       {
-        int str_len = Utils::RandomNumber(10);
-        char buf[str_len];
-        for (int i = 0; i < str_len; i++) {
-          buf[i] = 'a' + Utils::RandomNumber(26);
+        if (i >= 2 && i <= 4) {
+          record_resource.at(i)->AddField(new Schema::StringType("hello"));
         }
-        record_resource.at(i)->AddField(new Schema::StringType(buf, str_len));
+        else {
+          int str_len = Utils::RandomNumber(10);
+          char buf[str_len];
+          for (int i = 0; i < str_len; i++) {
+            buf[i] = 'a' + Utils::RandomNumber(26);
+          }
+          record_resource.at(i)->AddField(new Schema::StringType(buf, str_len));
+        }
       }
       // age
       int rand_int = Utils::RandomNumber(20);
       record_resource.at(i)->AddField(new Schema::IntType(rand_int));
       // money (we use this field as key for record resource map).
       int rand_long = Utils::RandomNumber(100);
-      record_resource.at(i)->AddField(new Schema::LongIntType(rand_long));
+      if (i >= 2 && i <= 4) {
+        record_resource.at(i)->AddField(new Schema::LongIntType(-1));
+      }
+      else {
+        record_resource.at(i)->AddField(new Schema::LongIntType(rand_long));
+      }
       // weight
       double rand_double = 1.0 * Utils::RandomNumber() / Utils::RandomNumber();
       record_resource.at(i)->AddField(new Schema::DoubleType(rand_double));
@@ -216,6 +226,18 @@ class BplusTreeTest: public UnitTest {
     }
   }
 
+  void Test_SearchByKey() {
+    BplusTree tree(tablename, key_indexes);
+    Schema::RecordBase key;
+    key.AddField(new Schema::LongIntType(-1));
+    key.AddField(new Schema::StringType("hello"));
+
+    std::vector<std::shared_ptr<Schema::RecordBase>> result;
+    tree.SearchByKey(&key, &result);
+
+    printf("Searched %d matched results\n", result.size());
+  }
+
 };
 
 }  // namespace DataBaseFiles
@@ -230,6 +252,7 @@ int main() {
     test.Test_BulkLoading();
     test.CheckBplusTree();
   }
+  test.Test_SearchByKey();
   test.teardown();
 
   std::cout << "\033[2;32mAll Passed ^_^\033[0m" << std::endl;

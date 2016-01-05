@@ -80,12 +80,17 @@ class RecordBase {
   bool operator==(const RecordBase& other) const;
   bool operator!=(const RecordBase& other) const;
 
-  static int CompareRecordsWithKey(const RecordBase* r1, const RecordBase* r2,
-                                   const std::vector<int>& indexes);
+  static int CompareRecordsBasedOnKey(const RecordBase* r1,
+                                      const RecordBase* r2,
+                                      const std::vector<int>& indexes);
 
   static bool RecordComparator(const std::shared_ptr<RecordBase> r1,
                                const std::shared_ptr<RecordBase> r2,
                                const std::vector<int>& indexes);
+
+  static int CompareRecordWithKey(const RecordBase* key,
+                                  const RecordBase* record,
+                                  const std::vector<int>& indexes);
 
   bool InsertToRecordPage(DataBaseFiles::RecordPage* page) const;
 
@@ -206,12 +211,7 @@ class PageRecordsManager {
                      TableSchema* schema,
                      std::vector<int> key_indexes,
                      DataBaseFiles::FileType file_type,
-                     DataBaseFiles::PageType page_type) :
-      page_(page),
-      schema_(schema),
-      key_indexes_(key_indexes),
-      file_type_(file_type),
-      page_type_(page_type) {}
+                     DataBaseFiles::PageType page_type);
 
   // Accessors
   DEFINE_ACCESSOR(schema, TableSchema*);
@@ -259,6 +259,11 @@ class PageRecordsManager {
   // Search for a key, returns the left boundary index this key should reside
   // in a B+ tree node.
   int SearchForKey(const RecordBase* record) const;
+
+  // Compare key with a record. It performs comparison based on the file type
+  // and page type.
+  int CompareRecordWithKey(const RecordBase* key,
+                           const RecordBase* record) const;
 
  private:
   DataBaseFiles::RecordPage* page_ = nullptr;
