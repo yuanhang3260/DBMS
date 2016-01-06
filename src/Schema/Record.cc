@@ -314,6 +314,51 @@ bool RecordBase::InitRecordFields(const TableSchema* schema,
   return true;
 }
 
+// Check all fields type match a schema.
+bool RecordBase::CheckFieldsType(const TableSchema* schema,
+                                 std::vector<int> key_indexes) const {
+  if (!schema) {
+    LogERROR("schema is nullptr passed to CheckFieldsType");
+    return false;
+  }
+  if (fields_.size() != key_indexes.size()) {
+    LogERROR("Index/TreeNode record has mismatchig number of fields - "
+             "key has %d indexes, record has %d",
+             key_indexes.size(), fields_.size());
+    return false;
+  }
+  for (int i = 0; i < (int)key_indexes.size(); i++) {
+    if (fields_[i] && fields_[i]->MatchesSchemaType(
+                                      schema->fields(key_indexes[i]).type())) {
+      LogERROR("Index/TreeNode record has mismatchig field type with schema "
+               "field %d", key_indexes[i]);
+      return false;
+    }
+  }
+  return true;
+}
+
+bool RecordBase::CheckFieldsType(const TableSchema* schema) const {
+  if (!schema) {
+    LogERROR("schema is nullptr passed to CheckFieldsType");
+    return false;
+  }
+  if ((int)fields_.size() != schema->fields_size()) {
+    LogERROR("Data record has mismatchig number of fields with schema - "
+             "schema has %d indexes, record has %d",
+             schema->fields_size(), fields_.size());
+    return false;
+  }
+  for (int i = 0; i < (int)schema->fields_size(); i++) {
+    if (!fields_[i] || !fields_[i]->MatchesSchemaType(
+                                        schema->fields(i).type())) {
+      LogERROR("Data record has mismatchig field type with schema field %d", i);
+      return false;
+    }
+  }
+  return true;
+}
+
 // ****************************** DataRecord ******************************** //
 bool DataRecord::ExtractKey(
          RecordBase* key, const std::vector<int>& key_indexes) const {

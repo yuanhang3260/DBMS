@@ -11,6 +11,13 @@
 
 namespace Schema {
 
+enum RecordType {
+  UNKNOWN_RECORDTYPE,
+  TREENODE_RECORD,
+  DATA_RECORD,
+  INDEX_RECORD,
+};
+
 class RecordID {
  public:
   RecordID() = default;
@@ -48,6 +55,8 @@ class RecordBase {
   // Number of fields this key contains.
   int NumFields() const { return fields_.size(); }
 
+  virtual RecordType type() const { return UNKNOWN_RECORDTYPE; }
+
   // Print this record.
   virtual void Print() const;
 
@@ -59,10 +68,16 @@ class RecordBase {
 
   virtual void clear();
 
+  // Init records fields with schema and key_indexes.
   bool InitRecordFields(const TableSchema* schema,
                         std::vector<int> key_indexes,
                         DataBaseFiles::FileType file_type,
                         DataBaseFiles::PageType page_type);
+
+  // Check all fields type match a schema.
+  bool CheckFieldsType(const TableSchema* schema,
+                       std::vector<int> key_indexes) const;
+  bool CheckFieldsType(const TableSchema* schema) const;
 
   // Compare 2 Schema fields. We first compare field type and then the value
   // if the field types are same.
@@ -109,6 +124,8 @@ class DataRecord: public RecordBase {
  public:
   virtual ~DataRecord() {}
 
+  RecordType type() const { return DATA_RECORD; }
+
   // Extract key data to a RecordKey object. The fields to extract as key
   // are given in arg field_indexes.
   // Extracted RecordKey will not allocate space for nor take ownership of the
@@ -126,6 +143,7 @@ class IndexRecord: public RecordBase {
   DEFINE_ACCESSOR(rid, RecordID);
 
   int size() const override;
+  RecordType type() const { return INDEX_RECORD; }
 
   int DumpToMem(byte* buf) const override;
   int LoadFromMem(const byte* buf) override;
@@ -149,6 +167,7 @@ class TreeNodeRecord: public RecordBase {
   DEFINE_ACCESSOR(page_id, int);
 
   int size() const override;
+  RecordType type() const { return TREENODE_RECORD; }
 
   int DumpToMem(byte* buf) const override;
   int LoadFromMem(const byte* buf) override;

@@ -1010,7 +1010,7 @@ int BplusTree::FetchResultsFromLeave(
         }
         last_is_match = false;
       }
-    }
+    } 
     // If index reaches the end of all records, check overflow page.
     if (last_is_match && leave->Meta()->overflow_page() >= 0) {
       if (num_matching_records == 0) {
@@ -1040,6 +1040,46 @@ RecordPage* BplusTree::SearchToNextLevel(RecordPage* page,
   auto tn_record = prmanager.GetRecord<Schema::TreeNodeRecord>(index);
   RecordPage* next_level_page = FetchPage(tn_record->page_id());
   return next_level_page;
+}
+
+bool BplusTree::CheckRecordFieldsType(const Schema::RecordBase* record) const {
+  if (record->type() == Schema::DATA_RECORD) {
+    if (!record->CheckFieldsType(schema_.get())) {
+      return false;
+    }
+    return true;
+  }
+  if (record->type() == Schema::INDEX_RECORD) {
+    if (!record->CheckFieldsType(schema_.get(), key_indexes_)) {
+      return false;
+    }
+    return true;
+  }
+
+  LogERROR("Invalid ReocrdType %d to insert to B+ tree", record->type());
+  return false;
+}
+
+bool BplusTree::InsertRecord(const Schema::DataRecord* record) {
+  if (!record) {
+    LogERROR("record to insert is nullptr");
+    return false;
+  }
+
+  // Verify this data record fields matches schema.
+  if (!CheckRecordFieldsType(record)) {
+    LogERROR("Record fields type mismatch table schema");
+    return false;
+  }
+  return true;
+}
+
+bool BplusTree::InsertRecord(const Schema::IndexRecord* record) {
+  return false;
+}
+
+bool BplusTree::InsertRecord(const Schema::RecordBase* record) {
+  return false;
 }
 
 }  // namespace DataBaseFiles

@@ -84,6 +84,12 @@ class BplusTree {
   int SearchByKey(const Schema::RecordBase* key,
                   std::vector<std::shared_ptr<Schema::RecordBase>>* result);
 
+  // Insert a data record to the B+ tree.
+  bool InsertRecord(const Schema::DataRecord* record);
+
+  // Insert an index record to the B+ tree.
+  bool InsertRecord(const Schema::IndexRecord* record);
+
   friend class BplusTreeTest;
 
  private:
@@ -155,10 +161,16 @@ class BplusTree {
   RecordPage* SearchToNextLevel(RecordPage* page,
                                 const Schema::RecordBase* key);
 
+  // Fetch all matching records from BB+ tree.
   int FetchResultsFromLeave(
           RecordPage* leave,
           const Schema::RecordBase* key,
           std::vector<std::shared_ptr<Schema::RecordBase>>* result);
+
+  bool CheckRecordFieldsType(const Schema::RecordBase* record) const;
+
+  // Gerneric insert record to B+ tree.
+  bool InsertRecord(const Schema::RecordBase* record);
 
   std::string tablename_;
   FILE* file_ = nullptr;

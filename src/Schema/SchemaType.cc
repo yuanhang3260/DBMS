@@ -24,4 +24,27 @@ std::string SchemaFieldType::FieldTypeAsString(FieldType type) {
   return "Unknown";
 }
 
+bool SchemaFieldType::MatchesSchemaType(TableField::Type schema_type) const {
+  if (type() == INT && schema_type != TableField::INTEGER) {
+    return false;
+  }
+  if (type() == LONGINT && schema_type != TableField::LLONG) {
+    return false;
+  }
+  if (type() == DOUBLE && schema_type != TableField::DOUBLE) {
+    return false;
+  }
+  if (type() == BOOL && schema_type != TableField::BOOL) {
+    return false;
+  }
+  if (type() == STRING && schema_type != TableField::STRING) {
+    return false;
+  }
+  if (type() == CHARARRAY && schema_type != TableField::CHARARR) {
+    return false;
+  }
+
+  return true;
+}
+
 }  // Schema

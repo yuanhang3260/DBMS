@@ -5,6 +5,7 @@
 
 #include "Base/BaseTypes.h"
 #include "Base/MacroUtils.h"
+#include "DBTable_pb.h"
 
 namespace Schema {
 
@@ -32,6 +33,8 @@ class SchemaFieldType {
   virtual void reset() = 0;
 
   static std::string FieldTypeAsString(FieldType type);
+
+  bool MatchesSchemaType(TableField::Type type) const;
 
  protected:
 };

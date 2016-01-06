@@ -80,7 +80,7 @@ class BplusTreeTest: public UnitTest {
       int rand_int = Utils::RandomNumber(20);
       record_resource.at(i)->AddField(new Schema::IntType(rand_int));
       // money (we use this field as key for record resource map).
-      int rand_long = Utils::RandomNumber(10);
+      int rand_long = Utils::RandomNumber(100);
       if (i >= 2 && i <= 6) {
         record_resource.at(i)->AddField(new Schema::LongIntType(-1));
       }
@@ -235,7 +235,8 @@ class BplusTreeTest: public UnitTest {
     std::vector<std::shared_ptr<Schema::RecordBase>> result;
     tree.SearchByKey(&key, &result);
 
-    printf("Searched %d records matching key (-1, \"hello\")\n", result.size());
+    printf("Searched %d records matching key (-1, \"hello\")\n",
+           (int)result.size());
 
     // Scan all records and search one by one.
     // First merge records with the same key.
@@ -257,7 +258,7 @@ class BplusTreeTest: public UnitTest {
       ((Schema::DataRecord*)v[i].get())->ExtractKey(&key, key_indexes);
       start_list.push_back(i);
     }
-    printf("%d different keys\n", start_list.size());
+    printf("%d different keys\n", (int)start_list.size());
     start_list.push_back(kNumRecordsSource);
     for (int i = 0; i < (int)start_list.size() - 1; i++) {
       key.clear();
