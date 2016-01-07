@@ -991,15 +991,12 @@ int BplusTree::FetchResultsFromLeave(
                                          file_type_,
                                          leave->Meta()->page_type());
     // Fetch all matching records in this leave.
-    int index = 0;
-    int num_matching_records = 0;
     bool last_is_match = false;
-    for (; index < prmanager.NumRecords(); index++) {
+    for (int index = 0; index < prmanager.NumRecords(); index++) {
       if (Schema::RecordBase::CompareRecordWithKey(
             key, prmanager.Record(index),
             key_indexes_) == 0) {
         result->push_back(prmanager.plrecords().at(index).Record());
-        num_matching_records++;
         last_is_match = true;
       }
       else {
@@ -1010,12 +1007,9 @@ int BplusTree::FetchResultsFromLeave(
         }
         last_is_match = false;
       }
-    } 
+    }
     // If index reaches the end of all records, check overflow page.
     if (last_is_match && leave->Meta()->overflow_page() >= 0) {
-      if (num_matching_records == 0) {
-        LogERROR("No records matched found on leave %d", leave->id());
-      }
       leave = FetchPage(leave->Meta()->overflow_page());
     }
     else {
@@ -1060,7 +1054,7 @@ bool BplusTree::CheckRecordFieldsType(const Schema::RecordBase* record) const {
   return false;
 }
 
-bool BplusTree::InsertRecord(const Schema::DataRecord* record) {
+bool BplusTree::InsertRecord(const Schema::RecordBase* record) {
   if (!record) {
     LogERROR("record to insert is nullptr");
     return false;
@@ -1074,13 +1068,6 @@ bool BplusTree::InsertRecord(const Schema::DataRecord* record) {
   return true;
 }
 
-bool BplusTree::InsertRecord(const Schema::IndexRecord* record) {
-  return false;
-}
-
-bool BplusTree::InsertRecord(const Schema::RecordBase* record) {
-  return false;
-}
 
 }  // namespace DataBaseFiles
 

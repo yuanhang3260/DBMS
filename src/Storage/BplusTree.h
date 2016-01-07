@@ -85,10 +85,7 @@ class BplusTree {
                   std::vector<std::shared_ptr<Schema::RecordBase>>* result);
 
   // Insert a data record to the B+ tree.
-  bool InsertRecord(const Schema::DataRecord* record);
-
-  // Insert an index record to the B+ tree.
-  bool InsertRecord(const Schema::IndexRecord* record);
+  bool InsertRecord(const Schema::RecordBase* record);
 
   friend class BplusTreeTest;
 
@@ -112,10 +109,11 @@ class BplusTree {
   // Insert a new TreeNodeRecord to tree node page.
   bool InsertTreeNodeRecord(Schema::TreeNodeRecord* tn_record,
                             RecordPage* tn_page);
-  // Create a new leave in bulkloading.
+  // Create a new leave in bulk loading.
   RecordPage* AppendNewLeave();
-  // Create a new overflow leave in bulkloading.
+  // Create a new overflow leave in bulk loading.
   RecordPage* AppendNewOverflowLeave();
+
   // Used in bulk loading. We don't allow records with same key are spread
   // to 2 successive pages. Same keys must be merged into a single page and
   // possibly, into overflow pages if there are many duplicates.
@@ -168,9 +166,6 @@ class BplusTree {
           std::vector<std::shared_ptr<Schema::RecordBase>>* result);
 
   bool CheckRecordFieldsType(const Schema::RecordBase* record) const;
-
-  // Gerneric insert record to B+ tree.
-  bool InsertRecord(const Schema::RecordBase* record);
 
   std::string tablename_;
   FILE* file_ = nullptr;
