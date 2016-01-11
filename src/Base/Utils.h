@@ -16,7 +16,12 @@ class Utils {
     T tmp = *t1;
     *t1 = *t2;
     *t2 = tmp;
-  }  
+  }
+
+  template<typename T>
+  static void Abs(T t1, T t2) {
+    return t1 > t2 ? t1 - t2 : t2 - t1;
+  }
 
   static int RandomNumber();
   static int RandomNumber(int range);  // random int from [0, range - 1]

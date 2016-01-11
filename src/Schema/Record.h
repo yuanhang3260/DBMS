@@ -286,7 +286,20 @@ class PageRecordsManager {
   int CompareRecordWithKey(const RecordBase* key,
                            const RecordBase* record) const;
 
+  class SplitPageResult {
+   public:
+    int index = -1;
+    int num_records = 0;
+    int size = 0;
+    bool overflow = false;
+  };
+
+  // Insert a new data record to the plrecords list.
+  std::vector<SplitPageResult> InsertRecordAndSplitPage(RecordBase* record);
+
  private:
+  bool InsertNewRecord(RecordBase* record);
+
   DataBaseFiles::RecordPage* page_ = nullptr;
 
   std::vector<PageLoadedRecord> plrecords_;

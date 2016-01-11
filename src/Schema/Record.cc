@@ -1,3 +1,4 @@
+#include <climits>
 #include <string.h>
 #include <iostream>
 #include <stdexcept>
@@ -644,28 +645,10 @@ bool PageRecordsManager::CheckSort() const {
 }
 
 int PageRecordsManager::AppendRecordAndSplitPage(RecordBase* record) {
-  if (plrecords_.empty()) {
-    LogERROR("Won't add the record - This PageRecordsManager has not loaded "
-             "any PageLoadedRecord");
+  if (!InsertNewRecord(record)) {
+    LogERROR("Can't insert new record to PageRecordsManager");
     return -1;
   }
-  if (record->NumFields() != plrecords_[0].NumFields()) {
-    LogERROR("Can't insert a new reocrd to PageRecordsManager - record "
-             "has mismatching number of fields with that of this page");
-    return -1;
-  }
-
-  // Create a new PageLoadedRecord with this record. We need to duplicate
-  // the record and pass it to PageLoadedRecord so that it won't take ownership
-  // of the original one.
-  PageLoadedRecord new_plrecord;
-  new_plrecord.set_record(record->Duplicate());
-  plrecords_.insert(plrecords_.end(), new_plrecord);
-  auto comparator = std::bind(PageLoadedRecord::Comparator,
-                              std::placeholders::_1, std::placeholders::_2,
-                              ProduceIndexesToCompare());
-  std::stable_sort(plrecords_.begin(), plrecords_.end(), comparator);
-  total_size_ += record->size();
 
   int acc_size = 0;
   int i = 0;
@@ -727,6 +710,117 @@ int PageRecordsManager::SearchForKey(const RecordBase* key) const {
   }
 
   return index;
+}
+
+bool PageRecordsManager::InsertNewRecord(RecordBase* record) {
+  if (plrecords_.empty()) {
+    LogERROR("Won't add the record - This PageRecordsManager has not loaded "
+             "any PageLoadedRecord");
+    return false;
+  }
+  if (record->NumFields() != plrecords_[0].NumFields()) {
+    LogERROR("Can't insert a new reocrd to PageRecordsManager - record "
+             "has mismatching number of fields with that of this page");
+    return false;
+  }
+
+  // Create a new PageLoadedRecord with this record. We need to duplicate
+  // the record and pass it to PageLoadedRecord so that it won't take ownership
+  // of the original one.
+  PageLoadedRecord new_plrecord;
+  new_plrecord.set_record(record->Duplicate());
+  plrecords_.insert(plrecords_.end(), new_plrecord);
+  auto comparator = std::bind(PageLoadedRecord::Comparator,
+                              std::placeholders::_1, std::placeholders::_2,
+                              ProduceIndexesToCompare());
+  std::stable_sort(plrecords_.begin(), plrecords_.end(), comparator);
+  total_size_ += record->size();
+  return true;
+}
+
+namespace {
+
+class RecordGroup {
+ public:
+  RecordGroup(int start_index_, int num_records_, int size_) :
+      start_index(start_index_),
+      num_records(num_records_),
+      size(size_) {
+  }
+  int start_index;
+  int num_records;
+  int size;
+};
+
+class HalfSplitResult {
+ public:
+  HalfSplitResult(int mid_index_, bool left_larger_) :
+      mid_index(mid_index_),
+      left_larger(left_larger_) {
+  }
+  int mid_index = -1;
+  bool left_larger = false;
+};
+
+HalfSplitResult HalfSplitRecordGroups(const std::vector<RecordGroup>* rgroups,
+                                      int start, int end) {
+  int left_size = 0;
+  int right_size = 0;
+  for (int i = start; i <= end; i++) {
+    right_size += rgroups->at(i).size;
+  }
+
+  int min_abs = INT_MIN;
+  int index = start;
+  for (; index <= end; index++) {
+    left_size += rgroups->at(index).size;
+    right_size -= rgroups->at(index).size;
+    int abs_value = std::abs(left_size - right_size);
+    if (abs_value < min_abs) {
+      min_abs = abs_value;
+    }
+    else {
+      left_size -= rgroups->at(index).size;
+      right_size += rgroups->at(index).size;
+      break;
+    }
+  }
+  return HalfSplitResult(index, left_size > right_size);
+}
+
+}
+
+std::vector<PageRecordsManager::SplitPageResult>
+PageRecordsManager::InsertRecordAndSplitPage(RecordBase* record) {
+  std::vector<SplitPageResult> result;
+  if (!InsertNewRecord(record)) {
+    LogERROR("Can't insert new record to PageRecordsManager");
+    return result;
+  }
+
+  RecordBase* crt_record = Record(0);
+  int crt_start = 0;
+  int num_records = 0;
+  int size = 0;
+  std::vector<RecordGroup> rgroups;
+  for (int i = 0; i <= (int)plrecords_.size(); i++) {
+    if (i < (int)plrecords_.size() &&
+        CompareRecordWithKey(crt_record, Record(i)) == 0) {
+      num_records++;
+      size += Record(i)->size();
+    }
+    else {
+      rgroups.push_back(RecordGroup(crt_start, num_records, size));
+      crt_start = i + 1;
+      num_records = 0;
+      size = 0;
+    }
+  }
+
+  HalfSplitResult re1 = HalfSplitRecordGroups(&rgroups, 0, rgroups.size() - 1);
+  (void)re1;
+
+  return result;
 }
 
 }  // namespace Schema
