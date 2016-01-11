@@ -101,6 +101,10 @@ void RecordPageMeta::reset() {
   next_page_ = -1;
   prev_page_ = -1;
   space_used_ = 0;
+  is_overflow_page_ = false;
+  overflow_page_ = -1;
+  space_used_ = 0;
+  page_type_ = UNKNOW_PAGETYPE;
   slot_directory_.clear();
 }
 

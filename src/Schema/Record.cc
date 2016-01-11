@@ -754,40 +754,55 @@ class RecordGroup {
 
 class HalfSplitResult {
  public:
-  HalfSplitResult(int mid_index_, bool left_larger_) :
-      mid_index(mid_index_),
-      left_larger(left_larger_) {
-  }
+  HalfSplitResult() = default;
+
   int mid_index = -1;
+  int left_records = 0;
+  int left_size = 0;
+  int right_records = 0;
+  int right_size = 0;
   bool left_larger = false;
 };
 
 HalfSplitResult HalfSplitRecordGroups(const std::vector<RecordGroup>* rgroups,
                                       int start, int end) {
-  int left_size = 0;
-  int right_size = 0;
+  HalfSplitResult result;
   for (int i = start; i <= end; i++) {
-    right_size += rgroups->at(i).size;
+    result.right_records += rgroups->at(i).num_records;
+    result.right_size += rgroups->at(i).size;
   }
 
   int min_abs = INT_MIN;
   int index = start;
   for (; index <= end; index++) {
-    left_size += rgroups->at(index).size;
-    right_size -= rgroups->at(index).size;
-    int abs_value = std::abs(left_size - right_size);
+    result.left_records += rgroups->at(index).num_records;
+    result.left_size += rgroups->at(index).size;
+    result.right_records -= rgroups->at(index).num_records;
+    result.right_size -= rgroups->at(index).size;
+    int abs_value = std::abs(result.left_size - result.right_size);
     if (abs_value < min_abs) {
       min_abs = abs_value;
     }
     else {
-      left_size -= rgroups->at(index).size;
-      right_size += rgroups->at(index).size;
+      result.left_records -= rgroups->at(index).num_records;
+      result.left_size -= rgroups->at(index).size;
+      result.right_records += rgroups->at(index).num_records;
+      result.right_size += rgroups->at(index).size;
       break;
     }
   }
-  return HalfSplitResult(index, left_size > right_size);
+
+  result.mid_index = rgroups->at(index).start_index;
+  result.left_larger = result.left_size > result.right_size;
+  return result;
 }
 
+}
+
+void PageRecordsManager::SetPageAllocator(
+         DataBaseFiles::RecordPage* (*f)(DataBaseFiles::PageType)) {
+  page_allocator_ =
+      std::function<DataBaseFiles::RecordPage*(DataBaseFiles::PageType)>(f);
 }
 
 std::vector<PageRecordsManager::SplitPageResult>
@@ -818,7 +833,37 @@ PageRecordsManager::InsertRecordAndSplitPage(RecordBase* record) {
   }
 
   HalfSplitResult re1 = HalfSplitRecordGroups(&rgroups, 0, rgroups.size() - 1);
-  (void)re1;
+  if (re1.left_larger) {
+    int new_record_inserted = false;
+    auto page = page_allocator_(DataBaseFiles::TREE_LEAVE);
+    for (int i = re1.mid_index; i < (int)rgroups.size(); i ++) {
+      if (!Record(i)->InsertToRecordPage(page)) {
+        LogFATAL("Insert new record to right half split failed.");
+      }
+      if (plrecords_.at(i).slot_id() < 0) {
+        new_record_inserted = true;
+      }
+      else {
+        page_->DeleteRecord(plrecords_.at(i).slot_id());
+      }
+    }
+    if (new_record_inserted || record->InsertToRecordPage(page_)) {
+      result.emplace_back(0,  // index
+                          re1.left_records,  // num_records
+                          re1.left_size,  // size
+                          false,  // overflow
+                          page_);  // RecordPage
+      result.emplace_back(re1.mid_index,  // index
+                          re1.right_records,  // num_records
+                          re1.right_size,  // size
+                          false,  // overflow
+                          page);  // RecordPage
+      return result;
+    }
+    // Continue splitting left half.
+    auto re2 = HalfSplitRecordGroups(&rgroups, 0, re1.mid_index - 1);
+    (void)re2;
+  }
 
   return result;
 }

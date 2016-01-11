@@ -26,6 +26,8 @@ class BplusTreeHeaderPage: public HeaderPage {
   DEFINE_INCREMENTOR_DECREMENTOR(num_leaves, int);
   DEFINE_ACCESSOR(depth, int);
   DEFINE_INCREMENTOR_DECREMENTOR(depth, int);
+  DEFINE_ACCESSOR(next_id, int);
+  DEFINE_INCREMENTOR_DECREMENTOR(next_id, int);
 
   // Dump header page to memory.
   bool DumpToMem(byte* buf) const override;
@@ -43,6 +45,7 @@ class BplusTreeHeaderPage: public HeaderPage {
   int root_page_ = -1;
   int num_leaves_ = 0;
   int depth_ = 0;
+  int next_id_ = 1;
 };
 
 
@@ -194,7 +197,6 @@ class BplusTree {
    public:
     RecordPage* crt_leave = nullptr;
     RecordPage* prev_leave = nullptr;
-    int next_id = 1;
     std::shared_ptr<Schema::RecordBase> last_record;
   };
 

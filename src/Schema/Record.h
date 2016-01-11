@@ -288,14 +288,27 @@ class PageRecordsManager {
 
   class SplitPageResult {
    public:
+    SplitPageResult(int index_, int num_records_, int size_, int overflow_,
+                    DataBaseFiles::RecordPage* page_) :
+        index(index_),
+        num_records(num_records_),
+        size(size_),
+        overflow(overflow_),
+        page(page_) {
+    }
+
     int index = -1;
     int num_records = 0;
     int size = 0;
     bool overflow = false;
+    DataBaseFiles::RecordPage* page = nullptr;
   };
 
   // Insert a new data record to the plrecords list.
   std::vector<SplitPageResult> InsertRecordAndSplitPage(RecordBase* record);
+
+  void SetPageAllocator(
+           DataBaseFiles::RecordPage* (*f)(DataBaseFiles::PageType));
 
  private:
   bool InsertNewRecord(RecordBase* record);
@@ -310,6 +323,9 @@ class PageRecordsManager {
   DataBaseFiles::PageType page_type_ = DataBaseFiles::UNKNOW_PAGETYPE;
 
   int total_size_ = 0;
+
+  std::function<
+      DataBaseFiles::RecordPage*(DataBaseFiles::PageType)> page_allocator_;
 };
 
 }  // namespace Schema

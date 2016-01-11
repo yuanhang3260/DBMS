@@ -56,6 +56,9 @@ bool BplusTreeHeaderPage::DumpToMem(byte* buf) const {
   // depth
   memcpy(buf + offset, &depth_, sizeof(depth_));
   offset += sizeof(depth_);
+  // next_id
+  memcpy(buf + offset, &next_id_, sizeof(next_id_));
+  offset += sizeof(next_id_);
 
   return true;
 }
@@ -92,6 +95,9 @@ bool BplusTreeHeaderPage::ParseFromMem(const byte* buf) {
   // depth
   memcpy(&depth_, buf + offset, sizeof(depth_));
   offset += sizeof(depth_);
+  // depth
+  memcpy(&next_id_, buf + offset, sizeof(next_id_));
+  offset += sizeof(next_id_);
 
   // Do consistency check.
   if (!ConsistencyCheck("Load")) {
@@ -379,11 +385,30 @@ bool BplusTree::LoadFromDisk() {
 }
 
 RecordPage* BplusTree::AllocateNewPage(PageType page_type) {
-  RecordPage* page = new RecordPage(bl_status_.next_id++, file_);
-  page->InitInMemoryPage();
+  int new_page_id = 0;
+  RecordPage* page = nullptr;
+  // Look up free page list first.
+  if (header_->num_free_pages() > 0) {
+    new_page_id = header_->free_page();
+    header_->decrement_num_free_pages(1);
+    RecordPage* page = FetchPage(header_->free_page());
+    if (!page) {
+      LogFATAL("Fetch free page %d failed", header_->free_page());
+    }
+    header_->set_free_page(page->Meta()->next_page());
+    page->Meta()->reset();
+  }
+  else {
+    // Append new page at the end of file.
+    new_page_id = header_->next_id();
+    header_->increment_next_id(1);
+    header_->increment_num_pages(1);
+    page = new RecordPage(new_page_id, file_);
+    page->InitInMemoryPage();
+  }
+
   page->Meta()->set_page_type(page_type);
   page_map_[page->id()] = std::shared_ptr<RecordPage>(page);
-  header_->increment_num_pages(1);
   header_->increment_num_used_pages(1);
   if (page_type == TREE_LEAVE) {
     header_->increment_num_leaves(1);
