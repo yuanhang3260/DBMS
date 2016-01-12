@@ -1087,12 +1087,18 @@ RecordPage* BplusTree::SearchToNextLevel(RecordPage* page,
 
 bool BplusTree::CheckRecordFieldsType(const Schema::RecordBase* record) const {
   if (record->type() == Schema::DATA_RECORD) {
+    if (file_type_ == INDEX) {
+      return false;
+    }
     if (!record->CheckFieldsType(schema_.get())) {
       return false;
     }
     return true;
   }
   if (record->type() == Schema::INDEX_RECORD) {
+    if (file_type_ == INDEX_DATA) {
+      return false;
+    }
     if (!record->CheckFieldsType(schema_.get(), key_indexes_)) {
       return false;
     }
@@ -1114,6 +1120,47 @@ bool BplusTree::InsertRecord(const Schema::RecordBase* record) {
     LogERROR("Record fields type mismatch table schema");
     return false;
   }
+
+  // (TODO) If root page doesn't exist (empty tree).
+  if (header_->root_page() < 0) {
+    return true;
+  }
+
+  // Produce the key of the record to search.
+  const Schema::RecordBase* search_key = nullptr;
+  if (file_type_ == INDEX_DATA) {
+    Schema::RecordBase key;
+    (reinterpret_cast<const Schema::DataRecord*>(record))
+        ->ExtractKey(&key, key_indexes_);
+    search_key = &key;
+  }
+  else {
+    search_key = record;
+  }
+
+  // Search the leave to insert.
+  RecordPage* crt_page = FetchPage(header_->root_page());
+  while (crt_page && crt_page->Meta()->page_type() == TREE_NODE) {
+    crt_page = SearchToNextLevel(crt_page, search_key);
+  }
+
+  if (!crt_page) {
+    LogERROR("Failed to search for key");
+    search_key->Print();
+    return -1;
+  }
+
+  if (record->InsertToRecordPage(crt_page)) {
+    return true;
+  }
+
+  // Need to split the page.
+  Schema::PageRecordsManager prmanager(crt_page, schema_.get(), key_indexes_,
+                                       file_type_, TREE_LEAVE);
+  auto result = prmanager.InsertRecordAndSplitPage(record);
+  (void)result;
+  // (TODO) Add leaves to parent node.
+
   return true;
 }
 

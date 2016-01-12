@@ -315,7 +315,7 @@ bool RecordBase::InitRecordFields(const TableSchema* schema,
   return true;
 }
 
-// Check all fields type match a schema.
+// Check fields type match a schema.
 bool RecordBase::CheckFieldsType(const TableSchema* schema,
                                  std::vector<int> key_indexes) const {
   if (!schema) {

@@ -128,10 +128,10 @@ class PageRecordsManager {
 
   // Insert a new data record to the plrecords list.
   std::vector<SplitLeaveResults>
-  InsertRecordAndSplitPage(RecordBase* record);
+  InsertRecordAndSplitPage(const RecordBase* record);
 
  private:
-  bool InsertNewRecord(RecordBase* record);
+  bool InsertNewRecord(const RecordBase* record);
 
   DataBaseFiles::RecordPage* page_ = nullptr;
 

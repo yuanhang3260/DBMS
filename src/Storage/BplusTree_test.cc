@@ -272,6 +272,9 @@ class BplusTreeTest: public UnitTest {
     }
   }
 
+  void Test_SplitLeave() {
+    
+  }
 
 };
 
@@ -288,6 +291,7 @@ int main() {
     test.CheckBplusTree();
   }
   test.Test_SearchByKey();
+  test.Test_SplitLeave();
   test.teardown();
 
   std::cout << "\033[2;32mAll Passed ^_^\033[0m" << std::endl;

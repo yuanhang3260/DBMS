@@ -56,7 +56,7 @@ class BplusTree {
   BplusTree(std::string tablename, std::vector<int> key_indexes);
 
   // Destructor
-  ~BplusTree();
+  virtual ~BplusTree();
 
   // Accessors
   DEFINE_ACCESSOR(tablename, std::string);
@@ -101,7 +101,7 @@ class BplusTree {
 
   friend class BplusTreeTest;
 
- private:
+ protected:
   // Generate B+ tree file name, based on table name, key indexes and file type.
   std::string GenerateBplusTreeFilename(FileType file_type);
   // Load header page from disk.
