@@ -3,6 +3,7 @@
 
 #include "Base/Log.h"
 #include "Base/Utils.h"
+#include "Schema/PageRecordsManager.h"
 #include "BplusTree.h"
 
 namespace DataBaseFiles {
@@ -613,8 +614,7 @@ bool BplusTree::AddLeaveToTree(RecordPage* leave) {
 RecordPage* BplusTree::AppendNewLeave() {
   RecordPage* new_leave = AllocateNewPage(TREE_LEAVE);
   if (bl_status_.crt_leave) {
-    new_leave->Meta()->set_prev_page(bl_status_.crt_leave->id());
-    bl_status_.crt_leave->Meta()->set_next_page(new_leave->id());
+    ConnectLeaves(bl_status_.crt_leave, new_leave);
     bl_status_.prev_leave = bl_status_.crt_leave;
   }
   bl_status_.crt_leave = new_leave;
@@ -628,6 +628,30 @@ RecordPage* BplusTree::AppendNewOverflowLeave() {
   new_leave->Meta()->set_is_overflow_page(1);
   bl_status_.prev_leave->Meta()->set_overflow_page(new_leave->id());
   return new_leave;
+}
+
+RecordPage* BplusTree::AppendOverflowPageTo(RecordPage* page) {
+  if (!page) {
+    LogERROR("Can't append overflow_page to page nullptr");
+    return nullptr;
+  }
+  RecordPage* new_leave = AllocateNewPage(TREE_LEAVE);
+  new_leave->Meta()->
+      set_parent_page(page->Meta()->parent_page());
+  new_leave->Meta()->set_is_overflow_page(1);
+  page->Meta()->set_overflow_page(new_leave->id());
+  ConnectLeaves(page, new_leave);
+  return new_leave;
+}
+
+bool BplusTree::ConnectLeaves(RecordPage* page1, RecordPage* page2) {
+  if (!page1 || !page2) {
+    LogERROR("Can't connect nullptr leaves");
+    return false;
+  }
+  page1->Meta()->set_next_page(page2->id());
+  page2->Meta()->set_prev_page(page1->id());
+  return true;
 }
 
 // BulkLoading data

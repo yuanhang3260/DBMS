@@ -7,6 +7,7 @@
 #include "Storage/Common.h"
 #include "Record.h"
 #include "DataTypes.h"
+#include "PageRecordsManager.h"
 
 namespace Schema {
 

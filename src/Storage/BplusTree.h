@@ -90,6 +90,15 @@ class BplusTree {
   // Insert a data record to the B+ tree.
   bool InsertRecord(const Schema::RecordBase* record);
 
+  // Allocate a new page in bulkloading.
+  RecordPage* AllocateNewPage(PageType page_type);
+
+  // Append a overflow page to an existing page.
+  RecordPage* AppendOverflowPageTo(RecordPage* page);
+
+  // Connect two leaves.
+  static bool ConnectLeaves(RecordPage* page1, RecordPage* page2);
+
   friend class BplusTreeTest;
 
  private:
@@ -103,8 +112,6 @@ class BplusTree {
   // raw file. It saves message TableSchema defined in Schema/DBTable.proto.
   bool LoadSchema();
 
-  // Allocate a new page in bulkloading.
-  RecordPage* AllocateNewPage(PageType page_type);
   // Insert a record to a leave node.
   bool InsertRecordToLeave(const Schema::DataRecord* record);
   // Insert a page to a parent node.
@@ -112,10 +119,6 @@ class BplusTree {
   // Insert a new TreeNodeRecord to tree node page.
   bool InsertTreeNodeRecord(Schema::TreeNodeRecord* tn_record,
                             RecordPage* tn_page);
-  // Create a new leave in bulk loading.
-  RecordPage* AppendNewLeave();
-  // Create a new overflow leave in bulk loading.
-  RecordPage* AppendNewOverflowLeave();
 
   // Used in bulk loading. We don't allow records with same key are spread
   // to 2 successive pages. Same keys must be merged into a single page and
@@ -169,6 +172,11 @@ class BplusTree {
           std::vector<std::shared_ptr<Schema::RecordBase>>* result);
 
   bool CheckRecordFieldsType(const Schema::RecordBase* record) const;
+
+  // Create a new leave in bulk loading.
+  RecordPage* AppendNewLeave();
+  // Create a new overflow leave in bulk loading.
+  RecordPage* AppendNewOverflowLeave();
 
   std::string tablename_;
   FILE* file_ = nullptr;

@@ -22,6 +22,7 @@ OBJ = $(OBJ_DIR)/Utility/Strings.o \
       $(OBJ_DIR)/Schema/SchemaType.o \
       $(OBJ_DIR)/Schema/DataTypes.o \
       $(OBJ_DIR)/Schema/Record.o \
+      $(OBJ_DIR)/Schema/PageRecordsManager.o \
       $(OBJ_DIR)/Schema/DBTable_pb.o \
 
 TESTOBJ = $(OBJ_DIR)/Utility/Strings_test.o \

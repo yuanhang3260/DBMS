@@ -139,7 +139,7 @@ class RecordPage {
   // Pre-check if some records can be inserted to this page.
   bool PreCheckCanInsert(int num_records, int total_size);
   // Pre-check if some records can be inserted to an empty page.
-  static bool PreCheckCanFitInEmptyPage(int num_records, int total_size);
+  //static bool PreCheckCanFitInEmptyPage(int num_records, int total_size);
 
   byte* Record(int slot_id) const;
 

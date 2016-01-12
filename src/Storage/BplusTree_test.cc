@@ -4,6 +4,7 @@
 #include "Schema/Record.h"
 #include "BplusTree.h"
 #include "Schema/DBTable_pb.h"
+#include "Schema/PageRecordsManager.h"
 
 namespace DataBaseFiles {
 
