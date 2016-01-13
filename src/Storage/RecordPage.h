@@ -58,11 +58,11 @@ class RecordPageMeta {
   DEFINE_INCREMENTOR_DECREMENTOR(num_records, int16);
   DEFINE_ACCESSOR(free_start, int16);
   DEFINE_INCREMENTOR_DECREMENTOR(free_start, int16);
-  DEFINE_ACCESSOR(next_page, int16);
-  DEFINE_ACCESSOR(prev_page, int16);
-  DEFINE_ACCESSOR(parent_page, int16);
-  DEFINE_ACCESSOR(is_overflow_page, int16);
-  DEFINE_ACCESSOR(overflow_page, int16);
+  DEFINE_ACCESSOR(next_page, int32);
+  DEFINE_ACCESSOR(prev_page, int32);
+  DEFINE_ACCESSOR(parent_page, int32);
+  DEFINE_ACCESSOR(is_overflow_page, byte);
+  DEFINE_ACCESSOR(overflow_page, int32);
   DEFINE_ACCESSOR(space_used, int16);
   DEFINE_INCREMENTOR_DECREMENTOR(space_used, int16);
   DEFINE_ACCESSOR_ENUM(page_type, PageType);
@@ -92,13 +92,13 @@ class RecordPageMeta {
   int16 num_slots_ = 0;
   int16 num_records_ = 0;
   int16 free_start_ = 0;  // offset of free space in this page
-  int16 next_page_ = -1;
-  int16 prev_page_ = -1;
-  int16 parent_page_ = -1;
-  int16 is_overflow_page_ = 0;
-  int16 overflow_page_ = -1;
+  int32 next_page_ = -1;
+  int32 prev_page_ = -1;
+  int32 parent_page_ = -1;
+  byte is_overflow_page_ = 0;
+  int32 overflow_page_ = -1;
   int16 space_used_ = 0;  // total space that has been used for record.
-  PageType page_type_ = UNKNOW_PAGETYPE;
+  PageType page_type_ = UNKNOW_PAGETYPE;  // save as 1 byte
   std::vector<SlotDirectoryEntry> slot_directory_;
 
   // A set of empty slots id. It is created when loading a page. New record

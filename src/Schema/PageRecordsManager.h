@@ -72,7 +72,7 @@ class PageRecordsManager {
   DEFINE_ACCESSOR_ENUM(file_type, DataBaseFiles::FileType);
   DEFINE_ACCESSOR_ENUM(page_type, DataBaseFiles::PageType);
   DEFINE_ACCESSOR(total_size, int);
-  //DEFINE_ACCESSOR(tree, DataBaseFiles::BplusTree*);
+  DEFINE_ACCESSOR(tree, DataBaseFiles::BplusTree*);
 
   int NumRecords() const { return plrecords_.size(); }
   std::vector<PageLoadedRecord>& plrecords() { return plrecords_; }
