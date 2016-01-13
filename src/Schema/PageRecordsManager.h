@@ -130,8 +130,21 @@ class PageRecordsManager {
   std::vector<SplitLeaveResults>
   InsertRecordAndSplitPage(const RecordBase* record);
 
+  class RecordGroup {
+   public:
+    RecordGroup(int start_index_, int num_records_, int size_) :
+        start_index(start_index_),
+        num_records(num_records_),
+        size(size_) {
+    }
+    int start_index;
+    int num_records;
+    int size;
+  };
+
  private:
   bool InsertNewRecord(const RecordBase* record);
+  void GroupRecords(std::vector<RecordGroup>* rgroups);
 
   DataBaseFiles::RecordPage* page_ = nullptr;
 

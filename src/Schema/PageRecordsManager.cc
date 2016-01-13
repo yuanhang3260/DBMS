@@ -273,18 +273,6 @@ bool PageRecordsManager::InsertNewRecord(const RecordBase* record) {
 
 namespace {
 
-class RecordGroup {
- public:
-  RecordGroup(int start_index_, int num_records_, int size_) :
-      start_index(start_index_),
-      num_records(num_records_),
-      size(size_) {
-  }
-  int start_index;
-  int num_records;
-  int size;
-};
-
 class HalfSplitResult {
  public:
   HalfSplitResult() = default;
@@ -297,15 +285,20 @@ class HalfSplitResult {
   bool left_larger = false;
 };
 
-HalfSplitResult HalfSplitRecordGroups(const std::vector<RecordGroup>* rgroups,
-                                      int start, int end) {
+HalfSplitResult HalfSplitRecordGroups(
+                    const std::vector<PageRecordsManager::RecordGroup>* rgroups,
+                    int start, int end) {
   HalfSplitResult result;
   for (int i = start; i <= end; i++) {
     result.right_records += rgroups->at(i).num_records;
+    printf("group %d: ", i);
+    printf("start_index = %d, ", rgroups->at(i).start_index);
+    printf("num_records = %d, ", rgroups->at(i).num_records);
+    printf("size = %d\n", rgroups->at(i).size);
     result.right_size += rgroups->at(i).size;
   }
 
-  int min_abs = INT_MIN;
+  int min_abs = INT_MAX;
   int index = start;
   for (; index <= end; index++) {
     result.left_records += rgroups->at(index).num_records;
@@ -332,6 +325,29 @@ HalfSplitResult HalfSplitRecordGroups(const std::vector<RecordGroup>* rgroups,
 
 }
 
+void PageRecordsManager::GroupRecords(std::vector<RecordGroup>* rgroups) {
+  RecordBase* crt_record = Record(0);
+  int crt_start = 0;
+  int num_records = 0;
+  int size = 0;
+  auto cmp_indexes = ProduceIndexesToCompare();
+  for (int i = 0; i < (int)plrecords_.size(); i++) {
+    if (RecordBase::CompareRecordsBasedOnKey(crt_record, Record(i),
+                                             cmp_indexes) == 0) {
+      num_records++;
+      size += Record(i)->size();
+    }
+    else {
+      rgroups->push_back(RecordGroup(crt_start, num_records, size));
+      crt_start = i;
+      num_records = 1;
+      size = Record(i)->size();
+      crt_record = Record(crt_start);
+    }
+  }
+  rgroups->push_back(RecordGroup(crt_start, num_records, size));
+}
+
 std::vector<PageRecordsManager::SplitLeaveResults>
 PageRecordsManager::InsertRecordAndSplitPage(const RecordBase* record) {
   std::vector<PageRecordsManager::SplitLeaveResults> result;
@@ -340,29 +356,16 @@ PageRecordsManager::InsertRecordAndSplitPage(const RecordBase* record) {
     return result;
   }
 
-  RecordBase* crt_record = Record(0);
-  int crt_start = 0;
-  int num_records = 0;
-  int size = 0;
   std::vector<RecordGroup> rgroups;
-  auto cmp_indexes = ProduceIndexesToCompare();
-  for (int i = 0; i <= (int)plrecords_.size(); i++) {
-    if (i < (int)plrecords_.size() &&
-        RecordBase::CompareRecordsBasedOnKey(crt_record, Record(i),
-                                             cmp_indexes) == 0) {
-      num_records++;
-      size += Record(i)->size();
-    }
-    else {
-      rgroups.push_back(RecordGroup(crt_start, num_records, size));
-      crt_start = i + 1;
-      num_records = 0;
-      size = 0;
-      crt_record = Record(crt_start);
-    }
-  }
+  GroupRecords(&rgroups);
 
   HalfSplitResult re1 = HalfSplitRecordGroups(&rgroups, 0, rgroups.size() - 1);
+  std::cout << "re1.mid_index: " << re1.mid_index << std::endl;
+  std::cout << "re1.left_records: " << re1.left_records << std::endl;
+  std::cout << "re1.left_size: " << re1.left_size << std::endl;
+  std::cout << "re1.right_records: " << re1.right_records << std::endl;
+  std::cout << "re1.right_size: " << re1.right_size << std::endl;
+  std::cout << "re1.left_larger: " << re1.left_larger << std::endl;
   if (re1.left_larger) {
     int new_record_inserted = false;
     auto page = tree_->AllocateNewPage(DataBaseFiles::TREE_LEAVE);

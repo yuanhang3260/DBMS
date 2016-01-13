@@ -141,6 +141,7 @@ class RecordPage {
   // Pre-check if some records can be inserted to an empty page.
   //static bool PreCheckCanFitInEmptyPage(int num_records, int total_size);
 
+  // Return the data pointer to a record.
   byte* Record(int slot_id) const;
 
   // Insert a record. This function only reserved space in page but no actual
@@ -153,6 +154,9 @@ class RecordPage {
   bool DeleteRecord(int slotid);
   // Delete a number of records.
   bool DeleteRecords(int from, int end);
+
+  // Clear this page.
+  void Clear();
 
  private:
   int id_ = -1;  // page id

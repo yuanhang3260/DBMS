@@ -116,7 +116,7 @@ bool BplusTreeHeaderPage::SaveToDisk() const {
 
   byte buf[kPageSize];
   if (!DumpToMem(buf)) {
-    LogERROR("DumpToMem(buf)");
+    LogERROR("DumpToMem failed before saving B+ tree to disk.");
     return false;
   }
 

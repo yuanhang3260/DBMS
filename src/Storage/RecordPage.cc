@@ -495,4 +495,9 @@ bool RecordPage::DeleteRecords(int from, int end) {
   return true;
 }
 
+void RecordPage::Clear() {
+  memset(data_.get(), 0, kPageSize);
+  page_meta_->reset();
+}
+
 }  // namespace DataBaseFiles

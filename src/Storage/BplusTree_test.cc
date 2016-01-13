@@ -272,8 +272,47 @@ class BplusTreeTest: public UnitTest {
     }
   }
 
+  void _AddIndexRecordsToLeave(RecordPage* leave, std::vector<int> rlens) {
+    char c = 'a';
+    int total_len = 0;
+    for (int i = 0; i < (int)rlens.size(); i++) {
+      Schema::IndexRecord irecord;
+      // Reserve 9 bytes for '\0' and rid (8 bytes).
+      char buf[rlens[i] - 9];
+      memset(buf, c, rlens[i] - 9);
+      irecord.AddField(new Schema::StringType(buf, rlens[i] - 9));
+      AssertTrue(irecord.InsertToRecordPage(leave),
+                 "Failed to add index record to leave");
+      total_len += rlens[i];
+      c++;
+      //irecord.Print();
+    }
+    AssertEqual((int)rlens.size(), (int)leave->Meta()->num_records());
+    AssertEqual((int)total_len, (int)leave->Meta()->space_used());
+  }
+
   void Test_SplitLeave() {
-    
+    // Create index for field "name".
+    BplusTree tree;
+    std::vector<int> key_index{0};
+    AssertTrue(tree.CreateFile(tablename, key_index, INDEX),
+               "Create B+ tree file faild");
+
+    RecordPage* leave = tree.AllocateNewPage(TREE_LEAVE);
+    _AddIndexRecordsToLeave(leave, std::vector<int>{30, 10, 40, 50});
+
+    Schema::PageRecordsManager prmanager(leave, schema, key_index,
+                                         INDEX, TREE_LEAVE);
+    for (int i = 0; i < (int)prmanager.NumRecords(); i++) {
+      prmanager.Record(i)->Print();
+    }
+
+    Schema::IndexRecord irecord;
+    int len = 60 - 9;
+    char buf[len];
+    memset(buf, 'd', len);
+    irecord.AddField(new Schema::StringType(buf, len));
+    auto result = prmanager.InsertRecordAndSplitPage(&irecord);
   }
 
 };
@@ -284,13 +323,13 @@ int main() {
   DataBaseFiles::BplusTreeTest test;
   test.setup();
   test.Test_SchemaFile();
-  test.Test_Header_Page_Consistency_Check();
-  test.Test_Create_Load_Empty_Tree();
-  for (int i = 0; i < 1; i++) {
-    test.Test_BulkLoading();
-    test.CheckBplusTree();
-  }
-  test.Test_SearchByKey();
+  //test.Test_Header_Page_Consistency_Check();
+  // test.Test_Create_Load_Empty_Tree();
+  // for (int i = 0; i < 1; i++) {
+  //   test.Test_BulkLoading();
+  //   test.CheckBplusTree();
+  // }
+  // test.Test_SearchByKey();
   test.Test_SplitLeave();
   test.teardown();
 

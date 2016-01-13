@@ -193,7 +193,7 @@ int RecordBase::CompareSchemaFields(const SchemaFieldType* field1,
 
   auto type = field1->type();
   if (type != field2->type()) {
-    return type - field2->type();
+    LogFATAL("Comparing different types of schema fields!");
   }
 
   if (type == INT) {
