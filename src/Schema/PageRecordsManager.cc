@@ -433,7 +433,7 @@ PageRecordsManager::InsertRecordAndSplitPage(const RecordBase* record) {
             LogFATAL("Failed to insert new record to first page");
           }
         }
-        // Now we insert remaining records to the middle page.
+        // Now we insert the middle group of records to the middle page.
         auto page2 = tree_->AllocateNewPage(DataBaseFiles::TREE_LEAVE);
         auto tail_page = page2;
         int index = group.start_index;
@@ -489,25 +489,36 @@ PageRecordsManager::InsertRecordAndSplitPage(const RecordBase* record) {
       }
     }
 
+    int gindex = re1.mid_index + 1;
+    index = rgroups[gindex].start_index;
     if (page2->Meta()->overflow_page() < 0) {
       // Page 2 is not overflowed. Continue inserting records to it.
-      for (; index < (int)plrecords_.size(); index++) {
-        int slot_id = plrecords_.at(index).slot_id(); 
-        if (slot_id < 0) {
-          new_record_inserted = true;
-        }
-        else {
-          page_->DeleteRecord(slot_id);
-        }
-        if (!Record(index)->InsertToRecordPage(page2)) {
+      for (; gindex < (int)rgroups.size(); gindex++) {
+        if (!page2->PreCheckCanInsert(rgroups[gindex].num_records,
+                                      rgroups[gindex].size)) {
           break;
+        }
+        // Add this record group to pag2.
+        for (index = rgroups[gindex].start_index;
+             index < rgroups[gindex].start_index + rgroups[gindex].num_records;
+             index++) {
+          int slot_id = plrecords_.at(index).slot_id(); 
+          if (slot_id < 0) {
+            new_record_inserted = true;
+          }
+          else {
+            page_->DeleteRecord(slot_id);
+          }
+          if (!Record(index)->InsertToRecordPage(page2)) {
+            LogFATAL("Failed to insert record to page2");
+          }
         }
       }
     }
     // Page 3, maybe
-    int page3_start_index = index;
+    int page3_start_index = rgroups[gindex].start_index;
     DataBaseFiles::RecordPage* page3 = nullptr;
-    if (index < (int)plrecords_.size()) {
+    if (gindex < (int)rgroups.size()) {
       page3 = tree_->AllocateNewPage(DataBaseFiles::TREE_LEAVE);
       for (; index < (int)plrecords_.size(); index++) {
         int slot_id = plrecords_.at(index).slot_id();

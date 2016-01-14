@@ -89,7 +89,7 @@ bool RecordPageMeta::AddEmptySlot(int slot_id) {
 }
 
 int RecordPageMeta::size() const {
-  // Slot directory entry size = 2 * sizeof(int)
+  // Slot directory entry size = 2 * sizeof(int16)
   return 26 + kSlotDirectoryEntrySize * slot_directory_.size();
 }
 

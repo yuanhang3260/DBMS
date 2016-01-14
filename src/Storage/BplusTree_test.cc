@@ -307,8 +307,8 @@ class BplusTreeTest: public UnitTest {
       // page 1 <--> page2
       std::cout << "----- Left Smaller test 1 -----" << std::endl;
       RecordPage* leave = tree.AllocateNewPage(TREE_LEAVE);
-      _AddIndexRecordsToLeave(leave, std::vector<int>{30, 10, 40, 50},
-                              std::vector<char>{'a', 'b', 'c', 'd'});
+      _AddIndexRecordsToLeave(leave, std::vector<int>{30, 10, 40, 50, 50},
+                              std::vector<char>{'a', 'b', 'c', 'd', 'e'});
 
       Schema::PageRecordsManager prmanager(leave, schema, key_index,
                                            INDEX, TREE_LEAVE);
@@ -319,10 +319,12 @@ class BplusTreeTest: public UnitTest {
 
       Schema::IndexRecord irecord;
       _GenerateIndeRecord(&irecord, 'a', 60);
+      AssertFalse(irecord.InsertToRecordPage(leave));
+      
       auto result = prmanager.InsertRecordAndSplitPage(&irecord);
       AssertEqual(2, (int)result.size());
       result[0].record->Print();
-      AssertEqual(2, (int)result[0].page->Meta()->num_records());
+      AssertEqual(3, (int)result[0].page->Meta()->num_records());
       result[1].record->Print();
       AssertEqual(3, (int)result[1].page->Meta()->num_records());
       AssertEqual(result[0].page->Meta()->next_page(), result[1].page->id());
@@ -342,6 +344,8 @@ class BplusTreeTest: public UnitTest {
 
       Schema::IndexRecord irecord;
       _GenerateIndeRecord(&irecord, 'b', 60);
+      AssertFalse(irecord.InsertToRecordPage(leave));
+      
       auto result = prmanager.InsertRecordAndSplitPage(&irecord);
       AssertEqual(2, (int)result.size());
       result[0].record->Print();
@@ -364,19 +368,22 @@ class BplusTreeTest: public UnitTest {
       // page 1 <--> page2 <--> overflow <--> page3
       std::cout << "----- Left Smaller test 3 -----" << std::endl;
       RecordPage* leave = tree.AllocateNewPage(TREE_LEAVE);
-      _AddIndexRecordsToLeave(leave, std::vector<int>{10, 60, 60, 60, 10},
-                              std::vector<char>{'a', 'b', 'b', 'b', 'c'});
+      _AddIndexRecordsToLeave(
+          leave, std::vector<int>{10, 10, 55, 55, 55, 10},
+          std::vector<char>{'a', 'a', 'b', 'b', 'b', 'c'});
 
       Schema::PageRecordsManager prmanager(leave, schema, key_index,
                                            INDEX, TREE_LEAVE);
       prmanager.set_tree(&tree);
 
       Schema::IndexRecord irecord;
-      _GenerateIndeRecord(&irecord, 'b', 60);
+      _GenerateIndeRecord(&irecord, 'b', 55);
+      AssertFalse(irecord.InsertToRecordPage(leave));
+      
       auto result = prmanager.InsertRecordAndSplitPage(&irecord);
       AssertEqual(3, (int)result.size());
       result[0].record->Print();
-      AssertEqual(1, (int)result[0].page->Meta()->num_records());
+      AssertEqual(2, (int)result[0].page->Meta()->num_records());
       result[1].record->Print();
       AssertEqual(3, (int)result[1].page->Meta()->num_records());
       result[2].record->Print();
@@ -401,9 +408,127 @@ class BplusTreeTest: public UnitTest {
 
     {
       // page 1 <--> page2 <--> page3
-      std::cout << "----- Left Smaller test 3 -----" << std::endl;
+      std::cout << "----- Left Smaller test 4 -----" << std::endl;
       RecordPage* leave = tree.AllocateNewPage(TREE_LEAVE);
-      _AddIndexRecordsToLeave(leave, std::vector<int>{10, 60, 60, 60, 10},
+      _AddIndexRecordsToLeave(leave, std::vector<int>{30, 50, 50, 50, 10, 10},
+                              std::vector<char>{'a', 'b', 'b', 'b', 'c', 'c'});
+
+      Schema::PageRecordsManager prmanager(leave, schema, key_index,
+                                           INDEX, TREE_LEAVE);
+      prmanager.set_tree(&tree);
+
+      Schema::IndexRecord irecord;
+      _GenerateIndeRecord(&irecord, 'b', 50);
+      AssertFalse(irecord.InsertToRecordPage(leave));
+      
+      auto result = prmanager.InsertRecordAndSplitPage(&irecord);
+      AssertEqual(3, (int)result.size());
+      result[0].record->Print();
+      AssertEqual(1, (int)result[0].page->Meta()->num_records());
+      result[1].record->Print();
+      AssertEqual(4, (int)result[1].page->Meta()->num_records());
+      result[2].record->Print();
+      AssertEqual(2, (int)result[2].page->Meta()->num_records());
+
+      AssertEqual(result[0].page->Meta()->next_page(), result[1].page->id());
+      AssertEqual(result[1].page->Meta()->prev_page(), result[0].page->id());
+      AssertEqual(result[1].page->Meta()->next_page(), result[2].page->id());
+      AssertEqual(result[2].page->Meta()->prev_page(), result[1].page->id());
+      // check overflow page.
+      int of_page_id = result[1].page->Meta()->overflow_page();
+      AssertTrue(of_page_id < 0);
+    }
+
+    {
+      // page 1 <--> page2
+      std::cout << "----- Left Larger test 1 -----" << std::endl;
+      RecordPage* leave = tree.AllocateNewPage(TREE_LEAVE);
+      _AddIndexRecordsToLeave(leave, std::vector<int>{50, 10, 40, 30, 60},
+                              std::vector<char>{'a', 'b', 'c', 'd', 'd'});
+
+      Schema::PageRecordsManager prmanager(leave, schema, key_index,
+                                           INDEX, TREE_LEAVE);
+      prmanager.set_tree(&tree);
+
+      Schema::IndexRecord irecord;
+      _GenerateIndeRecord(&irecord, 'a', 40);
+      AssertFalse(irecord.InsertToRecordPage(leave));
+      
+      auto result = prmanager.InsertRecordAndSplitPage(&irecord);
+      AssertEqual(2, (int)result.size());
+      result[0].record->Print();
+      AssertEqual(3, (int)result[0].page->Meta()->num_records());
+      result[1].record->Print();
+      AssertEqual(3, (int)result[1].page->Meta()->num_records());
+      AssertEqual(result[0].page->Meta()->next_page(), result[1].page->id());
+      AssertEqual(result[1].page->Meta()->prev_page(), result[0].page->id());
+    }
+
+    {
+      // page 1 <--> page2
+      std::cout << "----- Left Larger test 2 -----" << std::endl;
+      RecordPage* leave = tree.AllocateNewPage(TREE_LEAVE);
+      _AddIndexRecordsToLeave(leave, std::vector<int>{50, 10, 40, 30, 60},
+                              std::vector<char>{'a', 'b', 'c', 'd', 'd'});
+
+      Schema::PageRecordsManager prmanager(leave, schema, key_index,
+                                           INDEX, TREE_LEAVE);
+      prmanager.set_tree(&tree);
+
+      Schema::IndexRecord irecord;
+      _GenerateIndeRecord(&irecord, 'e', 30);
+      AssertFalse(irecord.InsertToRecordPage(leave));
+
+      auto result = prmanager.InsertRecordAndSplitPage(&irecord);
+      AssertEqual(2, (int)result.size());
+      result[0].record->Print();
+      AssertEqual(3, (int)result[0].page->Meta()->num_records());
+      result[1].record->Print();
+      AssertEqual(3, (int)result[1].page->Meta()->num_records());
+      AssertEqual(result[0].page->Meta()->next_page(), result[1].page->id());
+      AssertEqual(result[1].page->Meta()->prev_page(), result[0].page->id());
+    }
+
+    {
+      // page 1 <--> overflow <--> page2
+      std::cout << "----- Left Larger test 3 -----" << std::endl;
+      RecordPage* leave = tree.AllocateNewPage(TREE_LEAVE);
+      _AddIndexRecordsToLeave(leave, std::vector<int>{50, 50, 50, 50, 10},
+                              std::vector<char>{'a', 'a', 'a', 'a', 'b'});
+
+      Schema::PageRecordsManager prmanager(leave, schema, key_index,
+                                           INDEX, TREE_LEAVE);
+      prmanager.set_tree(&tree);
+
+      Schema::IndexRecord irecord;
+      _GenerateIndeRecord(&irecord, 'a', 50);
+      AssertFalse(irecord.InsertToRecordPage(leave));
+
+      auto result = prmanager.InsertRecordAndSplitPage(&irecord);
+      AssertEqual(2, (int)result.size());
+      result[0].record->Print();
+      AssertEqual(4, (int)result[0].page->Meta()->num_records());
+      result[1].record->Print();
+      AssertEqual(1, (int)result[1].page->Meta()->num_records());
+
+      int of_page_id = result[0].page->Meta()->overflow_page();
+      AssertTrue(of_page_id > 0);
+      AssertTrue(tree.FetchPage(of_page_id) > 0);
+      AssertEqual(tree.FetchPage(of_page_id)->Meta()->prev_page(),
+                  result[0].page->id(), "page 1 <- overflow");
+      AssertEqual(result[0].page->Meta()->next_page(),
+                  tree.FetchPage(of_page_id)->id(), "page 1 -> overflow");
+      AssertEqual(tree.FetchPage(of_page_id)->Meta()->next_page(),
+                  result[1].page->id(), "overflow -> page 2");
+      AssertEqual(result[1].page->Meta()->prev_page(),
+                  tree.FetchPage(of_page_id)->id(), "overflow <- page 2");
+    }
+
+    {
+      // page 1 <--> page2 <--> page3
+      std::cout << "----- Left Larger test 4 -----" << std::endl;
+      RecordPage* leave = tree.AllocateNewPage(TREE_LEAVE);
+      _AddIndexRecordsToLeave(leave, std::vector<int>{20, 50, 50, 50, 30},
                               std::vector<char>{'a', 'b', 'b', 'b', 'c'});
 
       Schema::PageRecordsManager prmanager(leave, schema, key_index,
@@ -411,7 +536,43 @@ class BplusTreeTest: public UnitTest {
       prmanager.set_tree(&tree);
 
       Schema::IndexRecord irecord;
-      _GenerateIndeRecord(&irecord, 'b', 60);
+      _GenerateIndeRecord(&irecord, 'b', 50);
+      AssertFalse(irecord.InsertToRecordPage(leave));
+
+      auto result = prmanager.InsertRecordAndSplitPage(&irecord);
+      AssertEqual(3, (int)result.size());
+      result[0].record->Print();
+      AssertEqual(1, (int)result[0].page->Meta()->num_records());
+      result[1].record->Print();
+      AssertEqual(4, (int)result[1].page->Meta()->num_records());
+      result[2].record->Print();
+      AssertEqual(1, (int)result[2].page->Meta()->num_records());
+
+      AssertEqual(result[0].page->Meta()->next_page(), result[1].page->id());
+      AssertEqual(result[1].page->Meta()->prev_page(), result[0].page->id());
+      AssertEqual(result[1].page->Meta()->next_page(), result[2].page->id());
+      AssertEqual(result[2].page->Meta()->prev_page(), result[1].page->id());
+      // check no overflow page.
+      AssertTrue(result[0].page->Meta()->overflow_page() < 0);
+      AssertTrue(result[1].page->Meta()->overflow_page() < 0);
+      AssertTrue(result[2].page->Meta()->overflow_page() < 0);
+    }
+
+    {
+      // page 1 <--> page2 <--> overflow <--> page3
+      std::cout << "----- Left Larger test 5 -----" << std::endl;
+      RecordPage* leave = tree.AllocateNewPage(TREE_LEAVE);
+      _AddIndexRecordsToLeave(leave, std::vector<int>{10, 55, 55, 55, 20, 10},
+                              std::vector<char>{'a', 'b', 'b', 'b', 'c', 'e'});
+
+      Schema::PageRecordsManager prmanager(leave, schema, key_index,
+                                           INDEX, TREE_LEAVE);
+      prmanager.set_tree(&tree);
+
+      Schema::IndexRecord irecord;
+      _GenerateIndeRecord(&irecord, 'b', 55);
+      AssertFalse(irecord.InsertToRecordPage(leave));
+
       auto result = prmanager.InsertRecordAndSplitPage(&irecord);
       AssertEqual(3, (int)result.size());
       result[0].record->Print();
@@ -419,11 +580,8 @@ class BplusTreeTest: public UnitTest {
       result[1].record->Print();
       AssertEqual(3, (int)result[1].page->Meta()->num_records());
       result[2].record->Print();
-      AssertEqual(1, (int)result[2].page->Meta()->num_records());
+      AssertEqual(2, (int)result[2].page->Meta()->num_records());
 
-      AssertEqual(result[0].page->Meta()->next_page(), result[1].page->id());
-      AssertEqual(result[1].page->Meta()->prev_page(), result[0].page->id());
-      // check overflow page.
       int of_page_id = result[1].page->Meta()->overflow_page();
       AssertTrue(of_page_id > 0);
       AssertTrue(tree.FetchPage(of_page_id) > 0);
@@ -431,7 +589,6 @@ class BplusTreeTest: public UnitTest {
                   result[1].page->id(), "page 2 <- overflow");
       AssertEqual(result[1].page->Meta()->next_page(),
                   tree.FetchPage(of_page_id)->id(), "page 2 -> overflow");
-
       AssertEqual(tree.FetchPage(of_page_id)->Meta()->next_page(),
                   result[2].page->id(), "overflow -> page 3");
       AssertEqual(result[2].page->Meta()->prev_page(),
