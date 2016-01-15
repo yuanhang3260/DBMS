@@ -604,14 +604,14 @@ int main() {
   DataBaseFiles::BplusTreeTest test;
   test.setup();
   test.Test_SchemaFile();
-  // test.Test_Header_Page_Consistency_Check();
-  // test.Test_Create_Load_Empty_Tree();
-  // for (int i = 0; i < 1; i++) {
-  //   test.Test_BulkLoading();
-  //   test.CheckBplusTree();
-  // }
-  // test.Test_SearchByKey();
-  test.Test_SplitLeave();
+  test.Test_Header_Page_Consistency_Check();
+  test.Test_Create_Load_Empty_Tree();
+  for (int i = 0; i < 1; i++) {
+    test.Test_BulkLoading();
+    test.CheckBplusTree();
+  }
+  test.Test_SearchByKey();
+  //test.Test_SplitLeave();
   test.teardown();
 
   std::cout << "\033[2;32mAll Passed ^_^\033[0m" << std::endl;

@@ -267,6 +267,15 @@ RecordBase* RecordBase::Duplicate() const {
   return new_record;
 }
 
+bool RecordBase::CopyFieldsFrom(const RecordBase* source) {
+  if (!source) {
+    LogERROR("Can't copy fields from nullptr RecordBase");
+    return false;
+  }
+  fields_ = source->fields_;
+  return true;
+}
+
 void RecordBase::reset() {
   for (auto& field: fields_) {
     field->reset();

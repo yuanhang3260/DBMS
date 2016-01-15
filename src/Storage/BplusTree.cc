@@ -561,26 +561,31 @@ bool BplusTree::InsertTreeNodeRecord(Schema::TreeNodeRecord* tn_record,
   return true;
 }
 
+// Only used in bulk loading.
 bool BplusTree::AddLeaveToTree(RecordPage* leave) {
   // Load first record from the page.
-  Schema::DataRecord first_data_record;
-  first_data_record.InitRecordFields(schema_.get(), key_indexes_,
-                                     DataBaseFiles::INDEX_DATA,
-                                     DataBaseFiles::TREE_LEAVE);
+  std::shared_ptr<Schema::RecordBase> first_record;
+  if (file_type_ == INDEX_DATA) {
+    first_record.reset(new Schema::DataRecord());
+  }
+  else if (file_type_ == INDEX) {
+    first_record.reset(new Schema::IndexRecord());
+  }
+  first_record->InitRecordFields(schema_.get(), key_indexes_,
+                                 file_type_, DataBaseFiles::TREE_LEAVE);
   if (leave->Meta()->num_records() <= 0) {
     LogFATAL("The leave page %d is empty, won't add it to tree", leave->id());
     return false;
   }
-  int load_size = first_data_record.LoadFromMem(leave->Record(0));
+  int load_size = first_record->LoadFromMem(leave->Record(0));
   if (load_size != leave->Meta()->slot_directory()[0].length()) {
     LogFATAL("Load first record from leave %d - expect %d bytes, actual %d",
              leave->id(),leave->Meta()->slot_directory()[0].length(),load_size);
   }
-  //first_data_record.Print();
 
   // Create a new TreeNodeRecord to insert to node.
   Schema::TreeNodeRecord new_tn_record;
-  first_data_record.ExtractKey(&new_tn_record, key_indexes_);
+  ProduceKeyRecordFromLeaveRecord(first_record.get(), &new_tn_record);
   new_tn_record.set_page_id(leave->id());
 
   // Get the tree node to insert.
@@ -1071,6 +1076,11 @@ int BplusTree::FetchResultsFromLeave(
 
 RecordPage* BplusTree::SearchToNextLevel(RecordPage* page,
                                          const Schema::RecordBase* key) {
+  if (page->Meta()->page_type() != TREE_NODE) {
+    LogERROR("Can't search to next level on a non-TreeNode page");
+    return nullptr;
+  }
+
   Schema::PageRecordsManager prmanager(page, schema_.get(), key_indexes_,
                                        file_type_, page->Meta()->page_type());
 
@@ -1109,6 +1119,28 @@ bool BplusTree::CheckRecordFieldsType(const Schema::RecordBase* record) const {
   return false;
 }
 
+
+bool BplusTree::ProduceKeyRecordFromLeaveRecord(
+         const Schema::RecordBase* leave_record, Schema::RecordBase* tn_record) {
+  if (!leave_record || !tn_record) {
+    LogERROR("Nullptr input to ProduceKeyRecordFromLeaveRecord");
+    return false;
+  }
+  if (file_type_ == INDEX_DATA &&
+      leave_record->type() == Schema::DATA_RECORD) {
+    (reinterpret_cast<const Schema::DataRecord*>(leave_record))
+        ->ExtractKey(tn_record, key_indexes_);
+  }
+  else if (file_type_ == INDEX &&
+           leave_record->type() == Schema::INDEX_RECORD){
+    tn_record->CopyFieldsFrom(leave_record);
+  }
+  else {
+    return false;
+  }
+  return true;
+}
+
 bool BplusTree::InsertRecord(const Schema::RecordBase* record) {
   if (!record) {
     LogERROR("record to insert is nullptr");
@@ -1121,45 +1153,88 @@ bool BplusTree::InsertRecord(const Schema::RecordBase* record) {
     return false;
   }
 
-  // (TODO) If root page doesn't exist (empty tree).
   if (header_->root_page() < 0) {
+    // (TODO) If root page doesn't exist (empty tree).
     return true;
   }
 
   // Produce the key of the record to search.
-  const Schema::RecordBase* search_key = nullptr;
-  if (file_type_ == INDEX_DATA) {
-    Schema::RecordBase key;
-    (reinterpret_cast<const Schema::DataRecord*>(record))
-        ->ExtractKey(&key, key_indexes_);
-    search_key = &key;
-  }
-  else {
-    search_key = record;
-  }
+  Schema::RecordBase search_key;
+  ProduceKeyRecordFromLeaveRecord(record, &search_key);
 
   // Search the leave to insert.
   RecordPage* crt_page = FetchPage(header_->root_page());
   while (crt_page && crt_page->Meta()->page_type() == TREE_NODE) {
-    crt_page = SearchToNextLevel(crt_page, search_key);
+    crt_page = SearchToNextLevel(crt_page, &search_key);
+  }
+  CheckLogFATAL(crt_page, "Failed to search for key");
+  CheckLogFATAL(crt_page->Meta()->page_type() == TREE_LEAVE,
+                "Key search ending at non-leave node");
+
+  // If current leave has overflow page, we check if the new record is same with
+  // existing ones in it. If yes, we can insert this record to overflow pages.
+  // If not, we have go to next leave.
+  if (crt_page->Meta()->overflow_page() >= 0) {
+    if (InsertNewRecordToOverFlowChain(crt_page, record)) {
+      return true;
+    }
+
   }
 
-  if (!crt_page) {
-    LogERROR("Failed to search for key");
-    search_key->Print();
-    return -1;
-  }
-
+  // Try inserting the new record to leave.
   if (record->InsertToRecordPage(crt_page)) {
     return true;
   }
 
+  // Try to re-organize records with next leave, it applicable (next leave
+  // must exists, not an overflow leave, and has the same parent).
+  if (ReOrganizeRecordsWithNextLeave(crt_page, record)) {
+    return true;
+  }
+
+  // We have to insert and split current leave.
+  if (!InsertNewRecordToLeaveWithSplit(crt_page, record)) {
+    return true;
+  }
+
+  LogERROR("Failed to insert new record to B+ tree");
+  return false;
+}
+
+bool BplusTree::ReOrganizeRecordsWithNextLeave(
+         RecordPage* leave, const Schema::RecordBase* record) {
+  return false;
+}
+
+bool BplusTree::InsertNewRecordToLeaveWithSplit(
+         RecordPage* leave, const Schema::RecordBase* record) {
+  if (!leave || !record) {
+    LogERROR("Nullptr input to InsertNewRecordToLeaveWithSplit");
+    return false;
+  }
+
   // Need to split the page.
-  Schema::PageRecordsManager prmanager(crt_page, schema_.get(), key_indexes_,
+  Schema::PageRecordsManager prmanager(leave, schema_.get(), key_indexes_,
                                        file_type_, TREE_LEAVE);
-  auto result = prmanager.InsertRecordAndSplitPage(record);
-  (void)result;
-  // (TODO) Add leaves to parent node.
+  auto leaves = prmanager.InsertRecordAndSplitPage(record);
+
+  // Insert back split leave pages to parent tree node(s).
+  RecordPage* parent = FetchPage(leave->Meta()->parent_page());
+  CheckLogFATAL(parent, "Failed to fetch parent page of current leave");
+  for (int i = 1; i < (int)leaves.size(); i++) {
+    Schema::TreeNodeRecord tn_record;
+    ProduceKeyRecordFromLeaveRecord(leaves[i].record.get(), &tn_record);
+    tn_record.set_page_id(leaves[i].page->id());
+    
+    if (!InsertTreeNodeRecord(&tn_record, parent)) {
+      LogFATAL("Failed to add split leave %d into parent");
+    }
+    // Reset parent because upper node may have been split after last leave
+    // was inserted. We always add next leave to the same parent as of its
+    // prev leave.
+    parent = FetchPage(leaves[i].page->Meta()->parent_page());
+    CheckLogFATAL(parent, "Failed to fetch parent page of current leave");
+  }
 
   return true;
 }

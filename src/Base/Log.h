@@ -19,6 +19,11 @@ void LogToFATAL(const char* file, int line, const char* func,
 #define LogFATAL(error_msg, ...)  \
   LogToFATAL(__FILE__, __LINE__, __FUNCTION__, error_msg, ## __VA_ARGS__);
 
+#define CheckLogFATAL(condition, error_msg, ...)  \
+  if (!condition) {  \
+    LogToFATAL(__FILE__, __LINE__, __FUNCTION__, error_msg, ## __VA_ARGS__);  \
+  }
+
 void debug(int i);
 
 #endif  /* BASE_LOG_ */

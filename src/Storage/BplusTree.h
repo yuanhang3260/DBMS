@@ -10,6 +10,10 @@
 #include "PageBase.h"
 #include "RecordPage.h"
 
+namespace Schema {
+  class PageRecordsManager;
+}
+
 namespace DataBaseFiles {
 
 class BplusTreeTest;
@@ -177,6 +181,16 @@ class BplusTree {
   RecordPage* AppendNewLeave();
   // Create a new overflow leave in bulk loading.
   RecordPage* AppendNewOverflowLeave();
+
+  bool ProduceKeyRecordFromLeaveRecord(
+        const Schema::RecordBase* leave_record, Schema::RecordBase* tn_record);
+
+  bool ReOrganizeRecordsWithNextLeave(
+           RecordPage* leave, const Schema::RecordBase* record);
+
+  // Insert a new record to leave which will split the leave.
+  bool InsertNewRecordToLeaveWithSplit(
+           RecordPage* leave, const Schema::RecordBase* record);
 
   std::string tablename_;
   FILE* file_ = nullptr;
