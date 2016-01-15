@@ -205,6 +205,13 @@ RecordBase* PageRecordsManager::Record(int index) const {
   return plrecords_.at(index).record();
 }
 
+int PageRecordsManager::RecordSlotID(int index) const {
+  if (index >= (int)plrecords_.size()) {
+    return -1;
+  }
+  return plrecords_.at(index).slot_id();
+}
+
 int PageRecordsManager::CompareRecordWithKey(const RecordBase* key,
                                              const RecordBase* record) const {
   if (page_type_ == DataBaseFiles::TREE_NODE ||

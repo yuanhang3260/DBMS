@@ -77,11 +77,11 @@ class PageRecordsManager {
   int NumRecords() const { return plrecords_.size(); }
   std::vector<PageLoadedRecord>& plrecords() { return plrecords_; }
   RecordBase* Record(int index) const;
+  int RecordSlotID(int index) const;
   template<class T>
   T* GetRecord(int index) {
     return reinterpret_cast<T*>(Record(index));
   }
-
 
   // Sort a list of records based on indexes that specified key.
   static void SortRecords(

@@ -119,7 +119,8 @@ class BplusTree {
   // Insert a record to a leave node.
   bool InsertRecordToLeave(const Schema::DataRecord* record);
   // Insert a page to a parent node.
-  bool AddLeaveToTree(RecordPage* leave);
+  bool AddLeaveToTree(RecordPage* leave, Schema::TreeNodeRecord* tn_record);
+  bool AddLeaveToTree2(RecordPage* leave, Schema::TreeNodeRecord* tn_record);
   // Insert a new TreeNodeRecord to tree node page.
   bool InsertTreeNodeRecord(Schema::TreeNodeRecord* tn_record,
                             RecordPage* tn_page);
@@ -164,10 +165,20 @@ class BplusTree {
   // Check overflow page.
   bool VerifyOverflowPage(RecordPage* page);
 
+  class SearchTreeNodeResult {
+   public:
+    int slot = -1;
+    std::shared_ptr<Schema::RecordBase> record;
+    RecordPage* child_page = nullptr;
+    int next_slot = -1;
+    std::shared_ptr<Schema::RecordBase> next_record;
+    RecordPage* next_child_page = nullptr;
+  };
+
   // Search for a key in the page and returns next level page this key
   // should reside in.
-  RecordPage* SearchToNextLevel(RecordPage* page,
-                                const Schema::RecordBase* key);
+  SearchTreeNodeResult SearchInTreeNode(RecordPage* page,
+                                        const Schema::RecordBase* key);
 
   // Fetch all matching records from BB+ tree.
   int FetchResultsFromLeave(
@@ -191,6 +202,10 @@ class BplusTree {
   // Insert a new record to leave which will split the leave.
   bool InsertNewRecordToLeaveWithSplit(
            RecordPage* leave, const Schema::RecordBase* record);
+
+  // Create a new leave with a new record inserted.
+  RecordPage* CreateNewLeaveWithRecord(
+      const Schema::RecordBase* record, Schema::TreeNodeRecord* tn_record);
 
   std::string tablename_;
   FILE* file_ = nullptr;

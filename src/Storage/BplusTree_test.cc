@@ -14,7 +14,7 @@ class BplusTreeTest: public UnitTest {
   std::vector<int> key_indexes;
   Schema::TableSchema* schema = nullptr;
   std::map<int, std::shared_ptr<Schema::DataRecord>> record_resource;
-  const int kNumRecordsSource = 10000;
+  const int kNumRecordsSource = 10;
 
  public:
   void InitSchema() {
