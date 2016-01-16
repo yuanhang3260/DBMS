@@ -13,9 +13,9 @@ namespace Schema {
 
 enum RecordType {
   UNKNOWN_RECORDTYPE,
-  TREENODE_RECORD,
-  DATA_RECORD,
   INDEX_RECORD,
+  DATA_RECORD,
+  TREENODE_RECORD,
 };
 
 class RecordID {
@@ -125,7 +125,9 @@ class DataRecord: public RecordBase {
  public:
   virtual ~DataRecord() {}
 
-  RecordType type() const { return DATA_RECORD; }
+  virtual RecordType type() const { return DATA_RECORD; }
+
+  RecordBase* Duplicate() const override;
 
   // Extract key data to a RecordKey object. The fields to extract as key
   // are given in arg field_indexes.
@@ -144,7 +146,7 @@ class IndexRecord: public RecordBase {
   DEFINE_ACCESSOR(rid, RecordID);
 
   int size() const override;
-  RecordType type() const { return INDEX_RECORD; }
+  virtual RecordType type() const { return INDEX_RECORD; }
 
   int DumpToMem(byte* buf) const override;
   int LoadFromMem(const byte* buf) override;
@@ -168,7 +170,7 @@ class TreeNodeRecord: public RecordBase {
   DEFINE_ACCESSOR(page_id, int);
 
   int size() const override;
-  RecordType type() const { return TREENODE_RECORD; }
+  virtual RecordType type() const { return TREENODE_RECORD; }
 
   int DumpToMem(byte* buf) const override;
   int LoadFromMem(const byte* buf) override;

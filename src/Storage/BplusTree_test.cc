@@ -606,7 +606,8 @@ class BplusTreeTest: public UnitTest {
     BplusTree tree;
     AssertTrue(tree.CreateFile(tablename, key_indexes, INDEX_DATA),
                "Create B+ tree file faild");
-    for (int i = 0; i < 10; i++) {
+    for (int i = 0; i < 50; i++) {
+      printf("-------------------------------------------------------------\n");
       printf("-------------------------------------------------------------\n");
       printf("i = %d, record size = %d\n", i, record_resource[i]->size());
       record_resource[i]->Print();

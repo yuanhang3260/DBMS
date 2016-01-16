@@ -386,6 +386,11 @@ bool DataRecord::ExtractKey(
   return true;
 }
 
+RecordBase* DataRecord::Duplicate() const {
+  DataRecord* new_record = new DataRecord();
+  new_record->fields_ = fields_;
+  return new_record;
+}
 
 // ***************************** IndexRecord ******************************** //
 int IndexRecord::DumpToMem(byte* buf) const {

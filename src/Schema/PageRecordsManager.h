@@ -83,6 +83,9 @@ class PageRecordsManager {
     return reinterpret_cast<T*>(Record(index));
   }
 
+  // Print this page.
+  void Print() const;
+
   // Sort a list of records based on indexes that specified key.
   static void SortRecords(
       std::vector<std::shared_ptr<Schema::RecordBase>>& records,

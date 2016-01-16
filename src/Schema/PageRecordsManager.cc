@@ -213,6 +213,14 @@ int PageRecordsManager::RecordSlotID(int index) const {
   return plrecords_.at(index).slot_id();
 }
 
+void PageRecordsManager::Print() const {
+  printf("Printing page %d\n", page_->id());
+  for (auto record: plrecords_) {
+    record.Print();
+  }
+  printf("Ending page %d\n", page_->id());
+}
+
 int PageRecordsManager::CompareRecordWithKey(const RecordBase* key,
                                              const RecordBase* record) const {
   if (page_type_ == DataBaseFiles::TREE_NODE ||

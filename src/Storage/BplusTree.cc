@@ -457,6 +457,7 @@ bool BplusTree::InsertRecordToLeave(const Schema::DataRecord* record) {
 
 bool BplusTree::InsertTreeNodeRecord(Schema::TreeNodeRecord* tn_record,
                                      RecordPage* tn_page) {
+  //printf("Inserting to tree node to node %d\n", tn_page->id());
   if (!tn_record || !tn_page) {
     LogERROR("nullptr passed to InsertTreeNodeRecord");
     return false;
@@ -467,7 +468,8 @@ bool BplusTree::InsertTreeNodeRecord(Schema::TreeNodeRecord* tn_record,
     return false;
   }
   
-  //tn_record->Print();
+  // printf("Inserting new TreeNodeRecord:\n");
+  // tn_record->Print();
   if (tn_record->InsertToRecordPage(tn_page)) {
     // Success, and we're done. Get the child page related with this new
     // TreeNode record and set its parent page id as this tree node.
@@ -1160,7 +1162,8 @@ bool BplusTree::ProduceKeyRecordFromLeaveRecord(
     tn_record->CopyFieldsFrom(leave_record);
   }
   else {
-    return false;
+    LogFATAL("Inconsistent B+ tree type and leave record type (%d, %d)",
+             file_type_, leave_record->type());
   }
   return true;
 }
