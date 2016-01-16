@@ -118,9 +118,10 @@ class BplusTree {
 
   // Insert a record to a leave node.
   bool InsertRecordToLeave(const Schema::DataRecord* record);
+  // Add first leave to empty tree.
+  bool AddFirstLeaveToTree(RecordPage* leave);
   // Insert a page to a parent node.
   bool AddLeaveToTree(RecordPage* leave, Schema::TreeNodeRecord* tn_record);
-  bool AddLeaveToTree2(RecordPage* leave, Schema::TreeNodeRecord* tn_record);
   // Insert a new TreeNodeRecord to tree node page.
   bool InsertTreeNodeRecord(Schema::TreeNodeRecord* tn_record,
                             RecordPage* tn_page);
@@ -200,12 +201,18 @@ class BplusTree {
            RecordPage* leave, const Schema::RecordBase* record);
 
   // Insert a new record to leave which will split the leave.
-  bool InsertNewRecordToLeaveWithSplit(
+  bool InsertNewRecordToLeaveWithSplit(RecordPage* leave,
+                                       RecordPage* next_leave,
+                                       const Schema::RecordBase* record);
+
+  // Insert a new record to the end of a overflow chain of leaves.
+  bool InsertNewRecordToOverFlowChain(
            RecordPage* leave, const Schema::RecordBase* record);
 
   // Create a new leave with a new record inserted.
   RecordPage* CreateNewLeaveWithRecord(
-      const Schema::RecordBase* record, Schema::TreeNodeRecord* tn_record);
+      const Schema::RecordBase* record,
+      Schema::TreeNodeRecord* tn_record=nullptr);
 
   std::string tablename_;
   FILE* file_ = nullptr;

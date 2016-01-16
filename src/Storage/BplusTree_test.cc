@@ -14,7 +14,7 @@ class BplusTreeTest: public UnitTest {
   std::vector<int> key_indexes;
   Schema::TableSchema* schema = nullptr;
   std::map<int, std::shared_ptr<Schema::DataRecord>> record_resource;
-  const int kNumRecordsSource = 10;
+  const int kNumRecordsSource = 10000;
 
  public:
   void InitSchema() {
@@ -596,6 +596,23 @@ class BplusTreeTest: public UnitTest {
     }
   }
 
+  void Test_InsertRecord() {
+    std::vector<std::shared_ptr<Schema::RecordBase>> v;
+    for (auto& entry: record_resource) {
+      v.push_back(entry.second);
+    }
+    Schema::PageRecordsManager::SortRecords(v, key_indexes);
+
+    BplusTree tree;
+    AssertTrue(tree.CreateFile(tablename, key_indexes, INDEX_DATA),
+               "Create B+ tree file faild");
+    for (int i = 0; i < 10; i++) {
+      printf("-------------------------------------------------------------\n");
+      printf("i = %d, record size = %d\n", i, record_resource[i]->size());
+      record_resource[i]->Print();
+      tree.InsertRecord(record_resource[i].get());
+    }
+  }
 };
 
 }  // namespace DataBaseFiles
@@ -606,12 +623,16 @@ int main() {
   test.Test_SchemaFile();
   test.Test_Header_Page_Consistency_Check();
   test.Test_Create_Load_Empty_Tree();
+  // for (int i = 0; i < 1; i++) {
+  //   test.Test_BulkLoading();
+  //   test.CheckBplusTree();
+  // }
+  // test.Test_SearchByKey();
+  // test.Test_SplitLeave();
   for (int i = 0; i < 1; i++) {
-    test.Test_BulkLoading();
+    test.Test_InsertRecord();
     test.CheckBplusTree();
   }
-  test.Test_SearchByKey();
-  //test.Test_SplitLeave();
   test.teardown();
 
   std::cout << "\033[2;32mAll Passed ^_^\033[0m" << std::endl;

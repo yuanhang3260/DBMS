@@ -109,8 +109,9 @@ bool PageRecordsManager::LoadRecordsFromPage() {
     int load_size = plrecords_.back().record()->
                         LoadFromMem(page_->Record(slot_id));
     if (load_size != length) {
-      LogERROR("Error loading slot %d from page - expect %d byte, actual %d ",
-               slot_id, length, load_size);
+      LogERROR("Error load slot %d from page %d - expect %d byte, actual %d ",
+               page_->id(), slot_id, length, load_size);
+      plrecords_.back().record()->Print();
       return false;
     }
     total_size_ += load_size;
@@ -216,8 +217,8 @@ int PageRecordsManager::CompareRecordWithKey(const RecordBase* key,
                                              const RecordBase* record) const {
   if (page_type_ == DataBaseFiles::TREE_NODE ||
       file_type_ == DataBaseFiles::INDEX) {
-    return RecordBase::CompareRecordsBasedOnKey(key, record,
-                                                ProduceIndexesToCompare());
+    return RecordBase::CompareRecordsBasedOnIndex(key, record,
+                                                  ProduceIndexesToCompare());
   }
   else {
     // file_type = INDEX_DATA && page_type = TREE_LEAVE
@@ -298,10 +299,10 @@ HalfSplitResult HalfSplitRecordGroups(
   HalfSplitResult result;
   for (int i = start; i <= end; i++) {
     result.right_records += rgroups->at(i).num_records;
-    printf("group %d: ", i);
-    printf("start_index = %d, ", rgroups->at(i).start_index);
-    printf("num_records = %d, ", rgroups->at(i).num_records);
-    printf("size = %d\n", rgroups->at(i).size);
+    // printf("group %d: ", i);
+    // printf("start_index = %d, ", rgroups->at(i).start_index);
+    // printf("num_records = %d, ", rgroups->at(i).num_records);
+    // printf("size = %d\n", rgroups->at(i).size);
     result.right_size += rgroups->at(i).size;
   }
 
@@ -339,8 +340,8 @@ void PageRecordsManager::GroupRecords(std::vector<RecordGroup>* rgroups) {
   int size = 0;
   auto cmp_indexes = ProduceIndexesToCompare();
   for (int i = 0; i < (int)plrecords_.size(); i++) {
-    if (RecordBase::CompareRecordsBasedOnKey(crt_record, Record(i),
-                                             cmp_indexes) == 0) {
+    if (RecordBase::CompareRecordsBasedOnIndex(crt_record, Record(i),
+                                               cmp_indexes) == 0) {
       num_records++;
       size += Record(i)->size();
     }
@@ -367,13 +368,25 @@ PageRecordsManager::InsertRecordAndSplitPage(const RecordBase* record) {
   GroupRecords(&rgroups);
 
   HalfSplitResult re1 = HalfSplitRecordGroups(&rgroups, 0, rgroups.size() - 1);
-  std::cout << "re1.mid_index: " << re1.mid_index << std::endl;
-  std::cout << "re1.left_records: " << re1.left_records << std::endl;
-  std::cout << "re1.left_size: " << re1.left_size << std::endl;
-  std::cout << "re1.right_records: " << re1.right_records << std::endl;
-  std::cout << "re1.right_size: " << re1.right_size << std::endl;
-  std::cout << "re1.left_larger: " << re1.left_larger << std::endl;
+  // std::cout << "re1.mid_index: " << re1.mid_index << std::endl;
+  // std::cout << "re1.left_records: " << re1.left_records << std::endl;
+  // std::cout << "re1.left_size: " << re1.left_size << std::endl;
+  // std::cout << "re1.right_records: " << re1.right_records << std::endl;
+  // std::cout << "re1.right_size: " << re1.right_size << std::endl;
+  // std::cout << "re1.left_larger: " << re1.left_larger << std::endl;
   if (re1.left_larger) {
+    // Corner case - all recors are same. We need to add new record to
+    // overflow page.
+    if (re1.mid_index >= (int)rgroups.size()) {
+      auto of_page = tree_->AppendOverflowPageTo(page_);
+      if (!record->InsertToRecordPage(of_page)) {
+        LogFATAL("Insert new record to first page's overflow page failed");
+      }
+      result.emplace_back(page_);
+      result[0].record = plrecords_[0].record_;
+      return result;
+    }
+
     int new_record_inserted = false;
     auto page = tree_->AllocateNewPage(DataBaseFiles::TREE_LEAVE);
     // Allocate a new leave and insert right half records to it.

@@ -122,9 +122,9 @@ bool RecordBase::operator==(const RecordBase& other) const {
   return true;
 }
 
-int RecordBase::CompareRecordsBasedOnKey(const RecordBase* r1,
-                                         const RecordBase* r2,
-                                         const std::vector<int>& indexes) {
+int RecordBase::CompareRecordsBasedOnIndex(const RecordBase* r1,
+                                           const RecordBase* r2,
+                                           const std::vector<int>& indexes) {
   for (int i = 0; i < (int)indexes.size(); i++) {
     int re = RecordBase::CompareSchemaFields(
                  r1->fields_.at(indexes[i]).get(),
@@ -143,7 +143,7 @@ int RecordBase::CompareRecordsBasedOnKey(const RecordBase* r1,
 bool RecordBase::RecordComparator(const std::shared_ptr<RecordBase> r1,
                                   const std::shared_ptr<RecordBase> r2,
                                   const std::vector<int>& indexes) {
-  return CompareRecordsBasedOnKey(r1.get(), r2.get(), indexes) < 0;
+  return CompareRecordsBasedOnIndex(r1.get(), r2.get(), indexes) < 0;
 }
 
 int RecordBase::CompareRecordWithKey(const RecordBase* key,
