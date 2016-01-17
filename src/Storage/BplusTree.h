@@ -170,10 +170,10 @@ class BplusTree {
    public:
     int slot = -1;
     std::shared_ptr<Schema::RecordBase> record;
-    RecordPage* child_page = nullptr;
+    int child_id = -1;
     int next_slot = -1;
     std::shared_ptr<Schema::RecordBase> next_record;
-    RecordPage* next_child_page = nullptr;
+    int next_child_id = -1;
   };
 
   // Search for a key in the page and returns next level page this key
@@ -202,8 +202,11 @@ class BplusTree {
 
   // Insert a new record to leave which will split the leave.
   bool InsertNewRecordToLeaveWithSplit(RecordPage* leave,
-                                       RecordPage* next_leave,
+                                       int next_leave_id,
                                        const Schema::RecordBase* record);
+
+  // Go to last overflow page of an overflow chain.
+  RecordPage* GotoOverflowChainEnd(RecordPage* leave);
 
   // Insert a new record to the end of a overflow chain of leaves.
   bool InsertNewRecordToOverFlowChain(

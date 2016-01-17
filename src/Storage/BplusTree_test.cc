@@ -69,7 +69,7 @@ class BplusTreeTest: public UnitTest {
           record_resource.at(i)->AddField(new Schema::StringType("hello"));
         }
         else {
-          int str_len = Utils::RandomNumber(10);
+          int str_len = Utils::RandomNumber(5);
           char buf[str_len];
           for (int i = 0; i < str_len; i++) {
             buf[i] = 'a' + Utils::RandomNumber(26);
@@ -81,7 +81,7 @@ class BplusTreeTest: public UnitTest {
       int rand_int = Utils::RandomNumber(20);
       record_resource.at(i)->AddField(new Schema::IntType(rand_int));
       // money (we use this field as key for record resource map).
-      int rand_long = Utils::RandomNumber(100);
+      int rand_long = Utils::RandomNumber(10);
       if (i >= 2 && i <= 6) {
         record_resource.at(i)->AddField(new Schema::LongIntType(-1));
       }
@@ -597,6 +597,7 @@ class BplusTreeTest: public UnitTest {
   }
 
   void Test_InsertRecord() {
+    InitRecordResource();
     std::vector<std::shared_ptr<Schema::RecordBase>> v;
     for (auto& entry: record_resource) {
       v.push_back(entry.second);
@@ -606,11 +607,11 @@ class BplusTreeTest: public UnitTest {
     BplusTree tree;
     AssertTrue(tree.CreateFile(tablename, key_indexes, INDEX_DATA),
                "Create B+ tree file faild");
-    for (int i = 0; i < 50; i++) {
-      printf("-------------------------------------------------------------\n");
-      printf("-------------------------------------------------------------\n");
-      printf("i = %d, record size = %d\n", i, record_resource[i]->size());
-      record_resource[i]->Print();
+    for (int i = 0; i < kNumRecordsSource; i++) {
+      // printf("-------------------------------------------------------------\n");
+      // printf("-------------------------------------------------------------\n");
+      // printf("i = %d, record size = %d\n", i, record_resource[i]->size());
+      // record_resource[i]->Print();
       tree.InsertRecord(record_resource[i].get());
     }
   }
@@ -630,7 +631,7 @@ int main() {
   // }
   // test.Test_SearchByKey();
   // test.Test_SplitLeave();
-  for (int i = 0; i < 1; i++) {
+  for (int i = 0; i < 20; i++) {
     test.Test_InsertRecord();
     test.CheckBplusTree();
   }

@@ -20,7 +20,7 @@ void LogToFATAL(const char* file, int line, const char* func,
   LogToFATAL(__FILE__, __LINE__, __FUNCTION__, error_msg, ## __VA_ARGS__);
 
 #define CheckLogFATAL(condition, error_msg, ...)  \
-  if (!condition) {  \
+  if (!(condition)) {  \
     LogToFATAL(__FILE__, __LINE__, __FUNCTION__, error_msg, ## __VA_ARGS__);  \
   }
 

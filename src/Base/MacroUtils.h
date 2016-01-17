@@ -24,7 +24,7 @@
   TypeName& operator=(const TypeName&) = delete; \
 
 #define CHECK(CONDITION, ERR_MSG) \
-  if (!CONDITION) { \
+  if (!(CONDITION)) { \
     throw std::runtime_error(ERR_MSG); \
   } \
 
