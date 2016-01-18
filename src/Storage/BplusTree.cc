@@ -863,6 +863,8 @@ bool BplusTree::VerifyChildRecordsRange(RecordPage* child_page,
   }
   if (first_record_key < *left_bound) {
     LogERROR("First record key of child < left bound");
+    first_record_key.Print();
+    left_bound->Print();
     return false;
   }
 
@@ -933,7 +935,7 @@ bool BplusTree::EqueueChildNodes(RecordPage* page,
         if (vc_status_.prev_leave_next > 0 &&
             vc_status_.prev_leave_next != child_page->id()) {
           LogERROR("Leave connecting verification failed - "
-                   "prev leave's next = %d, while crt_leave_id = %d",
+                   "prev leave's next = %d, while crt_child_id = %d",
                    vc_status_.prev_leave_next, child_page->id());
           return false;
         }
@@ -1117,13 +1119,16 @@ BplusTree::SearchInTreeNode(RecordPage* page, const Schema::RecordBase* key) {
     result.next_child_id = tn_record->page_id();
     CheckLogFATAL(result.next_child_id >= 0,
                   "Get nullptr next_child_page in SearchInTreeNode");
+    result.next_leave_id = result.next_child_id;
   }
   else {
+    // Get next leave id. It's not always next_child because next leave may have
+    // different parent.
     auto child_page = FetchPage(result.child_id);
     CheckLogFATAL(child_page, "child page is nullptr");
     if (child_page->Meta()->next_page() >= 0) {
       child_page = GotoOverflowChainEnd(child_page);
-      result.next_child_id = child_page->Meta()->next_page();
+      result.next_leave_id = child_page->Meta()->next_page();
     }
   }
 
@@ -1184,7 +1189,31 @@ bool BplusTree::ProduceKeyRecordFromLeaveRecord(
 bool BplusTree::InsertNewRecordToNextLeave(RecordPage* leave,
                                            SearchTreeNodeResult* search_result,
                                            const Schema::RecordBase* record) {
-  return false;
+  // Check next leave is valid, and has same parent.
+  if (search_result->next_child_id < 0 &&
+      FetchPage(search_result->next_child_id)->Meta()->overflow_page() >= 0) {
+    return false;
+  }
+
+  auto next_leave = FetchPage(search_result->next_child_id);
+  CheckLogFATAL(next_leave, "Failed to fetch next leave");
+  auto parent = FetchPage(leave->Meta()->parent_page());
+  CheckLogFATAL(parent, "Failed to fetch parent node");
+
+  if (record->InsertToRecordPage(next_leave) < 0) {
+    return false;
+  }
+
+  // Delete next leave's tree node record from parent.
+  CheckLogFATAL(parent->DeleteRecord(search_result->next_slot),
+                "Failed to delete next leave's original tree node record");
+  Schema::TreeNodeRecord tn_record;
+  ProduceKeyRecordFromLeaveRecord(record, &tn_record);
+  tn_record.set_page_id(next_leave->id());
+  CheckLogFATAL(InsertTreeNodeRecord(&tn_record, parent),
+                "Failed to insert new tree node record for next leave");
+
+  return true;
 }
 
 bool BplusTree::InsertAfterOverflowLeave(RecordPage* leave,
@@ -1232,15 +1261,12 @@ bool BplusTree::InsertAfterOverflowLeave(RecordPage* leave,
   // not overflow page, we can do some redistribution.
   if (search_result->next_child_id >= 0 &&
       FetchPage(search_result->next_child_id)->Meta()->overflow_page() < 0) {
-    // First try to insert the new record to next leave. If success, then we
-    // are done. Note the new record will be the first record of next leave,
-    // and we must copy its key up to parent node to replace the original key.
+    // First try inserting the new record to next leave.
     if (InsertNewRecordToNextLeave(leave, search_result, record)) {
       return true;
     }
-
     // Otherwise we need to create a new leave with the new record to insert,
-    // and try re-distributing records with the next_leave.
+    // and try re-distributing records with the next_leave if possible.
     Schema::TreeNodeRecord tn_record;
     RecordPage* new_leave = CreateNewLeaveWithRecord(record, &tn_record);
     tn_record.set_page_id(new_leave->id());
@@ -1251,8 +1277,8 @@ bool BplusTree::InsertAfterOverflowLeave(RecordPage* leave,
       return false;
     }
     RecordPage* page1 = leave;
-    if (search_result->next_child_id >= 0) {
-      RecordPage* page2 = FetchPage(search_result->next_child_id);
+    if (search_result->next_leave_id >= 0) {
+      RecordPage* page2 = FetchPage(search_result->next_leave_id);
       page1 = FetchPage(page2->Meta()->prev_page());
       ConnectLeaves(new_leave, page2);
     }
@@ -1273,8 +1299,8 @@ bool BplusTree::InsertAfterOverflowLeave(RecordPage* leave,
       return false;
     }
     RecordPage* page1 = leave;
-    if (search_result->next_child_id >= 0) {
-      RecordPage* page2 = FetchPage(search_result->next_child_id);
+    if (search_result->next_leave_id >= 0) {
+      RecordPage* page2 = FetchPage(search_result->next_leave_id);
       page1 = FetchPage(page2->Meta()->prev_page());
       ConnectLeaves(new_leave, page2);
     }
@@ -1339,7 +1365,7 @@ bool BplusTree::InsertRecord(const Schema::RecordBase* record) {
   }
 
   // We have to insert and split current leave.
-  int next_page_id = search_result.next_child_id;
+  int next_page_id = search_result.next_leave_id;
   if (InsertNewRecordToLeaveWithSplit(crt_page, next_page_id, record)) {
     return true;
   }

@@ -169,11 +169,12 @@ class BplusTree {
   class SearchTreeNodeResult {
    public:
     int slot = -1;
-    std::shared_ptr<Schema::RecordBase> record;
     int child_id = -1;
+    std::shared_ptr<Schema::RecordBase> record;
     int next_slot = -1;
-    std::shared_ptr<Schema::RecordBase> next_record;
     int next_child_id = -1;
+    std::shared_ptr<Schema::RecordBase> next_record;
+    int next_leave_id = -1;
   };
 
   // Search for a key in the page and returns next level page this key

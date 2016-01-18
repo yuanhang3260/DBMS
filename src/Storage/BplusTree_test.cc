@@ -294,7 +294,7 @@ class BplusTreeTest: public UnitTest {
     for (int i = 0; i < (int)rlens.size(); i++) {
       Schema::IndexRecord irecord;
       _GenerateIndeRecord(&irecord, contents[i], rlens[i]);
-      AssertTrue(irecord.InsertToRecordPage(leave),
+      AssertTrue(irecord.InsertToRecordPage(leave) >= 0,
                  "Failed to add index record to leave");
       total_len += rlens[i];
       //irecord.Print();
@@ -326,7 +326,7 @@ class BplusTreeTest: public UnitTest {
 
       Schema::IndexRecord irecord;
       _GenerateIndeRecord(&irecord, 'a', 60);
-      AssertFalse(irecord.InsertToRecordPage(leave));
+      AssertTrue(irecord.InsertToRecordPage(leave) < 0);
       
       auto result = prmanager.InsertRecordAndSplitPage(&irecord);
       AssertEqual(2, (int)result.size());
@@ -351,7 +351,7 @@ class BplusTreeTest: public UnitTest {
 
       Schema::IndexRecord irecord;
       _GenerateIndeRecord(&irecord, 'b', 60);
-      AssertFalse(irecord.InsertToRecordPage(leave));
+      AssertTrue(irecord.InsertToRecordPage(leave) < 0);
       
       auto result = prmanager.InsertRecordAndSplitPage(&irecord);
       AssertEqual(2, (int)result.size());
@@ -385,7 +385,7 @@ class BplusTreeTest: public UnitTest {
 
       Schema::IndexRecord irecord;
       _GenerateIndeRecord(&irecord, 'b', 55);
-      AssertFalse(irecord.InsertToRecordPage(leave));
+      AssertTrue(irecord.InsertToRecordPage(leave) < 0);
       
       auto result = prmanager.InsertRecordAndSplitPage(&irecord);
       AssertEqual(3, (int)result.size());
@@ -426,7 +426,7 @@ class BplusTreeTest: public UnitTest {
 
       Schema::IndexRecord irecord;
       _GenerateIndeRecord(&irecord, 'b', 50);
-      AssertFalse(irecord.InsertToRecordPage(leave));
+      AssertTrue(irecord.InsertToRecordPage(leave) < 0);
       
       auto result = prmanager.InsertRecordAndSplitPage(&irecord);
       AssertEqual(3, (int)result.size());
@@ -459,8 +459,8 @@ class BplusTreeTest: public UnitTest {
 
       Schema::IndexRecord irecord;
       _GenerateIndeRecord(&irecord, 'a', 40);
-      AssertFalse(irecord.InsertToRecordPage(leave));
-      
+      AssertTrue(irecord.InsertToRecordPage(leave) < 0);
+
       auto result = prmanager.InsertRecordAndSplitPage(&irecord);
       AssertEqual(2, (int)result.size());
       result[0].record->Print();
@@ -484,7 +484,7 @@ class BplusTreeTest: public UnitTest {
 
       Schema::IndexRecord irecord;
       _GenerateIndeRecord(&irecord, 'e', 30);
-      AssertFalse(irecord.InsertToRecordPage(leave));
+      AssertTrue(irecord.InsertToRecordPage(leave) < 0);
 
       auto result = prmanager.InsertRecordAndSplitPage(&irecord);
       AssertEqual(2, (int)result.size());
@@ -509,7 +509,7 @@ class BplusTreeTest: public UnitTest {
 
       Schema::IndexRecord irecord;
       _GenerateIndeRecord(&irecord, 'a', 50);
-      AssertFalse(irecord.InsertToRecordPage(leave));
+      AssertTrue(irecord.InsertToRecordPage(leave) < 0);
 
       auto result = prmanager.InsertRecordAndSplitPage(&irecord);
       AssertEqual(2, (int)result.size());
@@ -544,7 +544,7 @@ class BplusTreeTest: public UnitTest {
 
       Schema::IndexRecord irecord;
       _GenerateIndeRecord(&irecord, 'b', 50);
-      AssertFalse(irecord.InsertToRecordPage(leave));
+      AssertTrue(irecord.InsertToRecordPage(leave) < 0);
 
       auto result = prmanager.InsertRecordAndSplitPage(&irecord);
       AssertEqual(3, (int)result.size());
@@ -578,7 +578,7 @@ class BplusTreeTest: public UnitTest {
 
       Schema::IndexRecord irecord;
       _GenerateIndeRecord(&irecord, 'b', 55);
-      AssertFalse(irecord.InsertToRecordPage(leave));
+      AssertTrue(irecord.InsertToRecordPage(leave) < 0);
 
       auto result = prmanager.InsertRecordAndSplitPage(&irecord);
       AssertEqual(3, (int)result.size());
@@ -603,19 +603,19 @@ class BplusTreeTest: public UnitTest {
     }
   }
 
-  void Test_InsertRecord(FileType file_type) {
+  void Test_InsertRecord(FileType file_type_, int key_index) {
     InitRecordResource();
-    key_indexes = std::vector<int>{0};
+    key_indexes = std::vector<int>{key_index};
 
     BplusTree tree;
-    AssertTrue(tree.CreateFile(tablename, key_indexes, file_type),
+    AssertTrue(tree.CreateFile(tablename, key_indexes, file_type_),
                "Create B+ tree file faild");
     for (int i = 0; i < kNumRecordsSource; i++) {
       // printf("-------------------------------------------------------------\n");
       // printf("-------------------------------------------------------------\n");
       // printf("i = %d, record size = %d\n", i, record_resource[i]->size());
       // record_resource[i]->Print();
-      if (file_type == INDEX_DATA) {
+      if (file_type_ == INDEX_DATA) {
         tree.InsertRecord(record_resource[i].get());
       }
       else {
@@ -632,7 +632,16 @@ class BplusTreeTest: public UnitTest {
 
 }  // namespace DataBaseFiles
 
-int main() {
+int main(int argc, char** argv) {
+  DataBaseFiles::FileType file_type = DataBaseFiles::INDEX_DATA;
+  int key_index = 0;
+  if (argc >= 2 && std::string(argv[1]) == "INDEX") {
+    file_type = DataBaseFiles::INDEX;
+  }
+  if (argc >= 3) {
+    key_index = std::stoi(argv[2]);
+  }
+
   DataBaseFiles::BplusTreeTest test;
   test.setup();
   test.Test_SchemaFile();
@@ -644,8 +653,8 @@ int main() {
   // }
   // test.Test_SearchByKey();
   // test.Test_SplitLeave();
-  for (int i = 0; i < 20; i++) {
-    test.Test_InsertRecord(DataBaseFiles::INDEX_DATA);
+  for (int i = 0; i < 1; i++) {
+    test.Test_InsertRecord(file_type, key_index);
     test.CheckBplusTree();
   }
   test.teardown();
