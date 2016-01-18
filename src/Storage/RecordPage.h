@@ -144,6 +144,9 @@ class RecordPage {
   // Return the data pointer to a record.
   byte* Record(int slot_id) const;
 
+  // Record length.
+  int RecordLength(int slot_id) const;
+
   // Insert a record. This function only reserved space in page but no actual
   // record data will be copied yet.
   byte* InsertRecord(int length);

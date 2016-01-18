@@ -398,6 +398,20 @@ byte* RecordPage::Record(int slot_id) const {
   return data_.get() + slot_directory[slot_id].offset();
 }
 
+int RecordPage::RecordLength(int slot_id) const {
+  auto& slot_directory = page_meta_->slot_directory();
+  if (slot_id < 0 || slot_id > (int)slot_directory.size()) {
+    LogERROR("Can't get Record from page - slot_id %d out of range [0 - %d]",
+             slot_id, slot_directory.size());
+    return -1;
+  }
+  if (slot_directory[slot_id].offset() < 0) {
+    LogERROR("Empty slot_id %d, won't load record", slot_id);
+    return -1;
+  }
+  return slot_directory[slot_id].length();
+}
+
 bool RecordPage::InsertRecord(const byte* content, int length) {
   byte* buf = InsertRecord(length);
   if (buf) {

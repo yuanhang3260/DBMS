@@ -761,7 +761,7 @@ bool BplusTree::CheckBoundaryDuplication(Schema::RecordBase* record) {
     }
   }
 
-  LogINFO("New duplicated record needs a new overflow page.");
+  //LogINFO("New duplicated record needs a new overflow page.");
   RecordPage* overflow_leave = AppendNewOverflowLeave();
   if (!record->InsertToRecordPage(overflow_leave)) {
     LogFATAL("Insert first duplicated record to overflow page faield - "
@@ -976,11 +976,11 @@ bool BplusTree::EqueueChildNodes(RecordPage* page,
 bool BplusTree::VerifyOverflowPage(RecordPage* page) {
   Schema::PageRecordsManager prmanager(page, schema_.get(), key_indexes_,
                                        file_type_, TREE_LEAVE);
-  
+
   for (int i = 1; i < prmanager.NumRecords(); i++) {
     if (Schema::RecordBase::CompareRecordsBasedOnIndex(
             prmanager.Record(0), prmanager.Record(i),
-            key_indexes_) != 0) {
+            prmanager.ProduceIndexesToCompare()) != 0) {
       LogERROR("Records in overflow page inconsistent!");
       return false;
     }
@@ -1014,6 +1014,8 @@ bool BplusTree::MetaConsistencyCheck() const {
     return false;
   }
 
+  printf("count_num_pages = %d\n", vc_status_.count_num_pages);
+  printf("count_num_leaves = %d\n", vc_status_.count_num_leaves);
   printf("count_num_records = %d\n", vc_status_.count_num_records);
 
   return true;
@@ -1027,6 +1029,11 @@ int BplusTree::SearchByKey(
     return -1;
   }
   result->clear();
+
+  if (!CheckKeyFieldsType(key)) {
+    LogERROR("Key fields type mismatch table schema of this B+ tree");
+    return -1;
+  }
 
   RecordPage* crt_page = FetchPage(header_->root_page());
   while (crt_page && crt_page->Meta()->page_type() == TREE_NODE) {
@@ -1060,9 +1067,7 @@ int BplusTree::FetchResultsFromLeave(
     // Fetch all matching records in this leave.
     bool last_is_match = false;
     for (int index = 0; index < prmanager.NumRecords(); index++) {
-      if (Schema::RecordBase::CompareRecordWithKey(
-            key, prmanager.Record(index),
-            key_indexes_) == 0) {
+      if (prmanager.CompareRecordWithKey(key, prmanager.Record(index)) == 0) {
         result->push_back(prmanager.plrecords().at(index).Record());
         last_is_match = true;
       }
@@ -1128,6 +1133,10 @@ BplusTree::SearchInTreeNode(RecordPage* page, const Schema::RecordBase* key) {
   }
 
   return result;
+}
+
+bool BplusTree::CheckKeyFieldsType(const Schema::RecordBase* key) const {
+  return key->CheckFieldsType(schema_.get(), key_indexes_);
 }
 
 bool BplusTree::CheckRecordFieldsType(const Schema::RecordBase* record) const {
@@ -1216,10 +1225,43 @@ bool BplusTree::InsertRecord(const Schema::RecordBase* record) {
   // If not, we have go to next leave.
   if (crt_page->Meta()->overflow_page() >= 0) {
     // Try inserting to this overflow page. If the new record happens to match
-    // this overflow page, we're done.
+    // this overflow page we're done in this special case.
     if (InsertNewRecordToOverFlowChain(crt_page, record)) {
       return true;
     }
+    // Special case 2 - It is the most left leave, which has different tree
+    // node key with the records in this leave. This new record is possibly
+    // 'less' than records of the overflow page, which means the new leave
+    // should reside left to current leave.
+    if (crt_page->Meta()->prev_page() < 0) {
+      Schema::PageRecordsManager prmanager(crt_page, schema_.get(),
+                                           key_indexes_,
+                                           file_type_, TREE_LEAVE);
+      if (prmanager.CompareRecords(record, prmanager.Record(0)) < 0) {
+        auto parent = FetchPage(crt_page->Meta()->parent_page());
+        // Replace the page_id field of left most TreeNodeRecord of parent page
+        // with the new left-most leave.
+        RecordPage* new_leave = CreateNewLeaveWithRecord(record);
+        new_leave->Meta()->set_parent_page(parent->id());
+        *(parent->Record(search_result.slot) +
+          parent->RecordLength(search_result.slot) - 
+          sizeof(int)) = new_leave->id();
+
+        // Now the previous left-most leave (crt_leave) is the second leave to
+        // the left, and it's tree node record in parent has been replaced by
+        // new leave. We need to re-insert its tree node record.
+        Schema::TreeNodeRecord tn_record;
+        ProduceKeyRecordFromLeaveRecord(prmanager.Record(0), &tn_record);
+        tn_record.set_page_id(crt_page->id());
+        if (!InsertTreeNodeRecord(&tn_record, parent)) {
+          LogERROR("Inserting new leave to B+ tree failed");
+          return false;
+        }
+        ConnectLeaves(new_leave, crt_page);
+        return true;
+      }      
+    }
+
     // Otherwise we check next leave. If next leave has the same parent, and is
     // not overflow page, we can do some redistribution.
     if (search_result.next_child_id >= 0 &&
@@ -1242,12 +1284,15 @@ bool BplusTree::InsertRecord(const Schema::RecordBase* record) {
         return false;
       }
       RecordPage* page1 = FetchPage(search_result.child_id);
-      page1 = GotoOverflowChainEnd(page1);
-      ConnectLeaves(page1, new_leave);
       if (search_result.next_child_id >= 0) {
         RecordPage* page2 = FetchPage(search_result.next_child_id);
+        page1 = FetchPage(page2->Meta()->prev_page());
         ConnectLeaves(new_leave, page2);
       }
+      else {
+        page1 = GotoOverflowChainEnd(page1);
+      }
+      ConnectLeaves(page1, new_leave);
     }
     else {
       // Next leave has different parent, or is overflowed too. We have no
@@ -1261,12 +1306,15 @@ bool BplusTree::InsertRecord(const Schema::RecordBase* record) {
         return false;
       }
       RecordPage* page1 = FetchPage(search_result.child_id);
-      page1 = GotoOverflowChainEnd(page1);
-      ConnectLeaves(page1, new_leave);
       if (search_result.next_child_id >= 0) {
         RecordPage* page2 = FetchPage(search_result.next_child_id);
+        page1 = FetchPage(page2->Meta()->prev_page());
         ConnectLeaves(new_leave, page2);
       }
+      else {
+        page1 = GotoOverflowChainEnd(page1);
+      }
+      ConnectLeaves(page1, new_leave);
     }
     return true;
   }
@@ -1325,8 +1373,7 @@ bool BplusTree::InsertNewRecordToOverFlowChain(
   // First verify that the new record is same with existing records.
   Schema::PageRecordsManager prmanager(leave, schema_.get(), key_indexes_,
                                        file_type_, TREE_LEAVE);
-  if (Schema::RecordBase::CompareRecordsBasedOnIndex(
-       record, prmanager.Record(0), prmanager.ProduceIndexesToCompare()) != 0) {
+  if (prmanager.CompareRecords(record, prmanager.Record(0)) != 0) {
     return false;
   }
 

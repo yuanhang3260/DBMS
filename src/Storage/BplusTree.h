@@ -187,6 +187,7 @@ class BplusTree {
           const Schema::RecordBase* key,
           std::vector<std::shared_ptr<Schema::RecordBase>>* result);
 
+  bool CheckKeyFieldsType(const Schema::RecordBase* key) const;
   bool CheckRecordFieldsType(const Schema::RecordBase* record) const;
 
   // Create a new leave in bulk loading.

@@ -121,6 +121,8 @@ class PageRecordsManager {
   int CompareRecordWithKey(const RecordBase* key,
                            const RecordBase* record) const;
 
+  int CompareRecords(const RecordBase* r1, const RecordBase* r2) const;
+
   class SplitLeaveResults {
    public:
     SplitLeaveResults(DataBaseFiles::RecordPage* page_) : page(page_) {}

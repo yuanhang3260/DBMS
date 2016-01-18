@@ -338,7 +338,7 @@ bool RecordBase::CheckFieldsType(const TableSchema* schema,
     return false;
   }
   for (int i = 0; i < (int)key_indexes.size(); i++) {
-    if (fields_[i] && fields_[i]->MatchesSchemaType(
+    if (!fields_[i] || !fields_[i]->MatchesSchemaType(
                                       schema->fields(key_indexes[i]).type())) {
       LogERROR("Index/TreeNode record has mismatchig field type with schema "
                "field %d", key_indexes[i]);

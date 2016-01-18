@@ -234,6 +234,12 @@ int PageRecordsManager::CompareRecordWithKey(const RecordBase* key,
   }
 }
 
+int PageRecordsManager::CompareRecords(const RecordBase* r1,
+                                       const RecordBase* r2) const {
+  return RecordBase::CompareRecordsBasedOnIndex(
+                         r1, r2, ProduceIndexesToCompare());
+}
+
 int PageRecordsManager::SearchForKey(const RecordBase* key) const {
   if (!key) {
     LogERROR("key to search for is nullptr");

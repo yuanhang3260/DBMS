@@ -227,6 +227,41 @@ class BplusTreeTest: public UnitTest {
     }
   }
 
+  void _VerifyAllRecordsInTree(BplusTree* tree) {
+    std::vector<std::shared_ptr<Schema::RecordBase>> v;
+    for (auto& entry: record_resource) {
+      v.push_back(entry.second);
+    }
+    Schema::PageRecordsManager::SortRecords(v, key_indexes);
+    std::vector<int> start_list;
+    start_list.push_back(0);
+    Schema::RecordBase key;
+    ((Schema::DataRecord*)v[0].get())->ExtractKey(&key, key_indexes);
+    for (int i = 1; i < (int)v.size(); i++) {
+      if (Schema::RecordBase::CompareRecordWithKey(
+              &key, v[i].get(), key_indexes) == 0) {
+        continue;
+      }
+      key.clear();
+      ((Schema::DataRecord*)v[i].get())->ExtractKey(&key, key_indexes);
+      start_list.push_back(i);
+    }
+    printf("%d different keys\n", (int)start_list.size());
+    start_list.push_back(kNumRecordsSource);
+    
+    std::vector<std::shared_ptr<Schema::RecordBase>> result;
+    for (int i = 0; i < (int)start_list.size() - 1; i++) {
+      key.clear();
+      int start = start_list[i];
+      ((Schema::DataRecord*)v[start].get())->ExtractKey(&key, key_indexes);
+      //key.Print();
+
+      result.clear();
+      AssertEqual(start_list[i + 1] - start_list[i],
+                  tree->SearchByKey(&key, &result), "Search result differs");
+    }
+  }
+
   void Test_SearchByKey() {
     BplusTree tree(tablename, key_indexes);
     Schema::RecordBase key;
@@ -241,35 +276,7 @@ class BplusTreeTest: public UnitTest {
 
     // Scan all records and search one by one.
     // First merge records with the same key.
-    std::vector<std::shared_ptr<Schema::RecordBase>> v;
-    for (auto& entry: record_resource) {
-      v.push_back(entry.second);
-    }
-    Schema::PageRecordsManager::SortRecords(v, key_indexes);
-    std::vector<int> start_list;
-    start_list.push_back(0);
-    key.clear();
-    ((Schema::DataRecord*)v[0].get())->ExtractKey(&key, key_indexes);
-    for (int i = 1; i < (int)v.size(); i++) {
-      if (Schema::RecordBase::CompareRecordWithKey(
-              &key, v[i].get(), key_indexes) == 0) {
-        continue;
-      }
-      key.clear();
-      ((Schema::DataRecord*)v[i].get())->ExtractKey(&key, key_indexes);
-      start_list.push_back(i);
-    }
-    printf("%d different keys\n", (int)start_list.size());
-    start_list.push_back(kNumRecordsSource);
-    for (int i = 0; i < (int)start_list.size() - 1; i++) {
-      key.clear();
-      int start = start_list[i];
-      ((Schema::DataRecord*)v[start].get())->ExtractKey(&key, key_indexes);
-      
-      result.clear();
-      AssertEqual(start_list[i + 1] - start_list[i],
-                  tree.SearchByKey(&key, &result), "Search result differs");
-    }
+    _VerifyAllRecordsInTree(&tree);
   }
 
   void _GenerateIndeRecord(Schema::IndexRecord* irecord, char c, int len) {
@@ -596,24 +603,30 @@ class BplusTreeTest: public UnitTest {
     }
   }
 
-  void Test_InsertRecord() {
+  void Test_InsertRecord(FileType file_type) {
     InitRecordResource();
-    std::vector<std::shared_ptr<Schema::RecordBase>> v;
-    for (auto& entry: record_resource) {
-      v.push_back(entry.second);
-    }
-    Schema::PageRecordsManager::SortRecords(v, key_indexes);
+    key_indexes = std::vector<int>{4};
 
     BplusTree tree;
-    AssertTrue(tree.CreateFile(tablename, key_indexes, INDEX_DATA),
+    AssertTrue(tree.CreateFile(tablename, key_indexes, file_type),
                "Create B+ tree file faild");
     for (int i = 0; i < kNumRecordsSource; i++) {
       // printf("-------------------------------------------------------------\n");
       // printf("-------------------------------------------------------------\n");
       // printf("i = %d, record size = %d\n", i, record_resource[i]->size());
       // record_resource[i]->Print();
-      tree.InsertRecord(record_resource[i].get());
+      if (file_type == INDEX_DATA) {
+        tree.InsertRecord(record_resource[i].get());
+      }
+      else {
+        Schema::IndexRecord irecord;
+        ((Schema::DataRecord*)record_resource[i].get())->
+            ExtractKey(&irecord, key_indexes);
+        tree.InsertRecord(&irecord);
+      }
     }
+    // Search and verify records.
+    _VerifyAllRecordsInTree(&tree);
   }
 };
 
@@ -623,8 +636,8 @@ int main() {
   DataBaseFiles::BplusTreeTest test;
   test.setup();
   test.Test_SchemaFile();
-  test.Test_Header_Page_Consistency_Check();
-  test.Test_Create_Load_Empty_Tree();
+  // test.Test_Header_Page_Consistency_Check();
+  // test.Test_Create_Load_Empty_Tree();
   // for (int i = 0; i < 1; i++) {
   //   test.Test_BulkLoading();
   //   test.CheckBplusTree();
@@ -632,7 +645,7 @@ int main() {
   // test.Test_SearchByKey();
   // test.Test_SplitLeave();
   for (int i = 0; i < 20; i++) {
-    test.Test_InsertRecord();
+    test.Test_InsertRecord(DataBaseFiles::INDEX_DATA);
     test.CheckBplusTree();
   }
   test.teardown();
