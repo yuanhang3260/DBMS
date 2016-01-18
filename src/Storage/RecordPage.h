@@ -149,9 +149,9 @@ class RecordPage {
 
   // Insert a record. This function only reserved space in page but no actual
   // record data will be copied yet.
-  byte* InsertRecord(int length);
+  int InsertRecord(int length);
   // Insert a record with data.
-  bool InsertRecord(const byte* content, int length);
+  int InsertRecord(const byte* content, int length);
 
   // Delete a record
   bool DeleteRecord(int slotid);

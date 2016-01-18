@@ -131,10 +131,10 @@ bool PageRecordsManager::LoadRecordsFromPage() {
 }
 
 bool PageRecordsManager::InsertRecordToPage(const RecordBase* record) {
-  byte* buf = page_->InsertRecord(record->size());
-  if (buf) {
+  int slot_id = page_->InsertRecord(record->size());
+  if (slot_id >= 0) {
     // Write the record content to page.
-    record->DumpToMem(buf);
+    record->DumpToMem(page_->Record(slot_id));
     return true;
   }
   return false;
@@ -393,7 +393,7 @@ PageRecordsManager::InsertRecordAndSplitPage(const RecordBase* record) {
     // overflow page.
     if (re1.mid_index >= (int)rgroups.size()) {
       auto of_page = tree_->AppendOverflowPageTo(page_);
-      if (!record->InsertToRecordPage(of_page)) {
+      if (record->InsertToRecordPage(of_page) < 0) {
         LogFATAL("Insert new record to first page's overflow page failed");
       }
       result.emplace_back(page_);
@@ -407,7 +407,7 @@ PageRecordsManager::InsertRecordAndSplitPage(const RecordBase* record) {
     for (int i = rgroups.at(re1.mid_index).start_index;
          i < (int)plrecords_.size();
          i++) {
-      if (!Record(i)->InsertToRecordPage(page)) {
+      if (Record(i)->InsertToRecordPage(page) < 0) {
         LogFATAL("Insert new record to right half split failed.");
       }
       if (plrecords_.at(i).slot_id() < 0) {
@@ -421,7 +421,7 @@ PageRecordsManager::InsertRecordAndSplitPage(const RecordBase* record) {
     // half records can definitely fit in the original leave and we are done;
     // Otherwise we try inserting the new record to original leave and if
     // success we are also done.
-    if (new_record_inserted || record->InsertToRecordPage(page_)) {
+    if (new_record_inserted || record->InsertToRecordPage(page_) >= 0) {
       DataBaseFiles::BplusTree::ConnectLeaves(page_, page);
       result.emplace_back(page_);
       result[0].record = plrecords_[0].record_;
@@ -431,13 +431,13 @@ PageRecordsManager::InsertRecordAndSplitPage(const RecordBase* record) {
       return result;
     }
     else {
-      // We have to split the leave.
+      // We have to split more.
       int gindex = re1.mid_index - 1;
       if (gindex == 0) {
         // This is special case. The first records group becomes so large that
         // original leave can't hold them all.
         auto of_page = tree_->AppendOverflowPageTo(page_);
-        if (!record->InsertToRecordPage(of_page)) {
+        if (record->InsertToRecordPage(of_page) < 0) {
           LogFATAL("Insert new record to first page's overflow page failed");
         }
         DataBaseFiles::BplusTree::ConnectLeaves(of_page, page);
@@ -463,7 +463,7 @@ PageRecordsManager::InsertRecordAndSplitPage(const RecordBase* record) {
           }
         }
         if (!new_record_in_second_page) {
-          if (!record->InsertToRecordPage(page_)) {
+          if (record->InsertToRecordPage(page_) < 0) {
             LogFATAL("Failed to insert new record to first page");
           }
         }
@@ -472,10 +472,10 @@ PageRecordsManager::InsertRecordAndSplitPage(const RecordBase* record) {
         auto tail_page = page2;
         int index = group.start_index;
         for (; index < group.start_index + group.num_records; index++) {
-          if (!Record(index)->InsertToRecordPage(tail_page)) {
+          if (Record(index)->InsertToRecordPage(tail_page) < 0) {
             // Append overflow page to middle page.
             tail_page = tree_->AppendOverflowPageTo(tail_page);
-            if (!record->InsertToRecordPage(tail_page)) {
+            if (record->InsertToRecordPage(tail_page) < 0) {
               LogFATAL("Insert new record to mid page's overflow page failed");
             }
           }
@@ -507,10 +507,10 @@ PageRecordsManager::InsertRecordAndSplitPage(const RecordBase* record) {
     bool new_record_inserted = false;
     auto tail_page = page2;
     for (; index < group.start_index + group.num_records; index++) {
-      if (!Record(index)->InsertToRecordPage(tail_page)) {
+      if (Record(index)->InsertToRecordPage(tail_page) < 0) {
         // Append overflow page to middle page.
         tail_page = tree_->AppendOverflowPageTo(tail_page);
-        if (!record->InsertToRecordPage(tail_page)) {
+        if (record->InsertToRecordPage(tail_page) < 0) {
           LogFATAL("Insert new record to mid page's overflow page failed");
         }
       }
@@ -543,7 +543,7 @@ PageRecordsManager::InsertRecordAndSplitPage(const RecordBase* record) {
           else {
             page_->DeleteRecord(slot_id);
           }
-          if (!Record(index)->InsertToRecordPage(page2)) {
+          if (Record(index)->InsertToRecordPage(page2) < 0) {
             LogFATAL("Failed to insert record to page2");
           }
         }
@@ -562,14 +562,14 @@ PageRecordsManager::InsertRecordAndSplitPage(const RecordBase* record) {
         else {
           page_->DeleteRecord(slot_id);
         }
-        if (!Record(index)->InsertToRecordPage(page3)) {
+        if (Record(index)->InsertToRecordPage(page3) < 0) {
           LogFATAL("Failed to insert record to third page");
         }
       }
     }
 
     if (!new_record_inserted) {
-      if (!record->InsertToRecordPage(page_)) {
+      if (record->InsertToRecordPage(page_) < 0) {
         LogFATAL("Failed to insert new record to first page");
       }
     }

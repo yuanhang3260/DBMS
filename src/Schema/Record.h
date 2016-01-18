@@ -110,7 +110,8 @@ class RecordBase {
                                   const RecordBase* record,
                                   const std::vector<int>& indexes);
 
-  bool InsertToRecordPage(DataBaseFiles::RecordPage* page) const;
+  // Insert the record to a page and returns the record's slot id.
+  int InsertToRecordPage(DataBaseFiles::RecordPage* page) const;
 
  protected:
   void PrintImpl() const;

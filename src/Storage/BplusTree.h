@@ -198,8 +198,18 @@ class BplusTree {
   bool ProduceKeyRecordFromLeaveRecord(
         const Schema::RecordBase* leave_record, Schema::RecordBase* tn_record);
 
-  bool ReOrganizeRecordsWithNextLeave(
+  // Redistribute records with next leave.
+  bool ReDistributeRecordsWithNextLeave(
            RecordPage* leave, const Schema::RecordBase* record);
+
+  // Incurring overflow page when inserting new record.
+  bool InsertAfterOverflowLeave(RecordPage* leave,
+                                SearchTreeNodeResult* search_result,
+                                const Schema::RecordBase* record);
+  // Insert record to next leave.
+  bool InsertNewRecordToNextLeave(RecordPage* leave,
+                                  SearchTreeNodeResult* search_result,
+                                  const Schema::RecordBase* record);
 
   // Insert a new record to leave which will split the leave.
   bool InsertNewRecordToLeaveWithSplit(RecordPage* leave,

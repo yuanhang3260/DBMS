@@ -77,7 +77,7 @@ class RecordPageTest: public UnitTest {
       bool expect_success =
           (total_size + record.size() + kSlotDirectoryEntrySize) <= kPageSize;
       AssertEqual(expect_success,
-                  page_->InsertRecord(record.data(), record.size()));
+                  page_->InsertRecord(record.data(), record.size()) >= 0);
 
       if (expect_success) {
         num_records_inserted++;
@@ -191,7 +191,7 @@ class RecordPageTest: public UnitTest {
         }
         bool expect_success = free_size_after_insert >= 0;
         AssertEqual(expect_success,
-                    page_->InsertRecord(record.data(), record.size()),
+                    page_->InsertRecord(record.data(), record.size()) >= 0,
                     "InsertRecord result unexpected");
 
         if (expect_success) {

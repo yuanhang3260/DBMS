@@ -251,14 +251,14 @@ int RecordBase::LoadFromMem(const byte* buf) {
   return offset;
 }
 
-bool RecordBase::InsertToRecordPage(DataBaseFiles::RecordPage* page) const {
-  byte* buf = page->InsertRecord(size());
-  if (buf) {
+int RecordBase::InsertToRecordPage(DataBaseFiles::RecordPage* page) const {
+  int slot_id = page->InsertRecord(size());
+  if (slot_id >= 0) {
     // Write the record content to page.
-    DumpToMem(buf);
-    return true;
+    DumpToMem(page->Record(slot_id));
+    return slot_id;
   }
-  return false;
+  return -1;
 }
 
 RecordBase* RecordBase::Duplicate() const {

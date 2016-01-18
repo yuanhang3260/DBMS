@@ -605,7 +605,7 @@ class BplusTreeTest: public UnitTest {
 
   void Test_InsertRecord(FileType file_type) {
     InitRecordResource();
-    key_indexes = std::vector<int>{4};
+    key_indexes = std::vector<int>{0};
 
     BplusTree tree;
     AssertTrue(tree.CreateFile(tablename, key_indexes, file_type),

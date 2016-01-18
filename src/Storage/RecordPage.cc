@@ -412,19 +412,19 @@ int RecordPage::RecordLength(int slot_id) const {
   return slot_directory[slot_id].length();
 }
 
-bool RecordPage::InsertRecord(const byte* content, int length) {
-  byte* buf = InsertRecord(length);
-  if (buf) {
+int RecordPage::InsertRecord(const byte* content, int length) {
+  int slot_id = InsertRecord(length);
+  if (slot_id >= 0) {
     // Write the record content to page.
-    memcpy(buf, content, length);
-    return true;
+    memcpy(Record(slot_id), content, length);
+    return slot_id;
   }
-  return false;
+  return -1;
 }
 
-byte* RecordPage::InsertRecord(int length) {
+int RecordPage::InsertRecord(int length) {
   if (!PreCheckCanInsert(1, length)) {
-    return nullptr;
+    return -1;
   }
 
   // Allocate a slot id for the new record.
@@ -436,7 +436,7 @@ byte* RecordPage::InsertRecord(int length) {
     slot_id = page_meta_->AllocateSlotAvailable();
     if (slot_id < 0) {
       //LogINFO("Tried best, no space available for new slot id");
-      return nullptr;
+      return -1;
     }
   }
 
@@ -456,7 +456,7 @@ byte* RecordPage::InsertRecord(int length) {
       else {
         page_meta_->AddEmptySlot(slot_id);
       }
-      return nullptr;
+      return -1;
     }
   }
 
@@ -468,10 +468,10 @@ byte* RecordPage::InsertRecord(int length) {
 
   // (TODO: need this?) Re-write meta data to page.
   if (!page_meta_->SaveMetaToPage(data_.get())) {
-    return nullptr;
+    return -1;
   }
 
-  return data_.get() + slot_dir[slot_id].offset();
+  return slot_id;
 }
 
 bool RecordPage::DeleteRecord(int slot_id) {
