@@ -10,43 +10,6 @@
 
 namespace Schema {
 
-// **************************** PageLoadedRecord **************************** //
-bool PageLoadedRecord::GenerateRecordPrototype(
-         const TableSchema* schema,
-         std::vector<int> key_indexes,
-         DataBaseFiles::FileType file_type,
-         DataBaseFiles::PageType page_type) {
-  // Create record based on file tpye and page type
-  if (file_type == DataBaseFiles::INDEX_DATA &&
-      page_type == DataBaseFiles::TREE_LEAVE) {
-    record_.reset(new DataRecord());
-  }
-  else if (file_type == DataBaseFiles::INDEX &&
-      page_type == DataBaseFiles::TREE_LEAVE) {
-    record_.reset(new IndexRecord());
-  }
-  else if (page_type == DataBaseFiles::TREE_NODE ||
-      page_type == DataBaseFiles::TREE_ROOT) {
-    record_.reset(new TreeNodeRecord());
-  }
-
-  if (!record_) {
-    LogERROR("Illegal file_type and page_type combination");
-    return false;
-  }
-
-  record_->InitRecordFields(schema, key_indexes, file_type, page_type);
-  return true;
-}
-
-bool PageLoadedRecord::Comparator(const PageLoadedRecord& r1,
-                                  const PageLoadedRecord& r2,
-                                  const std::vector<int>& indexes) {
-  // TODO: Compare Rid for Index B+ tree?
-  return RecordBase::RecordComparator(r1.record_, r2.record_, indexes);
-}
-
-
 // ************************** PageRecordsManager **************************** //
 PageRecordsManager::PageRecordsManager(DataBaseFiles::RecordPage* page,
                                        TableSchema* schema,
@@ -69,7 +32,6 @@ PageRecordsManager::PageRecordsManager(DataBaseFiles::RecordPage* page,
     LogFATAL("Load page %d records failed", page->id());
   }
 }
-
 
 void PageRecordsManager::SortRecords(
          std::vector<std::shared_ptr<Schema::RecordBase>>& records,
@@ -307,9 +269,8 @@ class HalfSplitResult {
   bool left_larger = false;
 };
 
-HalfSplitResult HalfSplitRecordGroups(
-                    const std::vector<PageRecordsManager::RecordGroup>* rgroups,
-                    int start, int end) {
+HalfSplitResult HalfSplitRecordGroups(const std::vector<RecordGroup>* rgroups,
+                                      int start, int end) {
   HalfSplitResult result;
   for (int i = start; i <= end; i++) {
     result.right_records += rgroups->at(i).num_records;
@@ -397,7 +358,7 @@ PageRecordsManager::InsertRecordAndSplitPage(const RecordBase* record) {
         LogFATAL("Insert new record to first page's overflow page failed");
       }
       result.emplace_back(page_);
-      result[0].record = plrecords_[0].record_;
+      result[0].record = plrecords_[0].Record();
       return result;
     }
 
@@ -424,10 +385,10 @@ PageRecordsManager::InsertRecordAndSplitPage(const RecordBase* record) {
     if (new_record_inserted || record->InsertToRecordPage(page_) >= 0) {
       DataBaseFiles::BplusTree::ConnectLeaves(page_, page);
       result.emplace_back(page_);
-      result[0].record = plrecords_[0].record_;
+      result[0].record = plrecords_[0].Record();
       result.emplace_back(page);
       result[1].record =
-          plrecords_[rgroups.at(re1.mid_index).start_index].record_;
+          plrecords_[rgroups.at(re1.mid_index).start_index].Record();
       return result;
     }
     else {
@@ -442,10 +403,10 @@ PageRecordsManager::InsertRecordAndSplitPage(const RecordBase* record) {
         }
         DataBaseFiles::BplusTree::ConnectLeaves(of_page, page);
         result.emplace_back(page_);
-        result[0].record = plrecords_[0].record_;
+        result[0].record = plrecords_[0].Record();
         result.emplace_back(page);
         result[1].record =
-          plrecords_[rgroups.at(re1.mid_index).start_index].record_;
+          plrecords_[rgroups.at(re1.mid_index).start_index].Record();
         return result;
       }
       else {
@@ -483,11 +444,11 @@ PageRecordsManager::InsertRecordAndSplitPage(const RecordBase* record) {
         DataBaseFiles::BplusTree::ConnectLeaves(page_, page2);
         DataBaseFiles::BplusTree::ConnectLeaves(tail_page, page);
         result.emplace_back(page_);
-        result[0].record = plrecords_[0].record_;
+        result[0].record = plrecords_[0].Record();
         result.emplace_back(page2);
-        result[1].record = plrecords_[group.start_index].record_;
+        result[1].record = plrecords_[group.start_index].Record();
         result.emplace_back(page);
-        result[2].record = plrecords_[index].record_;
+        result[2].record = plrecords_[index].Record();
         return result;
       }
     }
@@ -495,14 +456,14 @@ PageRecordsManager::InsertRecordAndSplitPage(const RecordBase* record) {
   else {  // Right half is larger.
     // Page 1
     result.emplace_back(page_);
-    result[0].record = plrecords_[0].record_;
+    result[0].record = plrecords_[0].Record();
 
     // Page 2
     auto group = rgroups.at(re1.mid_index);
     int index = group.start_index;
     auto page2 = tree_->AllocateNewPage(DataBaseFiles::TREE_LEAVE);
     result.emplace_back(page2);
-    result[1].record = plrecords_[index].record_;
+    result[1].record = plrecords_[index].Record();
 
     bool new_record_inserted = false;
     auto tail_page = page2;
@@ -578,7 +539,7 @@ PageRecordsManager::InsertRecordAndSplitPage(const RecordBase* record) {
     if (page3) {
       DataBaseFiles::BplusTree::ConnectLeaves(tail_page, page3);
       result.emplace_back(page3);
-      result[2].record = plrecords_[page3_start_index].record_;
+      result[2].record = plrecords_[page3_start_index].Record();
     }
   }
 

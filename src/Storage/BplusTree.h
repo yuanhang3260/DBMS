@@ -7,6 +7,7 @@
 
 #include "Schema/Record.h"
 #include "Schema/DBTable_pb.h"
+#include "Schema/PageRecord_Common.h"
 #include "PageBase.h"
 #include "RecordPage.h"
 
@@ -211,6 +212,9 @@ class BplusTree {
   bool InsertNewRecordToNextLeave(RecordPage* leave,
                                   SearchTreeNodeResult* search_result,
                                   const Schema::RecordBase* record);
+  // Re-distribute records from next leave.
+  bool ReDistributeRecordsFromNextLeave(RecordPage* leave,
+                                        SearchTreeNodeResult* search_result);
 
   // Insert a new record to leave which will split the leave.
   bool InsertNewRecordToLeaveWithSplit(RecordPage* leave,

@@ -1216,6 +1216,63 @@ bool BplusTree::InsertNewRecordToNextLeave(RecordPage* leave,
   return true;
 }
 
+bool BplusTree::ReDistributeRecordsFromNextLeave(
+         RecordPage* leave,
+         SearchTreeNodeResult* search_result) {
+  auto next_leave = FetchPage(search_result->next_child_id);
+  CheckLogFATAL(next_leave, "Failed to fetch next child leave");
+
+  Schema::PageRecordsManager prmanager(next_leave, schema_.get(), key_indexes_,
+                                       file_type_, TREE_LEAVE);
+  std::vector<Schema::RecordGroup> rgroups;
+  prmanager.GroupRecords(&rgroups);
+
+  int min_gap = std::abs(leave->Meta()->space_used() -
+                         next_leave->Meta()->space_used());
+  int gindex = 0;
+  for (; gindex < (int)rgroups.size(); gindex++) {
+    if (std::abs(leave->Meta()->space_used() + rgroups[gindex].size -
+                 next_leave->Meta()->space_used() - rgroups[gindex].size)
+        > min_gap) {
+      break;
+    }
+    if (!leave->PreCheckCanInsert(rgroups[gindex].num_records,
+                                  rgroups[gindex].size)) {
+      break;
+    }
+    // Move from next_leave to leave.
+    for (int index = rgroups[gindex].start_index;
+         index < rgroups[gindex].start_index + rgroups[gindex].num_records;
+         index++) {
+      int slot_id = prmanager.RecordSlotID(index);
+      next_leave->DeleteRecord(slot_id);
+      if (prmanager.Record(index)->InsertToRecordPage(leave) < 0) {
+        LogFATAL("Failed to insert record to page2");
+      }
+    }
+  }
+  // No record is re-distributed.
+  if (gindex == 0) {
+    return true;
+  }
+
+  // Delete original tree node record of next leave from parent.
+  auto parent = FetchPage(next_leave->Meta()->parent_page());
+  CheckLogFATAL(parent, "Failed to fetch parent of next leave");
+  CheckLogFATAL(parent->DeleteRecord(search_result->next_slot),
+                "Failed to delete next leave's original tree node record");
+
+  // Insert new tree node record of next leave to parent.
+  Schema::TreeNodeRecord tn_record;
+  auto new_min_record = prmanager.Record(rgroups[gindex].start_index);
+  ProduceKeyRecordFromLeaveRecord(new_min_record, &tn_record);
+  tn_record.set_page_id(next_leave->id());
+  CheckLogFATAL(InsertTreeNodeRecord(&tn_record, parent),
+                "Failed to insert new tree node record for next leave");
+
+  return true;
+}
+
 bool BplusTree::InsertAfterOverflowLeave(RecordPage* leave,
                                          SearchTreeNodeResult* search_result,
                                          const Schema::RecordBase* record) {
@@ -1265,26 +1322,25 @@ bool BplusTree::InsertAfterOverflowLeave(RecordPage* leave,
     if (InsertNewRecordToNextLeave(leave, search_result, record)) {
       return true;
     }
+
     // Otherwise we need to create a new leave with the new record to insert,
     // and try re-distributing records with the next_leave if possible.
     Schema::TreeNodeRecord tn_record;
     RecordPage* new_leave = CreateNewLeaveWithRecord(record, &tn_record);
     tn_record.set_page_id(new_leave->id());
-    // (TODO) Re-distribute.
+
+    // Re-distribute records from next leave to balance.
+    ReDistributeRecordsFromNextLeave(new_leave, search_result);
+
+    // Insert tree node record of the new leave to parent.
     auto parent = FetchPage(leave->Meta()->parent_page());
     if (!InsertTreeNodeRecord(&tn_record, parent)) {
       LogERROR("Inserting new leave to B+ tree failed");
       return false;
     }
-    RecordPage* page1 = leave;
-    if (search_result->next_leave_id >= 0) {
-      RecordPage* page2 = FetchPage(search_result->next_leave_id);
-      page1 = FetchPage(page2->Meta()->prev_page());
-      ConnectLeaves(new_leave, page2);
-    }
-    else {
-      page1 = GotoOverflowChainEnd(page1);
-    }
+    RecordPage* page2 = FetchPage(search_result->next_leave_id);
+    RecordPage* page1 = FetchPage(page2->Meta()->prev_page());
+    ConnectLeaves(new_leave, page2);
     ConnectLeaves(page1, new_leave);
   }
   else {
@@ -1293,6 +1349,8 @@ bool BplusTree::InsertAfterOverflowLeave(RecordPage* leave,
     Schema::TreeNodeRecord tn_record;
     RecordPage* new_leave = CreateNewLeaveWithRecord(record, &tn_record);
     tn_record.set_page_id(new_leave->id());
+    
+    // Insert tree node record of the new leave to parent.
     auto parent = FetchPage(leave->Meta()->parent_page());
     if (!InsertTreeNodeRecord(&tn_record, parent)) {
       LogERROR("Inserting new leave to B+ tree failed");
