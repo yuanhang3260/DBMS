@@ -1370,6 +1370,121 @@ bool BplusTree::InsertAfterOverflowLeave(RecordPage* leave,
   return true;
 }
 
+bool BplusTree::ReDistributeWithNextLeave(RecordPage* leave,
+                                          SearchTreeNodeResult* search_result,
+                                          const Schema::RecordBase* record) {
+  // Check next child is valid.
+  if (search_result->next_child_id < 0 ||
+      FetchPage(search_result->next_child_id)->Meta()->overflow_page() >= 0) {
+    return false;
+  }
+
+  auto next_leave = FetchPage(search_result->next_child_id);
+  CheckLogFATAL(next_leave, "Failed to fetch next child leave");
+  // If next leave is even more 'full' than current leave, can't redistribute.
+  if (leave->Meta()->space_used() <= next_leave->Meta()->space_used()) {
+    return false;
+  }
+
+  Schema::PageRecordsManager prmanager(next_leave, schema_.get(), key_indexes_,
+                                       file_type_, TREE_LEAVE);
+  // Insert new record, sort and group records.
+  if (!prmanager.InsertNewRecord(record)) {
+    LogFATAL("Can't insert new record to PageRecordsManager");
+  }
+  std::vector<Schema::RecordGroup> rgroups;
+  prmanager.GroupRecords(&rgroups);
+
+  // Find new which record group new record belongs to.
+  int new_record_gindex = 0;
+  for (; new_record_gindex < (int)rgroups.size(); new_record_gindex++) {
+    for (int index = rgroups[new_record_gindex].start_index;
+         index < rgroups[new_record_gindex].start_index +
+                 rgroups[new_record_gindex].num_records;
+         index++) {
+      if (prmanager.RecordSlotID(index) < 0) {
+        break;
+      }
+    }
+  }
+
+  int records_to_move = 0;
+  int size_to_move = 0;
+  bool can_insert_new_record = false;
+  int gindex = rgroups.size() - 1;
+  for (; gindex >= new_record_gindex; gindex--) {
+    records_to_move += rgroups[gindex].num_records;
+    size_to_move += rgroups[gindex].size;
+    if (!next_leave->PreCheckCanInsert(records_to_move, size_to_move)) {
+      records_to_move -= rgroups[gindex].num_records;
+      size_to_move -= rgroups[gindex].size;
+      break;
+    }
+    if (size_to_move >= record->size()) {
+      can_insert_new_record = true;
+      break;
+    }
+  }
+
+  if (!can_insert_new_record) {
+    return false;
+  }
+
+  int left_size = leave->Meta()->space_used() - size_to_move + record->size();
+  int right_size = next_leave->Meta()->space_used() + size_to_move;
+  CheckLogFATAL(prmanager.total_size_ - size_to_move == left_size,
+                "left leave size error");
+  CheckLogFATAL(next_leave->Meta()->space_used() + size_to_move == right_size,
+                "right leave size error");
+
+  int min_gap = std::abs(left_size - right_size);
+  gindex--;
+  for (; left_size > right_size && gindex >= 0; gindex--) {
+    records_to_move += rgroups[gindex].num_records;
+    size_to_move += rgroups[gindex].size;
+    if (!next_leave->PreCheckCanInsert(records_to_move, size_to_move)) {
+      break;
+    }
+
+    left_size -= rgroups[gindex].size;
+    right_size += rgroups[gindex].size;
+    if (std::abs(left_size - right_size) > min_gap) {
+      break;
+    }
+  }
+  gindex++;
+
+  // Move from next_leave to leave.
+  for (int index = rgroups[gindex].start_index;
+       index < (int)rgroups.size();
+       index++) {
+    int slot_id = prmanager.RecordSlotID(index);
+    if (slot_id >= 0) {
+      CheckLogFATAL(leave->DeleteRecord(slot_id),
+                    "Failed to remove record from current leave");
+    }
+    if (prmanager.Record(index)->InsertToRecordPage(next_leave) < 0) {
+      LogFATAL("Failed to insert record to next page");
+    }
+  }
+
+  // Delete original tree node record of next leave from parent.
+  auto parent = FetchPage(next_leave->Meta()->parent_page());
+  CheckLogFATAL(parent, "Failed to fetch parent of next leave");
+  CheckLogFATAL(parent->DeleteRecord(search_result->next_slot),
+                "Failed to delete next leave's original tree node record");
+
+  // Insert new tree node record of next leave to parent.
+  Schema::TreeNodeRecord tn_record;
+  auto new_min_record = prmanager.Record(rgroups[gindex].start_index);
+  ProduceKeyRecordFromLeaveRecord(new_min_record, &tn_record);
+  tn_record.set_page_id(next_leave->id());
+  CheckLogFATAL(InsertTreeNodeRecord(&tn_record, parent),
+                "Failed to insert new tree node record for next leave");
+
+  return true;
+}
+
 bool BplusTree::InsertRecord(const Schema::RecordBase* record) {
   if (!record) {
     LogERROR("record to insert is nullptr");
@@ -1418,7 +1533,7 @@ bool BplusTree::InsertRecord(const Schema::RecordBase* record) {
 
   // Try to re-organize records with next leave, it applicable (next leave
   // must exists, not an overflow leave, and has the same parent).
-  if (ReDistributeRecordsWithNextLeave(crt_page, record)) {
+  if (ReDistributeWithNextLeave(crt_page, &search_result, record)) {
     return true;
   }
 
@@ -1505,11 +1620,6 @@ RecordPage* BplusTree::CreateNewLeaveWithRecord(
     ProduceKeyRecordFromLeaveRecord(record, tn_record);
   }
   return new_leave;
-}
-
-bool BplusTree::ReDistributeRecordsWithNextLeave(
-         RecordPage* leave, const Schema::RecordBase* record) {
-  return false;
 }
 
 bool BplusTree::InsertNewRecordToLeaveWithSplit(

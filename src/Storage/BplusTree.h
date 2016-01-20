@@ -201,8 +201,9 @@ class BplusTree {
         const Schema::RecordBase* leave_record, Schema::RecordBase* tn_record);
 
   // Redistribute records with next leave.
-  bool ReDistributeRecordsWithNextLeave(
-           RecordPage* leave, const Schema::RecordBase* record);
+  bool ReDistributeWithNextLeave(RecordPage* leave,
+                                 SearchTreeNodeResult* search_result,
+                                 const Schema::RecordBase* record);
 
   // Incurring overflow page when inserting new record.
   bool InsertAfterOverflowLeave(RecordPage* leave,
