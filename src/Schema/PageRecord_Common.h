@@ -50,6 +50,7 @@ class PageLoadedRecord {
   int slot_id_ = -1;
 };
 
+
 // Record group.
 class RecordGroup {
  public:
@@ -61,6 +62,32 @@ class RecordGroup {
   int start_index;
   int num_records;
   int size;
+};
+
+
+// Inserted DataRecord with RecordID, used to produce index files.
+class DataRecordWithRid {
+ public:
+  std::shared_ptr<RecordBase> record;
+  RecordID rid;
+
+  static bool Comparator(const DataRecordWithRid& r1,
+                         const DataRecordWithRid& r2,
+                         const std::vector<int>& indexes);
+};
+
+
+// Record ID of a DataRecord may be changed when leaves are splited or merged,
+// and index files needs to be updated.
+class DataRecordRidMutation {
+ public:
+  std::shared_ptr<RecordBase> record;
+  RecordID old_rid;
+  RecordID new_rid;
+
+  static bool Comparator(const DataRecordRidMutation& r1,
+                         const DataRecordRidMutation& r2,
+                         const std::vector<int>& indexes);
 };
 
 

@@ -42,4 +42,20 @@ bool PageLoadedRecord::Comparator(const PageLoadedRecord& r1,
   return RecordBase::RecordComparator(r1.record_, r2.record_, indexes);
 }
 
+
+// *************************** DataRecordWithRid **************************** //
+bool DataRecordWithRid::Comparator(const DataRecordWithRid& r1,
+                                   const DataRecordWithRid& r2,
+                                   const std::vector<int>& indexes) {
+  return RecordBase::RecordComparator(r1.record, r2.record, indexes);
+}
+
+
+// ************************ DataRecordRidMutation *************************** //
+bool DataRecordRidMutation::Comparator(const DataRecordRidMutation& r1,
+                                       const DataRecordRidMutation& r2,
+                                       const std::vector<int>& indexes) {
+  return RecordBase::RecordComparator(r1.record, r2.record, indexes);
+}
+
 }  // namespace Schema

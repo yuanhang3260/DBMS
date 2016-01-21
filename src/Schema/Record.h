@@ -34,6 +34,10 @@ class RecordID {
 
   void Print() const;
 
+  bool IsValid() const { return page_id_ >= 0 && slot_id_ >= 0; }
+
+  void reset() { page_id_ = -1; slot_id_ = -1; }
+
  private:
   int page_id_ = -1;
   int slot_id_ = -1;

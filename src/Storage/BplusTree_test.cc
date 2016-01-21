@@ -222,9 +222,8 @@ class BplusTreeTest: public UnitTest {
     BplusTree tree;
     AssertTrue(tree.CreateFile(tablename, key_indexes, INDEX_DATA),
                "Create B+ tree file faild");
-    for (int i = 0; i < kNumRecordsSource; i++) {
-      tree.BulkLoadRecord((Schema::DataRecord*)v.at(i).get());
-    }
+
+    tree.BulkLoad(v);
   }
 
   void _VerifyAllRecordsInTree(BplusTree* tree) {
@@ -633,31 +632,33 @@ class BplusTreeTest: public UnitTest {
 }  // namespace DataBaseFiles
 
 int main(int argc, char** argv) {
-  DataBaseFiles::FileType file_type = DataBaseFiles::INDEX_DATA;
-  int key_index = 0;
-  if (argc >= 2 && std::string(argv[1]) == "INDEX") {
-    file_type = DataBaseFiles::INDEX;
-  }
-  if (argc >= 3) {
-    key_index = std::stoi(argv[2]);
-  }
+  // DataBaseFiles::FileType file_type = DataBaseFiles::INDEX_DATA;
+  // int key_index = 0;
+  // if (argc >= 2 && std::string(argv[1]) == "INDEX") {
+  //   file_type = DataBaseFiles::INDEX;
+  // }
+  // if (argc >= 3) {
+  //   key_index = std::stoi(argv[2]);
+  // }
 
   DataBaseFiles::BplusTreeTest test;
   test.setup();
   test.Test_SchemaFile();
-  // test.Test_Header_Page_Consistency_Check();
+  test.Test_Header_Page_Consistency_Check();
   // test.Test_Create_Load_Empty_Tree();
-  // for (int i = 0; i < 1; i++) {
-  //   test.Test_BulkLoading();
-  //   test.CheckBplusTree();
-  // }
-  // test.Test_SearchByKey();
-  // test.Test_SplitLeave();
+  
   for (int i = 0; i < 1; i++) {
-    test.Test_InsertRecord(file_type, key_index);
+    test.Test_BulkLoading();
     test.CheckBplusTree();
   }
-  test.teardown();
+  test.Test_SearchByKey();
+
+  // test.Test_SplitLeave();
+  // for (int i = 0; i < 1; i++) {
+  //   test.Test_InsertRecord(file_type, key_index);
+  //   test.CheckBplusTree();
+  // }
+  // test.teardown();
 
   std::cout << "\033[2;32mAll Passed ^_^\033[0m" << std::endl;
   return 0;

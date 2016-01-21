@@ -659,12 +659,50 @@ bool BplusTree::ConnectLeaves(RecordPage* page1, RecordPage* page2) {
   return true;
 }
 
-// BulkLoading data
-bool BplusTree::BulkLoadRecord(Schema::DataRecord* record) {
+std::vector<int> BplusTree::IndexesToCompareLeaveRecords() const {
+  std::vector<int> indexes;
+  if (file_type_ == DataBaseFiles::INDEX_DATA) {
+    indexes = key_indexes_;
+  }
+  else {
+    for (int i = 0; i < (int)key_indexes_.size(); i++) {
+      indexes.push_back(i);
+    }
+  }
+  return indexes;
+}
+
+bool BplusTree::BlukLoadInsertRecordToLeave(RecordPage* leave,
+                                            Schema::RecordBase* record) {
+  int slot_id = record->InsertToRecordPage(leave);
+  if (slot_id >= 0) {
+    bl_status_.last_record.reset(record->Duplicate());
+    bl_status_.rid.set_page_id(leave->id());
+    bl_status_.rid.set_slot_id(slot_id);
+    return true;
+  }
+  return false;
+}
+
+// BulkLoading records.
+bool
+BplusTree::BulkLoad(std::vector<std::shared_ptr<Schema::RecordBase>>& records) {
+  for (int i = 0; i < (int)records.size(); i++) {
+    if (!BulkLoadRecord(records[i].get())) {
+      LogERROR("Load record %d failed, stop loading ...", i);
+      return false;
+    }
+  }
+  return true;
+}
+
+bool BplusTree::BulkLoadRecord(Schema::RecordBase* record) {
   if (!record) {
     LogERROR("Record to insert is nullptr");
     return false;
   }
+
+  bl_status_.rid.reset();
 
   // Try inserting the record to current leave page. If success, we continue.
   // Otherwise it is possible that current leave is nullptr (empty B+ tree,
@@ -672,8 +710,7 @@ bool BplusTree::BulkLoadRecord(Schema::DataRecord* record) {
   // need to allocate a new leave page and continue inserting.
   if (bl_status_.crt_leave &&
       bl_status_.crt_leave->Meta()->is_overflow_page() == 0 &&
-      record->InsertToRecordPage(bl_status_.crt_leave) >= 0) {
-    bl_status_.last_record.reset(record->Duplicate());
+      BlukLoadInsertRecordToLeave(bl_status_.crt_leave, record)) {
     return true;
   }
 
@@ -682,16 +719,17 @@ bool BplusTree::BulkLoadRecord(Schema::DataRecord* record) {
   if (bl_status_.crt_leave && bl_status_.last_record &&
       Schema::RecordBase::CompareRecordsBasedOnIndex(
           record, bl_status_.last_record.get(),
-          key_indexes_) == 0) {
+          IndexesToCompareLeaveRecords()) == 0) {
     bl_status_.last_record.reset(record->Duplicate());
     return CheckBoundaryDuplication(record);
   }
 
   // Normal insertion. Allocate a new leave node and insert the record.
   RecordPage* new_leave = AppendNewLeave();
-  if (record->InsertToRecordPage(new_leave) < 0) {
+  if (!BlukLoadInsertRecordToLeave(new_leave, record)) {
     LogFATAL("Failed to insert record to new leave node");
   }
+
   // We add this new leave node with one record, to a upper tree node. Note that
   // we only do this when having allocated a new leave node and had just first
   // record inserted to it.
@@ -701,16 +739,12 @@ bool BplusTree::BulkLoadRecord(Schema::DataRecord* record) {
     LogFATAL("Failed to add leave to B+ tree node");
   }
 
-  // Keep a copy of last inserted record. We need this copy to check record
-  // duplication in CheckBoundaryDuplication.
-  bl_status_.last_record.reset(record->Duplicate());
-
   return true;
 }
 
 bool BplusTree::CheckBoundaryDuplication(Schema::RecordBase* record) {
   // Try inserting first. This deals with a non-full overflow page.
-  if (record->InsertToRecordPage(bl_status_.crt_leave) >= 0) {
+  if (BlukLoadInsertRecordToLeave(bl_status_.crt_leave, record)) {
     return true;
   }
 
@@ -724,7 +758,7 @@ bool BplusTree::CheckBoundaryDuplication(Schema::RecordBase* record) {
   for (; index >= 0; index--) {
     if (Schema::RecordBase::CompareRecordsBasedOnIndex(
             record, bl_status_.last_record.get(),
-            key_indexes_) != 0) {
+            IndexesToCompareLeaveRecords()) != 0) {
       break;
     }
   }
@@ -749,20 +783,18 @@ bool BplusTree::CheckBoundaryDuplication(Schema::RecordBase* record) {
     ProduceKeyRecordFromLeaveRecord(mid_record, &tn_record);
     if (!AddLeaveToTree(new_leave, &tn_record)) {
       LogFATAL("Failed to add leave to B+ tree");
-      return false;
     }
     // Re-try inserting record to new crt_leave.
-    if (record->InsertToRecordPage(new_leave) >= 0) {
+    if (BlukLoadInsertRecordToLeave(new_leave, record)) {
       return true;
     }
   }
 
   //LogINFO("New duplicated record needs a new overflow page.");
   RecordPage* overflow_leave = AppendNewOverflowLeave();
-  if (record->InsertToRecordPage(overflow_leave) < 0) {
+  if (!BlukLoadInsertRecordToLeave(overflow_leave, record)) {
     LogFATAL("Insert first duplicated record to overflow page faield - "
              "This should not happen!");
-    return false;
   }
 
   return true;

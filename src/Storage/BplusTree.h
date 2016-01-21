@@ -80,10 +80,18 @@ class BplusTree {
   bool SaveToDisk() const;
   bool LoadFromDisk();
 
+  // Produce indexes to compare records. For INDEX-DATA file, they are key
+  // indexes; For INDEX file, they are [0, 1, 2 ... (num_keys-1)]
+  std::vector<int> IndexesToCompareLeaveRecords() const;
+
+  bool BlukLoadInsertRecordToLeave(RecordPage* leave,
+                                   Schema::RecordBase* record);
+
   // BulkLoading data. Input is a list of Record consisting of various fields
   // defined in Schema/DataTypes. These records must have been sorted based
   // on a key which consists of fields from Record speficed from key_indexes.
-  bool BulkLoadRecord(Schema::DataRecord* record);
+  bool BulkLoad(std::vector<std::shared_ptr<Schema::RecordBase>>& records);
+  bool BulkLoadRecord(Schema::RecordBase* record);
 
   // Validity check for the B+ tree.
   bool ValidityCheck();
@@ -262,6 +270,7 @@ class BplusTree {
     RecordPage* crt_leave = nullptr;
     RecordPage* prev_leave = nullptr;
     std::shared_ptr<Schema::RecordBase> last_record;
+    Schema::RecordID rid;
   };
 
   BulkLoadingStatus bl_status_;
