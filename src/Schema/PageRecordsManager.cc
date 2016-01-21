@@ -252,6 +252,7 @@ bool PageRecordsManager::InsertNewRecord(const RecordBase* record) {
                               ProduceIndexesToCompare());
   std::stable_sort(plrecords_.begin(), plrecords_.end(), comparator);
   total_size_ += record->size();
+
   return true;
 }
 

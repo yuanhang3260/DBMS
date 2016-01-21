@@ -1381,12 +1381,14 @@ bool BplusTree::ReDistributeWithNextLeave(RecordPage* leave,
 
   auto next_leave = FetchPage(search_result->next_child_id);
   CheckLogFATAL(next_leave, "Failed to fetch next child leave");
+  // printf("(%d, %d)\n", leave->Meta()->space_used(),
+  //        next_leave->Meta()->space_used());
   // If next leave is even more 'full' than current leave, can't redistribute.
   if (leave->Meta()->space_used() <= next_leave->Meta()->space_used()) {
     return false;
   }
 
-  Schema::PageRecordsManager prmanager(next_leave, schema_.get(), key_indexes_,
+  Schema::PageRecordsManager prmanager(leave, schema_.get(), key_indexes_,
                                        file_type_, TREE_LEAVE);
   // Insert new record, sort and group records.
   if (!prmanager.InsertNewRecord(record)) {
@@ -1397,14 +1399,20 @@ bool BplusTree::ReDistributeWithNextLeave(RecordPage* leave,
 
   // Find new which record group new record belongs to.
   int new_record_gindex = 0;
+  bool found_group = false;
+  // printf("rgroup size = %d\n", (int)rgroups.size());
   for (; new_record_gindex < (int)rgroups.size(); new_record_gindex++) {
     for (int index = rgroups[new_record_gindex].start_index;
          index < rgroups[new_record_gindex].start_index +
                  rgroups[new_record_gindex].num_records;
          index++) {
       if (prmanager.RecordSlotID(index) < 0) {
+        found_group = true;
         break;
       }
+    }
+    if (found_group) {
+      break;
     }
   }
 
@@ -1412,9 +1420,14 @@ bool BplusTree::ReDistributeWithNextLeave(RecordPage* leave,
   int size_to_move = 0;
   bool can_insert_new_record = false;
   int gindex = rgroups.size() - 1;
+  // printf("size to insert = %d\n", record->size());
+  // printf("new_record_gindex = %d\n", new_record_gindex);
+  // printf("gindex = %d\n", gindex);
   for (; gindex >= new_record_gindex; gindex--) {
     records_to_move += rgroups[gindex].num_records;
     size_to_move += rgroups[gindex].size;
+    // printf("records_to_move = %d\n", records_to_move);
+    // printf("size_to_move = %d\n", size_to_move);
     if (!next_leave->PreCheckCanInsert(records_to_move, size_to_move)) {
       records_to_move -= rgroups[gindex].num_records;
       size_to_move -= rgroups[gindex].size;
@@ -1456,7 +1469,7 @@ bool BplusTree::ReDistributeWithNextLeave(RecordPage* leave,
 
   // Move from next_leave to leave.
   for (int index = rgroups[gindex].start_index;
-       index < (int)rgroups.size();
+       index < (int)prmanager.NumRecords();
        index++) {
     int slot_id = prmanager.RecordSlotID(index);
     if (slot_id >= 0) {
@@ -1465,6 +1478,14 @@ bool BplusTree::ReDistributeWithNextLeave(RecordPage* leave,
     }
     if (prmanager.Record(index)->InsertToRecordPage(next_leave) < 0) {
       LogFATAL("Failed to insert record to next page");
+    }
+  }
+
+  // If new record is not in next leave, it needs to be inserted to current
+  // leave.
+  if (gindex > new_record_gindex) {
+    if (record->InsertToRecordPage(leave) < 0) {
+      LogFATAL("Failed to insert new record to current leave");
     }
   }
 
@@ -1481,6 +1502,9 @@ bool BplusTree::ReDistributeWithNextLeave(RecordPage* leave,
   tn_record.set_page_id(next_leave->id());
   CheckLogFATAL(InsertTreeNodeRecord(&tn_record, parent),
                 "Failed to insert new tree node record for next leave");
+
+  // printf("(%d, %d)\n", leave->Meta()->space_used(),
+  //        next_leave->Meta()->space_used());
 
   return true;
 }
