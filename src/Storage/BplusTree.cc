@@ -1541,7 +1541,7 @@ bool BplusTree::ReDistributeWithNextLeave(RecordPage* leave,
   return true;
 }
 
-bool BplusTree::InsertRecord(const Schema::RecordBase* record) {
+bool BplusTree::Do_InsertRecord(const Schema::RecordBase* record) {
   if (!record) {
     LogERROR("record to insert is nullptr");
     return false;

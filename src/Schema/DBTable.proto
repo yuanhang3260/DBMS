@@ -20,5 +20,7 @@ message TableSchema {
   optional string name = 1;
   repeated TableField fields = 2;
 
+  repeated int32 primary_key_indexes = 3;
+
   // TODO: foreign keys, constraints, assertions ...
 }

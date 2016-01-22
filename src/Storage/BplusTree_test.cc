@@ -55,6 +55,8 @@ class BplusTreeTest: public UnitTest {
     field->set_index(5);
     field->set_type(Schema::TableField::CHARARR);
     field->set_size(20);
+
+    schema->add_primary_key_indexes(0);
   }
 
   void InitRecordResource() {
@@ -615,13 +617,13 @@ class BplusTreeTest: public UnitTest {
       // printf("i = %d, record size = %d\n", i, record_resource[i]->size());
       // record_resource[i]->Print();
       if (file_type_ == INDEX_DATA) {
-        tree.InsertRecord(record_resource[i].get());
+        tree.Do_InsertRecord(record_resource[i].get());
       }
       else {
         Schema::IndexRecord irecord;
         ((Schema::DataRecord*)record_resource[i].get())->
             ExtractKey(&irecord, key_indexes);
-        tree.InsertRecord(&irecord);
+        tree.Do_InsertRecord(&irecord);
       }
     }
     // Search and verify records.

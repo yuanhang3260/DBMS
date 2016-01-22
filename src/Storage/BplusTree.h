@@ -101,7 +101,7 @@ class BplusTree {
                   std::vector<std::shared_ptr<Schema::RecordBase>>* result);
 
   // Insert a data record to the B+ tree.
-  bool InsertRecord(const Schema::RecordBase* record);
+  bool Do_InsertRecord(const Schema::RecordBase* record);
 
   // Allocate a new page in bulkloading.
   RecordPage* AllocateNewPage(PageType page_type);

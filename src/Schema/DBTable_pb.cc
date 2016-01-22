@@ -18,7 +18,7 @@ std::shared_ptr<::proto::MessageReflection> TableSchema_reflection_;
 
 }  // namepsace
 
-void static_init_default_instances_home_hy_Desktop_Projects_DBMS_src_Schema_DBTable() {
+void static_init_default_instances_usr_local_google_home_hangyuan_Desktop_test_DBMS_src_Schema_DBTable() {
   if (Schema::TableField::default_instance_ == NULL) {
     Schema::TableField::default_instance_ = new Schema::TableField();
     Schema::TableField::default_instance_->InitAsDefaultInstance();
@@ -29,18 +29,18 @@ void static_init_default_instances_home_hy_Desktop_Projects_DBMS_src_Schema_DBTa
   }
 }
 
-void static_init_home_hy_Desktop_Projects_DBMS_src_Schema_DBTable() {
+void static_init_usr_local_google_home_hangyuan_Desktop_test_DBMS_src_Schema_DBTable() {
   static bool already_called = false;
   if (already_called) return;
   already_called = true;
 
   ::proto::ProtoParser::ProtoParser parser(
       ::proto::ProtoParser::CPP,
-      "/home/hy/Desktop/Projects/DBMS/src/Schema/DBTable.proto");
+      "/usr/local/google/home/hangyuan/Desktop/test/DBMS/src/Schema/DBTable.proto");
   CHECK(parser.ParseProto(),
-        "static class initialization for /home/hy/Desktop/Projects/DBMS/src/Schema/DBTable.proto failed");
+        "static class initialization for /usr/local/google/home/hangyuan/Desktop/test/DBMS/src/Schema/DBTable.proto failed");
 
-  static_init_default_instances_home_hy_Desktop_Projects_DBMS_src_Schema_DBTable();
+  static_init_default_instances_usr_local_google_home_hangyuan_Desktop_test_DBMS_src_Schema_DBTable();
 
   int i = 0;
   // static init for class TableField
@@ -64,9 +64,10 @@ void static_init_home_hy_Desktop_Projects_DBMS_src_Schema_DBTable() {
   ::proto::MessageFactory::RegisterGeneratedMessage(TableField_reflection_);
 
   // static init for class TableSchema
-  static const int TableSchema_offsets_[2] = {
+  static const int TableSchema_offsets_[3] = {
     PROTO_MESSAGE_FIELD_OFFSET(Schema::TableSchema, name_),
     PROTO_MESSAGE_FIELD_OFFSET(Schema::TableSchema, fields_),
+    PROTO_MESSAGE_FIELD_OFFSET(Schema::TableSchema, primary_key_indexes_),
   };
   i = 0;
   for (auto& field: parser.mutable_messages_list()[1]->mutable_fields_list()) {
@@ -83,12 +84,12 @@ void static_init_home_hy_Desktop_Projects_DBMS_src_Schema_DBTable() {
 
 }
 
-// Force static_init_home_hy_Desktop_Projects_DBMS_src_Schema_DBTable() to be called at initialization time.
-struct static_init_forcer_home_hy_Desktop_Projects_DBMS_src_Schema_DBTable {
-  static_init_forcer_home_hy_Desktop_Projects_DBMS_src_Schema_DBTable() {
-    static_init_home_hy_Desktop_Projects_DBMS_src_Schema_DBTable();
+// Force static_init_usr_local_google_home_hangyuan_Desktop_test_DBMS_src_Schema_DBTable() to be called at initialization time.
+struct static_init_forcer_usr_local_google_home_hangyuan_Desktop_test_DBMS_src_Schema_DBTable {
+  static_init_forcer_usr_local_google_home_hangyuan_Desktop_test_DBMS_src_Schema_DBTable() {
+    static_init_usr_local_google_home_hangyuan_Desktop_test_DBMS_src_Schema_DBTable();
   }
-} static_init_forcer_home_hy_Desktop_Projects_DBMS_src_Schema_DBTable_obj_;
+} static_init_forcer_usr_local_google_home_hangyuan_Desktop_test_DBMS_src_Schema_DBTable_obj_;
 
 
 namespace Schema {
@@ -253,7 +254,7 @@ void TableField::Swap(TableField* other) {
 // default_instance()
 const TableField& TableField::default_instance() {
   if (default_instance_ == NULL) {
-    static_init_default_instances_home_hy_Desktop_Projects_DBMS_src_Schema_DBTable();
+    static_init_default_instances_usr_local_google_home_hangyuan_Desktop_test_DBMS_src_Schema_DBTable();
   }
   return *default_instance_;
 }
@@ -395,6 +396,7 @@ void TableSchema::CopyFrom(const TableSchema& other) {
   for (const TableField* p: other.fields().GetElements()) {
     fields_.AddAllocated(new TableField(*p));
   }
+  primary_key_indexes_ = other.primary_key_indexes();
   for (unsigned int i = 0; i < sizeof(has_bits_); i++) {
     has_bits_[i] = other.has_bits_[i];
   }
@@ -407,6 +409,7 @@ void TableSchema::MoveFrom(TableSchema&& other) {
   }
   name_ = std::move(other.mutable_name());
   fields_ = std::move(other.mutable_fields());
+  primary_key_indexes_ = std::move(other.mutable_primary_key_indexes());
   for (unsigned int i = 0; i < sizeof(has_bits_); i++) {
     other.has_bits_[i] = 0;
   }
@@ -424,6 +427,11 @@ bool TableSchema::Equals(const TableSchema& other) const {
   }
   for (unsigned int i = 0; i < fields_.size(); i++) {
     if (!fields_.at(i).Equals(other.fields_.at(i))) {
+      return false;
+    }
+  }
+  for (unsigned int i = 0; i < primary_key_indexes_.size(); i++) {
+    if (primary_key_indexes_.at(i) != other.primary_key_indexes_.at(i)) {
       return false;
     }
   }
@@ -455,6 +463,14 @@ void TableSchema::Print(int indent_num) const {
         ele.Print(indent_num + 1);
     }
   }
+  if (primary_key_indexes_size() > 0) {
+    PrintIndent(indent_num + 1);
+    std::cout << "primary_key_indexes: " << "[";
+    for (const auto& ele: primary_key_indexes_) {
+        std::cout << ele << ", ";
+    }
+    std::cout << "]" << std::endl;
+  }
   PrintIndent(indent_num);
   std::cout << "}" << std::endl;
 }
@@ -480,6 +496,10 @@ void TableSchema::Swap(TableSchema* other) {
   other->mutable_fields() = std::move(fields_);
   fields_ = std::move(fields_tmp__);
 
+  ::proto::RepeatedField<int> primary_key_indexes_tmp__ = std::move(other->mutable_primary_key_indexes());
+  other->mutable_primary_key_indexes() = std::move(primary_key_indexes_);
+  primary_key_indexes_ = std::move(primary_key_indexes_tmp__);
+
   // swap has_bits
   for (unsigned int i = 0; i < sizeof(has_bits_); i++) {
     has_bits_[i] = buf[i + sizeof(has_bits_)];
@@ -491,7 +511,7 @@ void TableSchema::Swap(TableSchema* other) {
 // default_instance()
 const TableSchema& TableSchema::default_instance() {
   if (default_instance_ == NULL) {
-    static_init_default_instances_home_hy_Desktop_Projects_DBMS_src_Schema_DBTable();
+    static_init_default_instances_usr_local_google_home_hangyuan_Desktop_test_DBMS_src_Schema_DBTable();
   }
   return *default_instance_;
 }
@@ -562,6 +582,37 @@ const ::proto::RepeatedPtrField<TableField>& TableSchema::fields() const {
 
 ::proto::RepeatedPtrField<TableField>& TableSchema::mutable_fields() {
   return fields_;
+}
+
+// "primary_key_indexes" = 3
+int TableSchema::primary_key_indexes_size() const {
+  return primary_key_indexes_.size();
+}
+
+int TableSchema::primary_key_indexes(int index) const {
+  return primary_key_indexes_.Get(index);
+}
+
+void TableSchema::set_primary_key_indexes(int index, int value) {
+  if ((int)primary_key_indexes_.size() > index) {
+    primary_key_indexes_.Set(index, value);
+  }
+}
+
+void TableSchema::add_primary_key_indexes(int value) {
+   primary_key_indexes_.Add(value);
+}
+
+void TableSchema::clear_primary_key_indexes() {
+  primary_key_indexes_ .Clear();
+}
+
+const ::proto::RepeatedField<int>& TableSchema::primary_key_indexes() const {
+  return primary_key_indexes_;
+}
+
+::proto::RepeatedField<int>& TableSchema::mutable_primary_key_indexes() {
+  return primary_key_indexes_;
 }
 
 }  // namespace Schema
