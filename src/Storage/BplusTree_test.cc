@@ -5,6 +5,7 @@
 #include "BplusTree.h"
 #include "Schema/DBTable_pb.h"
 #include "Schema/PageRecordsManager.h"
+#include "DataBase/Table.h"
 
 namespace DataBaseFiles {
 
@@ -13,6 +14,7 @@ class BplusTreeTest: public UnitTest {
   std::string tablename = "testTable";
   std::vector<int> key_indexes;
   Schema::TableSchema* schema = nullptr;
+  DataBase::Table* table;
   std::map<int, std::shared_ptr<Schema::DataRecord>> record_resource;
   const int kNumRecordsSource = 10000;
 
@@ -112,12 +114,17 @@ class BplusTreeTest: public UnitTest {
 
   void setup() override {
     InitSchema();
+    CreateSchemaFile(tablename);
     InitRecordResource();
+    table = new DataBase::Table(tablename);
   }
 
   void teardown() override {
     if (schema) {
       delete schema;
+    }
+    if (table) {
+      delete table;
     }
   }
 
@@ -143,25 +150,8 @@ class BplusTreeTest: public UnitTest {
     return true;
   }
 
-  void Test_SchemaFile() {
-    std::string tablename = "testTable";
-    AssertTrue(CreateSchemaFile(tablename));
-
-    // Create a B+ tree and load the schema.
-    BplusTree tree;
-    tree.set_tablename(tablename);
-    tree.LoadSchema();
-    const auto* loaded_schema = tree.schema();
-    AssertTrue(loaded_schema->Equals(*schema),
-               "Loaded schema differs from original");
-
-    loaded_schema->Print();
-  }
-
   void Test_Header_Page_Consistency_Check() {
-    BplusTree tree;
-    AssertTrue(tree.CreateFile(tablename, key_indexes, INDEX_DATA),
-               "Create B+ tree file faild");
+    BplusTree tree(table, INDEX_DATA, key_indexes);
 
     tree.meta()->set_num_pages(1);
     AssertFalse(tree.SaveToDisk());
@@ -185,31 +175,20 @@ class BplusTreeTest: public UnitTest {
   }
 
   void Test_Create_Load_Empty_Tree() {
-    std::string tablename = "testTable";
-    // Create a new empty B+ tree and save it file.
-    {
-      BplusTree tree;
-      AssertTrue(tree.CreateFile(tablename, key_indexes, INDEX_DATA),
-                 "Create B+ tree file faild");
-      AssertTrue(tree.SaveToDisk(), "Save to disk failed");
-    }
+    BplusTree tree(table, INDEX_DATA, key_indexes);
 
-    // Load a B +Tree from this file.
-    {
-      BplusTree tree2(tablename, key_indexes);
-      AssertEqual(INDEX_DATA, tree2.meta()->file_type());
-      AssertEqual(0, tree2.meta()->num_pages());
-      AssertEqual(0, tree2.meta()->num_free_pages());
-      AssertEqual(0, tree2.meta()->num_used_pages());
-      AssertEqual(-1, tree2.meta()->free_page());
-      AssertEqual(-1, tree2.meta()->root_page());
-      AssertEqual(0, tree2.meta()->num_leaves());
-      AssertEqual(0, tree2.meta()->depth());
-    }
+    AssertEqual(INDEX_DATA, tree.meta()->file_type());
+    AssertEqual(0, tree.meta()->num_pages());
+    AssertEqual(0, tree.meta()->num_free_pages());
+    AssertEqual(0, tree.meta()->num_used_pages());
+    AssertEqual(-1, tree.meta()->free_page());
+    AssertEqual(-1, tree.meta()->root_page());
+    AssertEqual(0, tree.meta()->num_leaves());
+    AssertEqual(0, tree.meta()->depth());
   }
 
-  void CheckBplusTree() {
-    BplusTree tree(tablename, key_indexes);
+  void CheckBplusTree(FileType file_type) {
+    BplusTree tree(table, file_type, key_indexes);
     AssertTrue(tree.ValidityCheck(), "Check B+ tree failed");
     printf("Good B+ Tree!\n");
   }
@@ -221,11 +200,10 @@ class BplusTreeTest: public UnitTest {
     }
     Schema::PageRecordsManager::SortRecords(v, key_indexes);
 
-    BplusTree tree;
-    AssertTrue(tree.CreateFile(tablename, key_indexes, INDEX_DATA),
-               "Create B+ tree file faild");
-
+    BplusTree tree(table, INDEX_DATA, key_indexes);
     tree.BulkLoad(v);
+
+    _VerifyAllRecordsInTree(&tree);
   }
 
   void _VerifyAllRecordsInTree(BplusTree* tree) {
@@ -263,23 +241,6 @@ class BplusTreeTest: public UnitTest {
     }
   }
 
-  void Test_SearchByKey() {
-    BplusTree tree(tablename, key_indexes);
-    Schema::RecordBase key;
-    key.AddField(new Schema::LongIntType(-1));
-    key.AddField(new Schema::StringType("hello"));
-
-    std::vector<std::shared_ptr<Schema::RecordBase>> result;
-    tree.SearchByKey(&key, &result);
-
-    printf("Searched %d records matching key (-1, \"hello\")\n",
-           (int)result.size());
-
-    // Scan all records and search one by one.
-    // First merge records with the same key.
-    _VerifyAllRecordsInTree(&tree);
-  }
-
   void _GenerateIndeRecord(Schema::IndexRecord* irecord, char c, int len) {
     // Reserve 9 bytes for '\0' and rid (8 bytes).
     len -= 9;
@@ -306,10 +267,8 @@ class BplusTreeTest: public UnitTest {
 
   void Test_SplitLeave() {
     // Create index for field "name".
-    BplusTree tree;
     std::vector<int> key_index{0};
-    AssertTrue(tree.CreateFile(tablename, key_index, INDEX),
-               "Create B+ tree file faild");
+    BplusTree tree(table, INDEX, key_indexes);
 
     {
       // page 1 <--> page2
@@ -608,9 +567,8 @@ class BplusTreeTest: public UnitTest {
     InitRecordResource();
     key_indexes = std::vector<int>{key_index};
 
-    BplusTree tree;
-    AssertTrue(tree.CreateFile(tablename, key_indexes, file_type_),
-               "Create B+ tree file faild");
+    BplusTree tree(table, file_type_, key_indexes);
+    tree.CreateBplusTreeFile();
     for (int i = 0; i < kNumRecordsSource; i++) {
       // printf("-------------------------------------------------------------\n");
       // printf("-------------------------------------------------------------\n");
@@ -645,23 +603,21 @@ int main(int argc, char** argv) {
 
   DataBaseFiles::BplusTreeTest test;
   test.setup();
-  test.Test_SchemaFile();
-  test.Test_Header_Page_Consistency_Check();
+  //test.Test_Header_Page_Consistency_Check();
   // test.Test_Create_Load_Empty_Tree();
   
   for (int i = 0; i < 1; i++) {
     test.Test_BulkLoading();
-    test.CheckBplusTree();
+    test.CheckBplusTree(DataBaseFiles::INDEX_DATA);
   }
-  test.Test_SearchByKey();
 
   // test.Test_SplitLeave();
   // for (int i = 0; i < 1; i++) {
   //   test.Test_InsertRecord(file_type, key_index);
-  //   test.CheckBplusTree();
+  //   test.CheckBplusTree(file_type);
   // }
-  // test.teardown();
 
+  test.teardown();
   std::cout << "\033[2;32mAll Passed ^_^\033[0m" << std::endl;
   return 0;
 }

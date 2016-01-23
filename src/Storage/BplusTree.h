@@ -8,11 +8,16 @@
 #include "Schema/Record.h"
 #include "Schema/DBTable_pb.h"
 #include "Schema/PageRecord_Common.h"
+#include "DataBase/Table.h"
 #include "PageBase.h"
 #include "RecordPage.h"
 
 namespace Schema {
   class PageRecordsManager;
+}
+
+namespace DataBase {
+  class Table;
 }
 
 namespace DataBaseFiles {
@@ -58,23 +63,24 @@ class BplusTree {
  public:
   BplusTree() = default;
   // Contruct B+ tree from an existing file.
-  BplusTree(std::string tablename, std::vector<int> key_indexes);
+  BplusTree(DataBase::Table* table,
+            FileType file_type,
+            std::vector<int> key_indexes);
 
   // Destructor
   virtual ~BplusTree();
 
   // Accessors
-  DEFINE_ACCESSOR(tablename, std::string);
   DEFINE_ACCESSOR(file, FILE*);
+  DEFINE_ACCESSOR(table, DataBase::Table*);
   DEFINE_ACCESSOR(key_indexes, std::vector<int>);
   DEFINE_ACCESSOR_ENUM(file_type, FileType);
   BplusTreeHeaderPage* meta() { return header_.get(); }
   RecordPage* root();
-  Schema::TableSchema* schema() { return schema_.get(); }
+  Schema::TableSchema* schema() const;
 
-  // Create an index or index-data file based on B+ tree;
-  bool CreateFile(std::string tablename, std::vector<int> key_indexes,
-                  FileType file_type);
+  // Create the B+ tree file;
+  bool CreateBplusTreeFile();
 
   // Load and save the B+ tree
   bool SaveToDisk() const;
@@ -116,7 +122,7 @@ class BplusTree {
 
  protected:
   // Generate B+ tree file name, based on table name, key indexes and file type.
-  std::string GenerateBplusTreeFilename(FileType file_type);
+  std::string GenerateBplusTreeFileName(FileType file_type);
   // Load header page from disk.
   bool LoadHeaderPage();
   // Load root node from disk.
@@ -242,17 +248,16 @@ class BplusTree {
       const Schema::RecordBase* record,
       Schema::TreeNodeRecord* tn_record=nullptr);
 
-  std::string tablename_;
   FILE* file_ = nullptr;
 
-  // Index of fields in key.
-  std::vector<int> key_indexes_;
+  // Table Schema
+  DataBase::Table* table_;
 
   // FileType
   FileType file_type_ = UNKNOWN_FILETYPE;
 
-  // Table Schema
-  std::unique_ptr<Schema::TableSchema> schema_;
+  // Index of fields in key.
+  std::vector<int> key_indexes_;
 
   // Header page contains meta data of this B+ tree.
   std::unique_ptr<BplusTreeHeaderPage> header_;

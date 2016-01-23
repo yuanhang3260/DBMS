@@ -196,83 +196,45 @@ BplusTree::~BplusTree() {
   }
 }
 
-BplusTree::BplusTree(std::string tablename, std::vector<int> key_indexes) :
-    tablename_(tablename),
+BplusTree::BplusTree(DataBase::Table* table,
+                     FileType file_type,
+                     std::vector<int> key_indexes) :
+    table_(table),
+    file_type_(file_type),
     key_indexes_(key_indexes) {
-  std::string btree_filename = GenerateBplusTreeFilename(UNKNOWN_FILETYPE);
-
-  file_ = fopen(btree_filename.c_str(), "r+");
-  if (!file_) {
-    LogERROR("file name %s", btree_filename.c_str());
-    throw std::runtime_error("Can't init B+ tree");
-  }
-
-  // Load table schema, header page and root node.
-  if (!LoadFromDisk()) {
-    throw std::runtime_error("Can't init B+ tree");
-  }
-}
-
-std::string BplusTree::GenerateBplusTreeFilename(FileType file_type) {
-  std::string filename = kDataDirectory + tablename_ + "(";
-  for (int index: key_indexes_) {
-    filename += std::to_string(index) + "_";
-  }
-  filename += ")";
+  std::string filename = table_->BplusTreeFileName(file_type, key_indexes);
   
-  if (file_type == UNKNOWN_FILETYPE) {
-    // Check file type.
-    // Data file.
-    std::string fullname = filename + ".indata";
-    if (access(fullname.c_str(), F_OK) != -1) {
-      file_type_ = INDEX_DATA;
-      return fullname;
-    }
-
-    // Index file.
-    fullname = filename + ".index";
-    if (access(fullname.c_str(), F_OK) != -1) {
-      file_type_ = INDEX;
-      return fullname;
+  file_ = fopen(filename.c_str(), "r+");
+  if (file_) {
+    if (!LoadFromDisk()) {
+      throw std::runtime_error("Can't init B+ tree");
     }
   }
-  else if (file_type == INDEX_DATA) {
-    return filename + ".indata";
+  else {
+    CheckLogFATAL(CreateBplusTreeFile(), "Failed to create new B+ tree file");
   }
-  else if (file_type == INDEX) {
-    return filename + ".index";
-  }
-  return "unknown_filename";
 }
 
-bool BplusTree::LoadSchema() {
-  std::string schema_filename = kDataDirectory + tablename_ + ".schema.pb";
-
-  struct stat stat_buf;
-  int re = stat(schema_filename.c_str(), &stat_buf);
-  if (re < 0) {
-    LogERROR("Failed to stat schema file %s", schema_filename.c_str());
+bool BplusTree::CreateBplusTreeFile() {
+  if (!table_) {
+    LogERROR("No database table for this B+ tree");
     return false;
   }
 
-  int size = stat_buf.st_size;
-  FILE* file = fopen(schema_filename.c_str(), "r");
-  if (!file) {
-    LogERROR("Failed to open schema file %s", schema_filename.c_str());
+  std::string filename = table_->BplusTreeFileName(file_type_, key_indexes_);
+  if (file_) {
+    fclose(file_);
+  }
+
+  file_ = fopen(filename.c_str(), "w+");
+  if (!file_) {
+    LogERROR("open file %s failed", filename.c_str());
     return false;
   }
-  // Read schema file.
-  char buf[size];
-  re = fread(buf, 1, size, file);
-  if (re != size) {
-    LogERROR("Read schema file %s error, expect %d bytes, actual %d",
-             schema_filename.c_str(), size, re);
-    return false;
-  }
-  fclose(file);
-  // Parse TableSchema proto data.
-  schema_.reset(new Schema::TableSchema());
-  schema_->DeSerialize(buf, size);
+
+  // Create header page.
+  header_.reset(new BplusTreeHeaderPage(file_, file_type_));
+
   return true;
 }
 
@@ -325,37 +287,8 @@ RecordPage* BplusTree::root() {
   return nullptr;
 }
 
-bool BplusTree::CreateFile(std::string tablename,
-                           std::vector<int> key_indexes,
-                           FileType file_type) {
-  tablename_ = tablename;
-  key_indexes_ = key_indexes;
-  file_type_ = file_type;
-
-  if (!schema_) {
-    if (!LoadSchema()) {
-      LogERROR("Failed to load schema while creating new B+ tree for table %s",
-               tablename_.c_str());
-      return false;
-    }
-  }
-
-  std::string filename = GenerateBplusTreeFilename(file_type);
-  if (file_) {
-    LogINFO("Existing B+ tree file, closing it ...");
-    fclose(file_);
-  }
-
-  file_ = fopen(filename.c_str(), "w+");
-  if (!file_) {
-    LogERROR("open file %s failed", filename.c_str());
-    return false;
-  }
-
-  // Create header page.
-  header_.reset(new BplusTreeHeaderPage(file_, file_type));
-
-  return true;
+Schema::TableSchema* BplusTree::schema() const {
+  return table_->schema();
 }
 
 bool BplusTree::SaveToDisk() const {
@@ -369,10 +302,6 @@ bool BplusTree::SaveToDisk() const {
 }
 
 bool BplusTree::LoadFromDisk() {
-  if (!LoadSchema()) {
-    return false;
-  }
-
   if (!LoadHeaderPage()) {
     return false;
   }
@@ -476,7 +405,7 @@ bool BplusTree::InsertTreeNodeRecord(Schema::TreeNodeRecord* tn_record,
 
   // The parent is full and needs to be split.
   Schema::PageRecordsManager prmanager(tn_page,
-                                       schema_.get(), key_indexes_,
+                                       schema(), key_indexes_,
                                        file_type_,
                                        tn_page->Meta()->page_type());
 
@@ -565,7 +494,7 @@ bool BplusTree::InsertTreeNodeRecord(Schema::TreeNodeRecord* tn_record,
 
 bool BplusTree::AddFirstLeaveToTree(RecordPage* leave) {
   Schema::TreeNodeRecord min_tn_record;
-  min_tn_record.InitRecordFields(schema_.get(), key_indexes_,
+  min_tn_record.InitRecordFields(schema(), key_indexes_,
                                  file_type_, DataBaseFiles::TREE_NODE);
   RecordPage* tree_node = AllocateNewPage(TREE_NODE);
   header_->set_root_page(tree_node->id());
@@ -685,8 +614,10 @@ bool BplusTree::BlukLoadInsertRecordToLeave(RecordPage* leave,
 }
 
 // BulkLoading records.
-bool
-BplusTree::BulkLoad(std::vector<std::shared_ptr<Schema::RecordBase>>& records) {
+bool BplusTree::BulkLoad(
+         std::vector<std::shared_ptr<Schema::RecordBase>>& records) {
+  CheckLogFATAL(CreateBplusTreeFile(),
+                "Failed to create B+ tree file for BulkLoad");
   for (int i = 0; i < (int)records.size(); i++) {
     if (!BulkLoadRecord(records[i].get())) {
       LogERROR("Load record %d failed, stop loading ...", i);
@@ -751,7 +682,7 @@ bool BplusTree::CheckBoundaryDuplication(Schema::RecordBase* record) {
   // Load curret leave records and find the first duplicate with the new record
   // to be insert.
   Schema::PageRecordsManager prmanager(bl_status_.crt_leave,
-                                       schema_.get(), key_indexes_,
+                                       schema(), key_indexes_,
                                        file_type_, TREE_LEAVE);
 
   int index = prmanager.NumRecords() - 1;
@@ -844,7 +775,7 @@ bool BplusTree::CheckTreeNodeValid(RecordPage* page) {
     return false;
   }
 
-  Schema::PageRecordsManager prmanager(page, schema_.get(), key_indexes_,
+  Schema::PageRecordsManager prmanager(page, schema(), key_indexes_,
                                        file_type_, TREE_NODE);
   
   for (int i = 0; i < prmanager.NumRecords(); i++) {
@@ -872,7 +803,7 @@ bool BplusTree::VerifyChildRecordsRange(RecordPage* child_page,
     LogFATAL("Child page is nullptr, can't verify it's range");
   }
 
-  Schema::PageRecordsManager prmanager(child_page, schema_.get(), key_indexes_,
+  Schema::PageRecordsManager prmanager(child_page, schema(), key_indexes_,
                                        file_type_,
                                        child_page->Meta()->page_type());
 
@@ -935,7 +866,7 @@ bool BplusTree::EqueueChildNodes(RecordPage* page,
     return false;
   }
 
-  Schema::PageRecordsManager prmanager(page, schema_.get(), key_indexes_,
+  Schema::PageRecordsManager prmanager(page, schema(), key_indexes_,
                                        file_type_, TREE_NODE);
   
   bool children_are_leave = false;
@@ -1004,7 +935,7 @@ bool BplusTree::EqueueChildNodes(RecordPage* page,
 }
 
 bool BplusTree::VerifyOverflowPage(RecordPage* page) {
-  Schema::PageRecordsManager prmanager(page, schema_.get(), key_indexes_,
+  Schema::PageRecordsManager prmanager(page, schema(), key_indexes_,
                                        file_type_, TREE_LEAVE);
 
   auto record = prmanager.Record(0);
@@ -1090,7 +1021,7 @@ int BplusTree::FetchResultsFromLeave(
   }
 
   while (leave) {
-    Schema::PageRecordsManager prmanager(leave, schema_.get(), key_indexes_,
+    Schema::PageRecordsManager prmanager(leave, schema(), key_indexes_,
                                          file_type_,
                                          leave->Meta()->page_type());
     // Fetch all matching records in this leave.
@@ -1129,7 +1060,7 @@ BplusTree::SearchInTreeNode(RecordPage* page, const Schema::RecordBase* key) {
     return result;
   }
 
-  Schema::PageRecordsManager prmanager(page, schema_.get(), key_indexes_,
+  Schema::PageRecordsManager prmanager(page, schema(), key_indexes_,
                                        file_type_, page->Meta()->page_type());
 
   int index = prmanager.SearchForKey(key);
@@ -1168,7 +1099,7 @@ BplusTree::SearchInTreeNode(RecordPage* page, const Schema::RecordBase* key) {
 }
 
 bool BplusTree::CheckKeyFieldsType(const Schema::RecordBase* key) const {
-  return key->CheckFieldsType(schema_.get(), key_indexes_);
+  return key->CheckFieldsType(schema(), key_indexes_);
 }
 
 bool BplusTree::CheckRecordFieldsType(const Schema::RecordBase* record) const {
@@ -1176,7 +1107,7 @@ bool BplusTree::CheckRecordFieldsType(const Schema::RecordBase* record) const {
     if (file_type_ == INDEX) {
       return false;
     }
-    if (!record->CheckFieldsType(schema_.get())) {
+    if (!record->CheckFieldsType(schema())) {
       return false;
     }
     return true;
@@ -1185,7 +1116,7 @@ bool BplusTree::CheckRecordFieldsType(const Schema::RecordBase* record) const {
     if (file_type_ == INDEX_DATA) {
       return false;
     }
-    if (!record->CheckFieldsType(schema_.get(), key_indexes_)) {
+    if (!record->CheckFieldsType(schema(), key_indexes_)) {
       return false;
     }
     return true;
@@ -1194,7 +1125,6 @@ bool BplusTree::CheckRecordFieldsType(const Schema::RecordBase* record) const {
   LogERROR("Invalid ReocrdType %d to insert to B+ tree", record->type());
   return false;
 }
-
 
 bool BplusTree::ProduceKeyRecordFromLeaveRecord(
          const Schema::RecordBase* leave_record, Schema::RecordBase* tn_record) {
@@ -1254,7 +1184,7 @@ bool BplusTree::ReDistributeRecordsFromNextLeave(
   auto next_leave = FetchPage(search_result->next_child_id);
   CheckLogFATAL(next_leave, "Failed to fetch next child leave");
 
-  Schema::PageRecordsManager prmanager(next_leave, schema_.get(), key_indexes_,
+  Schema::PageRecordsManager prmanager(next_leave, schema(), key_indexes_,
                                        file_type_, TREE_LEAVE);
   std::vector<Schema::RecordGroup> rgroups;
   prmanager.GroupRecords(&rgroups);
@@ -1318,7 +1248,7 @@ bool BplusTree::InsertAfterOverflowLeave(RecordPage* leave,
   // 'less' than records of the overflow page, which means the new leave
   // should reside left to current leave.
   if (leave->Meta()->prev_page() < 0) {
-    Schema::PageRecordsManager prmanager(leave, schema_.get(),
+    Schema::PageRecordsManager prmanager(leave, schema(),
                                          key_indexes_,
                                          file_type_, TREE_LEAVE);
     if (prmanager.CompareRecords(record, prmanager.Record(0)) < 0) {
@@ -1420,7 +1350,7 @@ bool BplusTree::ReDistributeWithNextLeave(RecordPage* leave,
     return false;
   }
 
-  Schema::PageRecordsManager prmanager(leave, schema_.get(), key_indexes_,
+  Schema::PageRecordsManager prmanager(leave, schema(), key_indexes_,
                                        file_type_, TREE_LEAVE);
   // Insert new record, sort and group records.
   if (!prmanager.InsertNewRecord(record)) {
@@ -1636,7 +1566,7 @@ bool BplusTree::InsertNewRecordToOverFlowChain(
   }
 
   // First verify that the new record is same with existing records.
-  Schema::PageRecordsManager prmanager(leave, schema_.get(), key_indexes_,
+  Schema::PageRecordsManager prmanager(leave, schema(), key_indexes_,
                                        file_type_, TREE_LEAVE);
   if (prmanager.CompareRecords(record, prmanager.Record(0)) != 0) {
     return false;
@@ -1688,7 +1618,7 @@ bool BplusTree::InsertNewRecordToLeaveWithSplit(
   }
 
   // Need to split the page.
-  Schema::PageRecordsManager prmanager(leave, schema_.get(), key_indexes_,
+  Schema::PageRecordsManager prmanager(leave, schema(), key_indexes_,
                                        file_type_, TREE_LEAVE);
   prmanager.set_tree(this);
   auto leaves = prmanager.InsertRecordAndSplitPage(record);

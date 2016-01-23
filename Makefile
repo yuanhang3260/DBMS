@@ -25,6 +25,8 @@ OBJ = $(OBJ_DIR)/Utility/Strings.o \
       $(OBJ_DIR)/Schema/PageRecord_Common.o \
       $(OBJ_DIR)/Schema/PageRecordsManager.o \
       $(OBJ_DIR)/Schema/DBTable_pb.o \
+      $(OBJ_DIR)/DataBase/Table.o \
+      
 
 TESTOBJ = $(OBJ_DIR)/Utility/Strings_test.o \
           $(OBJ_DIR)/Utility/StringBuilder_test.o \
@@ -104,6 +106,7 @@ clean:
 	rm -rf $(OBJ_DIR)/Utility/*.o
 	rm -rf $(OBJ_DIR)/Storage/*.o
 	rm -rf $(OBJ_DIR)/Schema/*.o
+	rm -rf $(OBJ_DIR)/DataBase/*.o
 	rm -rf test/*.out
 	rm -rf data/*.data
 	rm -rf data/*.index
