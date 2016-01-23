@@ -68,12 +68,20 @@ class RecordGroup {
 // Inserted DataRecord with RecordID, used to produce index files.
 class DataRecordWithRid {
  public:
+  DataRecordWithRid(std::shared_ptr<RecordBase> record_, RecordID rid_) :
+      record(record_),
+      rid(rid_) {
+  }
+
   std::shared_ptr<RecordBase> record;
   RecordID rid;
 
   static bool Comparator(const DataRecordWithRid& r1,
                          const DataRecordWithRid& r2,
                          const std::vector<int>& indexes);
+
+  static void Sort(std::vector<Schema::DataRecordWithRid>& records,
+                   const std::vector<int>& key_indexes);
 };
 
 
@@ -81,6 +89,13 @@ class DataRecordWithRid {
 // and index files needs to be updated.
 class DataRecordRidMutation {
  public:
+  DataRecordRidMutation(std::shared_ptr<RecordBase> record_,
+                        RecordID old_rid_, RecordID new_rid_) :
+      record(record_),
+      old_rid(old_rid_),
+      new_rid(new_rid_) {
+  }
+
   std::shared_ptr<RecordBase> record;
   RecordID old_rid;
   RecordID new_rid;

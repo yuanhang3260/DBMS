@@ -79,6 +79,9 @@ class BplusTree {
   RecordPage* root();
   Schema::TableSchema* schema() const;
 
+  // Load B+ tree from file.
+  bool LoadTree();
+
   // Create the B+ tree file;
   bool CreateBplusTreeFile();
 
@@ -97,7 +100,7 @@ class BplusTree {
   // defined in Schema/DataTypes. These records must have been sorted based
   // on a key which consists of fields from Record speficed from key_indexes.
   bool BulkLoad(std::vector<std::shared_ptr<Schema::RecordBase>>& records);
-  bool BulkLoadRecord(Schema::RecordBase* record);
+  Schema::RecordID BulkLoadRecord(Schema::RecordBase* record);
 
   // Validity check for the B+ tree.
   bool ValidityCheck();

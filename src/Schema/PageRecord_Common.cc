@@ -1,3 +1,6 @@
+#include <vector>
+#include <algorithm>
+
 #include "Base/Utils.h"
 #include "Base/MacroUtils.h"
 #include "Base/Log.h"
@@ -48,6 +51,14 @@ bool DataRecordWithRid::Comparator(const DataRecordWithRid& r1,
                                    const DataRecordWithRid& r2,
                                    const std::vector<int>& indexes) {
   return RecordBase::RecordComparator(r1.record, r2.record, indexes);
+}
+
+void DataRecordWithRid::Sort(std::vector<Schema::DataRecordWithRid>& records,
+                             const std::vector<int>& key_indexes) {
+  auto comparator = std::bind(Comparator,
+                              std::placeholders::_1, std::placeholders::_2,
+                              key_indexes);
+  std::stable_sort(records.begin(), records.end(), comparator);
 }
 
 

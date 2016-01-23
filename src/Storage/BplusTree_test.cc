@@ -16,13 +16,10 @@ class BplusTreeTest: public UnitTest {
   Schema::TableSchema* schema = nullptr;
   DataBase::Table* table;
   std::map<int, std::shared_ptr<Schema::DataRecord>> record_resource;
-  const int kNumRecordsSource = 10000;
+  const int kNumRecordsSource = 20;
 
  public:
   void InitSchema() {
-    // Create key_indexes.
-    key_indexes = std::vector<int>{2, 0};
-
     // Create a table schema.
     schema = new Schema::TableSchema();
     schema->set_name(tablename);
@@ -59,6 +56,10 @@ class BplusTreeTest: public UnitTest {
     field->set_size(20);
 
     schema->add_primary_key_indexes(0);
+    // Create key_indexes.
+    for (auto i: schema->primary_key_indexes()) {
+      key_indexes.push_back(i);
+    }
   }
 
   void InitRecordResource() {
@@ -198,15 +199,22 @@ class BplusTreeTest: public UnitTest {
     for (auto& entry: record_resource) {
       v.push_back(entry.second);
     }
-    Schema::PageRecordsManager::SortRecords(v, key_indexes);
+    table->PreLoadData(v);
 
-    BplusTree tree(table, INDEX_DATA, key_indexes);
-    tree.BulkLoad(v);
+    auto file_type = INDEX;
+    for (const auto& field: schema->fields()) {
+      auto key_index = std::vector<int>{field.index()};
+      file_type = table->IsDataFileKey(key_index[0]) ? INDEX_DATA : INDEX;
+      auto tree = table->Tree(table->BplusTreeFileName(file_type, key_index));
+      tree->SaveToDisk();
 
-    _VerifyAllRecordsInTree(&tree);
+      key_indexes = key_index;
+      CheckBplusTree(file_type);
+      _VerifyAllRecordsInTree(tree, key_index);
+    }
   }
 
-  void _VerifyAllRecordsInTree(BplusTree* tree) {
+  void _VerifyAllRecordsInTree(BplusTree* tree, std::vector<int> key_indexes) {
     std::vector<std::shared_ptr<Schema::RecordBase>> v;
     for (auto& entry: record_resource) {
       v.push_back(entry.second);
@@ -585,7 +593,7 @@ class BplusTreeTest: public UnitTest {
       }
     }
     // Search and verify records.
-    _VerifyAllRecordsInTree(&tree);
+    _VerifyAllRecordsInTree(&tree, key_indexes);
   }
 };
 
@@ -608,7 +616,6 @@ int main(int argc, char** argv) {
   
   for (int i = 0; i < 1; i++) {
     test.Test_BulkLoading();
-    test.CheckBplusTree(DataBaseFiles::INDEX_DATA);
   }
 
   // test.Test_SplitLeave();

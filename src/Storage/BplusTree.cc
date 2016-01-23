@@ -184,13 +184,8 @@ BplusTree::~BplusTree() {
     // Checkout all remaining pages. We don't call CheckoutPage() since it
     // involves map.erase() operation internally which is tricky.
     //printf("Checking out %d pags\n", page_map_.size());
-    for (auto& entry: page_map_) {
-      if (!entry.second->DumpPageData()) {
-        LogERROR("Save page %d to disk failed", entry.first);
-      }
-    }
-    page_map_.clear();
     SaveToDisk();
+    page_map_.clear();
     fflush(file_);
     fclose(file_);
   }
@@ -202,17 +197,21 @@ BplusTree::BplusTree(DataBase::Table* table,
     table_(table),
     file_type_(file_type),
     key_indexes_(key_indexes) {
-  std::string filename = table_->BplusTreeFileName(file_type, key_indexes);
-  
+  if (!LoadTree()) {
+    CheckLogFATAL(CreateBplusTreeFile(), "Failed to create new B+ tree file");
+  }
+}
+
+bool BplusTree::LoadTree() {
+  std::string filename = table_->BplusTreeFileName(file_type_, key_indexes_);
   file_ = fopen(filename.c_str(), "r+");
   if (file_) {
     if (!LoadFromDisk()) {
-      throw std::runtime_error("Can't init B+ tree");
+      LogFATAL("Can't init B+ tree file %s", filename.c_str());
     }
+    return true;
   }
-  else {
-    CheckLogFATAL(CreateBplusTreeFile(), "Failed to create new B+ tree file");
-  }
+  return false;
 }
 
 bool BplusTree::CreateBplusTreeFile() {
@@ -297,7 +296,13 @@ bool BplusTree::SaveToDisk() const {
     return false;
   }
 
-  // (TODO) Save B+ tree nodes. Root node, tree node and leaves.
+    // Save B+ tree nodes. Root node, tree node and leaves.
+  for (auto& entry: page_map_) {
+    if (!entry.second->DumpPageData()) {
+      LogERROR("Save page %d to disk failed", entry.first);
+    }
+  }
+
   return true;
 }
 
@@ -619,18 +624,21 @@ bool BplusTree::BulkLoad(
   CheckLogFATAL(CreateBplusTreeFile(),
                 "Failed to create B+ tree file for BulkLoad");
   for (int i = 0; i < (int)records.size(); i++) {
-    if (!BulkLoadRecord(records[i].get())) {
+    auto rid = BulkLoadRecord(records[i].get()); 
+    if (!rid.IsValid()) {
       LogERROR("Load record %d failed, stop loading ...", i);
+      rid.Print();
       return false;
     }
+    //rid.Print();
   }
   return true;
 }
 
-bool BplusTree::BulkLoadRecord(Schema::RecordBase* record) {
+Schema::RecordID BplusTree::BulkLoadRecord(Schema::RecordBase* record) {
   if (!record) {
     LogERROR("Record to insert is nullptr");
-    return false;
+    return Schema::RecordID();
   }
 
   bl_status_.rid.reset();
@@ -642,7 +650,7 @@ bool BplusTree::BulkLoadRecord(Schema::RecordBase* record) {
   if (bl_status_.crt_leave &&
       bl_status_.crt_leave->Meta()->is_overflow_page() == 0 &&
       BlukLoadInsertRecordToLeave(bl_status_.crt_leave, record)) {
-    return true;
+    return bl_status_.rid;
   }
 
   // Check boundary duplication. If new record equals last record at the end of
@@ -652,7 +660,10 @@ bool BplusTree::BulkLoadRecord(Schema::RecordBase* record) {
           record, bl_status_.last_record.get(),
           IndexesToCompareLeaveRecords()) == 0) {
     bl_status_.last_record.reset(record->Duplicate());
-    return CheckBoundaryDuplication(record);
+    if (CheckBoundaryDuplication(record)) {
+      return bl_status_.rid;
+    }
+    return Schema::RecordID();
   }
 
   // Normal insertion. Allocate a new leave node and insert the record.
@@ -670,7 +681,7 @@ bool BplusTree::BulkLoadRecord(Schema::RecordBase* record) {
     LogFATAL("Failed to add leave to B+ tree node");
   }
 
-  return true;
+  return bl_status_.rid;
 }
 
 bool BplusTree::CheckBoundaryDuplication(Schema::RecordBase* record) {

@@ -3,6 +3,8 @@
 
 #include "Base/Log.h"
 #include "Base/Utils.h"
+#include "Schema/PageRecord_Common.h"
+#include "Schema/PageRecordsManager.h"
 #include "Table.h"
 
 namespace DataBase {
@@ -69,6 +71,10 @@ bool Table::BuildFieldIndexMap() {
   return true;
 }
 
+DataBaseFiles::BplusTree* Table::Tree(std::string filename) {
+  return tree_map_.at(filename).get();
+}
+
 std::string Table::BplusTreeFileName(DataBaseFiles::FileType file_type,
                                      std::vector<int> key_indexes) {
   std::string filename = DataBaseFiles::kDataDirectory + name_ + "(";
@@ -97,16 +103,66 @@ std::string Table::BplusTreeFileName(DataBaseFiles::FileType file_type,
   else if (file_type == DataBaseFiles::INDEX) {
     return filename + ".index";
   }
-  return "unknown_filename";
+  LogFATAL("Can't generate B+ tree file name");
+  return "";
+}
+
+bool Table::IsDataFileKey(int index) const {
+  if (idata_indexes_.size() > 1) {
+    return false;
+  }
+  return idata_indexes_[0] == index;
 }
 
 bool Table::PreLoadData(
          std::vector<std::shared_ptr<Schema::RecordBase>>& records) {
+  // Sort the record based on idata_indexes_ (preferably primary key).
+  Schema::PageRecordsManager::SortRecords(records, idata_indexes_);
+
+  // BulkLoad DataRecord.
+  auto filename = BplusTreeFileName(DataBaseFiles::INDEX_DATA, idata_indexes_);
+  auto tree = std::make_shared<DataBaseFiles::BplusTree>(
+                   this, DataBaseFiles::INDEX_DATA, idata_indexes_);
+  tree->CreateBplusTreeFile();
+  tree_map_.emplace(filename, tree);
+
+  std::vector<Schema::DataRecordWithRid> record_rids;
   for (auto& record: records) {
     if (!record->CheckFieldsType(schema_.get())) {
       return false;
     }
-    //(TODO)BulkLoad DataReocrd.
+    auto rid = tree->BulkLoadRecord(record.get());
+    record_rids.emplace_back(record, rid);
+    //rid.Print();
+  }
+  tree->SaveToDisk();
+
+  // Generate Index B+ tree files.
+  for (auto field: schema_->fields()) {
+    auto key_index = std::vector<int>{field.index()};
+    if (IsDataFileKey(key_index[0])) {
+      continue;
+    }
+    Schema::DataRecordWithRid::Sort(record_rids, key_index);
+    // printf("sort by index %d\n", key_index[0]);
+    // for (auto r: record_rids) {
+    //   r.record->Print();
+    // }
+    // printf("***********************\n");
+    filename = BplusTreeFileName(DataBaseFiles::INDEX, key_index);
+    tree = std::make_shared<DataBaseFiles::BplusTree>(
+                     this, DataBaseFiles::INDEX, key_index);
+    tree->CreateBplusTreeFile();
+    tree_map_.emplace(filename, tree);
+
+    Schema::IndexRecord irecord;
+    for (auto& r: record_rids) {
+      (reinterpret_cast<Schema::DataRecord*>(r.record.get()))
+          ->ExtractKey(&irecord, key_index);
+      irecord.set_rid(r.rid);
+      tree->BulkLoadRecord(&irecord);
+    }
+    tree->SaveToDisk();
   }
 
   return true;

@@ -5,6 +5,7 @@
 #include <map>
 #include <memory>
 
+#include "Schema/Record.h"
 #include "Schema/DBTable_pb.h"
 #include "Storage/BplusTree.h"
 
@@ -29,6 +30,10 @@ class Table {
 
   // Bulkload data records and generate all index files.
   bool PreLoadData(std::vector<std::shared_ptr<Schema::RecordBase>>& records);
+
+  DataBaseFiles::BplusTree* Tree(std::string filename);
+
+  bool IsDataFileKey(int index) const;
 
  private:
   bool BuildFieldIndexMap();
