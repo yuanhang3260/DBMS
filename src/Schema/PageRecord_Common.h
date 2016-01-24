@@ -100,9 +100,14 @@ class DataRecordRidMutation {
   RecordID old_rid;
   RecordID new_rid;
 
+  void Print() const;
+
   static bool Comparator(const DataRecordRidMutation& r1,
                          const DataRecordRidMutation& r2,
                          const std::vector<int>& indexes);
+
+  static void Sort(std::vector<Schema::DataRecordRidMutation>& records,
+                   const std::vector<int>& key_indexes);
 };
 
 

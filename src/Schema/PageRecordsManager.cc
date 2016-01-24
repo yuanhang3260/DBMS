@@ -168,6 +168,13 @@ RecordBase* PageRecordsManager::Record(int index) const {
   return plrecords_.at(index).record();
 }
 
+std::shared_ptr<RecordBase> PageRecordsManager::Shared_Record(int index) {
+  if (index >= (int)plrecords_.size()) {
+    return std::shared_ptr<RecordBase>();
+  }
+  return plrecords_.at(index).Record();
+}
+
 int PageRecordsManager::RecordSlotID(int index) const {
   if (index >= (int)plrecords_.size()) {
     return -1;
@@ -333,7 +340,10 @@ void PageRecordsManager::GroupRecords(std::vector<RecordGroup>* rgroups) {
 }
 
 std::vector<PageRecordsManager::SplitLeaveResults>
-PageRecordsManager::InsertRecordAndSplitPage(const RecordBase* record) {
+PageRecordsManager::InsertRecordAndSplitPage(
+    const RecordBase* record,
+    std::vector<Schema::DataRecordRidMutation>& rid_mutations) {
+  // Insert new record to prmanager.
   std::vector<PageRecordsManager::SplitLeaveResults> result;
   if (!InsertNewRecord(record)) {
     LogERROR("Can't insert new record to PageRecordsManager");
@@ -369,14 +379,19 @@ PageRecordsManager::InsertRecordAndSplitPage(const RecordBase* record) {
     for (int i = rgroups.at(re1.mid_index).start_index;
          i < (int)plrecords_.size();
          i++) {
-      if (Record(i)->InsertToRecordPage(page) < 0) {
-        LogFATAL("Insert new record to right half split failed.");
-      }
-      if (plrecords_.at(i).slot_id() < 0) {
+      int new_slot_id = Record(i)->InsertToRecordPage(page);
+      CheckLogFATAL(new_slot_id >= 0, "Insert right half to new leave failed.");
+      int slot_id = plrecords_.at(i).slot_id();
+      if (slot_id < 0) {
         new_record_inserted = true;
       }
       else {
-        page_->DeleteRecord(plrecords_.at(i).slot_id());
+        page_->DeleteRecord(slot_id);
+        if (file_type_ == DataBaseFiles::INDEX_DATA) {
+          rid_mutations.emplace_back(Shared_Record(i),
+                                     RecordID(page_->id(), slot_id),
+                                     RecordID(page->id(), new_slot_id));
+        }
       }
     }
     // If new record is on right half (new_record_inserted = true), then left
@@ -413,15 +428,31 @@ PageRecordsManager::InsertRecordAndSplitPage(const RecordBase* record) {
       else {
         auto group = rgroups.at(gindex);
         bool new_record_in_second_page = false;
-        for (int i = group.start_index;
-             i < group.start_index + group.num_records;
-             i++) {
+        auto page2 = tree_->AllocateNewPage(DataBaseFiles::TREE_LEAVE);
+        auto tail_page = page2;
+        int i = group.start_index;
+        for (; i < group.start_index + group.num_records; i++) {
+          // We insert the middle group of records to middle page (page 2).
+          int new_slot_id = Record(i)->InsertToRecordPage(tail_page);
+          if (new_slot_id < 0) {
+            // Append overflow page to middle page.
+            tail_page = tree_->AppendOverflowPageTo(tail_page);
+            new_slot_id = record->InsertToRecordPage(tail_page);
+            if (new_slot_id < 0) {
+              LogFATAL("Insert new record to mid page's overflow page failed");
+            }
+          }
           int slot_id = plrecords_.at(i).slot_id();
           if (slot_id < 0) {
             new_record_in_second_page = true;
           }
           else {
             page_->DeleteRecord(slot_id);
+            if (file_type_ == DataBaseFiles::INDEX_DATA) {
+              rid_mutations.emplace_back(Shared_Record(i),
+                                         RecordID(page_->id(), slot_id),
+                                         RecordID(tail_page->id(),new_slot_id));
+            }
           }
         }
         if (!new_record_in_second_page) {
@@ -429,19 +460,7 @@ PageRecordsManager::InsertRecordAndSplitPage(const RecordBase* record) {
             LogFATAL("Failed to insert new record to first page");
           }
         }
-        // Now we insert the middle group of records to the middle page.
-        auto page2 = tree_->AllocateNewPage(DataBaseFiles::TREE_LEAVE);
-        auto tail_page = page2;
-        int index = group.start_index;
-        for (; index < group.start_index + group.num_records; index++) {
-          if (Record(index)->InsertToRecordPage(tail_page) < 0) {
-            // Append overflow page to middle page.
-            tail_page = tree_->AppendOverflowPageTo(tail_page);
-            if (record->InsertToRecordPage(tail_page) < 0) {
-              LogFATAL("Insert new record to mid page's overflow page failed");
-            }
-          }
-        }
+
         DataBaseFiles::BplusTree::ConnectLeaves(page_, page2);
         DataBaseFiles::BplusTree::ConnectLeaves(tail_page, page);
         result.emplace_back(page_);
@@ -449,7 +468,7 @@ PageRecordsManager::InsertRecordAndSplitPage(const RecordBase* record) {
         result.emplace_back(page2);
         result[1].record = plrecords_[group.start_index].Record();
         result.emplace_back(page);
-        result[2].record = plrecords_[index].Record();
+        result[2].record = plrecords_[i].Record();
         return result;
       }
     }
@@ -459,7 +478,7 @@ PageRecordsManager::InsertRecordAndSplitPage(const RecordBase* record) {
     result.emplace_back(page_);
     result[0].record = plrecords_[0].Record();
 
-    // Page 2
+    // Page 2 - Try inserting right half to it.
     auto group = rgroups.at(re1.mid_index);
     int index = group.start_index;
     auto page2 = tree_->AllocateNewPage(DataBaseFiles::TREE_LEAVE);
@@ -469,11 +488,13 @@ PageRecordsManager::InsertRecordAndSplitPage(const RecordBase* record) {
     bool new_record_inserted = false;
     auto tail_page = page2;
     for (; index < group.start_index + group.num_records; index++) {
-      if (Record(index)->InsertToRecordPage(tail_page) < 0) {
+      int new_slot_id = Record(index)->InsertToRecordPage(tail_page);
+      if (new_slot_id < 0) {
         // Append overflow page to middle page.
         tail_page = tree_->AppendOverflowPageTo(tail_page);
-        if (record->InsertToRecordPage(tail_page) < 0) {
-          LogFATAL("Insert new record to mid page's overflow page failed");
+        new_slot_id = Record(index)->InsertToRecordPage(tail_page);
+        if (new_slot_id < 0) {
+          LogFATAL("Insert record to mid page's overflow page failed");
         }
       }
       int slot_id = plrecords_.at(index).slot_id();
@@ -482,6 +503,11 @@ PageRecordsManager::InsertRecordAndSplitPage(const RecordBase* record) {
       }
       else {
         page_->DeleteRecord(slot_id);
+        if (file_type_ == DataBaseFiles::INDEX_DATA) {
+          rid_mutations.emplace_back(Shared_Record(index),
+                                     RecordID(page_->id(), slot_id),
+                                     RecordID(tail_page->id(), new_slot_id));
+        }
       }
     }
 
@@ -498,15 +524,21 @@ PageRecordsManager::InsertRecordAndSplitPage(const RecordBase* record) {
         for (index = rgroups[gindex].start_index;
              index < rgroups[gindex].start_index + rgroups[gindex].num_records;
              index++) {
+          int new_slot_id = Record(index)->InsertToRecordPage(page2);
+          if (new_slot_id < 0) {
+            LogFATAL("Failed to insert record to page2");
+          }
           int slot_id = plrecords_.at(index).slot_id(); 
           if (slot_id < 0) {
             new_record_inserted = true;
           }
           else {
             page_->DeleteRecord(slot_id);
-          }
-          if (Record(index)->InsertToRecordPage(page2) < 0) {
-            LogFATAL("Failed to insert record to page2");
+            if (file_type_ == DataBaseFiles::INDEX_DATA) {
+              rid_mutations.emplace_back(Shared_Record(index),
+                                         RecordID(page_->id(), slot_id),
+                                         RecordID(page2->id(), new_slot_id));
+            }
           }
         }
       }
@@ -517,15 +549,21 @@ PageRecordsManager::InsertRecordAndSplitPage(const RecordBase* record) {
     if (gindex < (int)rgroups.size()) {
       page3 = tree_->AllocateNewPage(DataBaseFiles::TREE_LEAVE);
       for (; index < (int)plrecords_.size(); index++) {
+        int new_slot_id = Record(index)->InsertToRecordPage(page3);
+        if (new_slot_id < 0) {
+          LogFATAL("Failed to insert record to 3rd page");
+        }
         int slot_id = plrecords_.at(index).slot_id();
         if (slot_id < 0) {
           new_record_inserted = true;
         }
         else {
           page_->DeleteRecord(slot_id);
-        }
-        if (Record(index)->InsertToRecordPage(page3) < 0) {
-          LogFATAL("Failed to insert record to third page");
+          if (file_type_ == DataBaseFiles::INDEX_DATA) {
+            rid_mutations.emplace_back(Shared_Record(index),
+                                       RecordID(page_->id(), slot_id),
+                                       RecordID(page3->id(), new_slot_id));
+          }
         }
       }
     }
@@ -545,6 +583,17 @@ PageRecordsManager::InsertRecordAndSplitPage(const RecordBase* record) {
   }
 
   return result;
+}
+
+bool PageRecordsManager::UpdateRecordID(int slot_id, const RecordID& rid) {
+  if (file_type_ != DataBaseFiles::INDEX ||
+      page_->Meta()->page_type() != DataBaseFiles::TREE_LEAVE) {
+    LogERROR("Can't update rid on page type other than (index_data, leave)");
+    return false;
+  }
+
+  rid.DumpToMem(page_->Record(slot_id) - rid.size());
+  return true;
 }
 
 }

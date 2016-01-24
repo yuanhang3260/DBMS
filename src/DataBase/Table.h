@@ -35,6 +35,8 @@ class Table {
 
   bool IsDataFileKey(int index) const;
 
+  bool ValidateAllIndexRecords(int num_records);
+
  private:
   bool BuildFieldIndexMap();
   bool LoadSchema();

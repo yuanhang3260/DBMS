@@ -69,4 +69,20 @@ bool DataRecordRidMutation::Comparator(const DataRecordRidMutation& r1,
   return RecordBase::RecordComparator(r1.record, r2.record, indexes);
 }
 
+void DataRecordRidMutation::Sort(
+         std::vector<Schema::DataRecordRidMutation>& records,
+         const std::vector<int>& key_indexes) {
+  auto comparator = std::bind(Comparator,
+                              std::placeholders::_1, std::placeholders::_2,
+                              key_indexes);
+  std::stable_sort(records.begin(), records.end(), comparator);
+}
+
+void DataRecordRidMutation::Print() const {
+  record->Print();
+  printf("rid: (%d, %d) --> (%d, %d)\n",
+         old_rid.page_id(), old_rid.slot_id(),
+         new_rid.page_id(), new_rid.slot_id());
+}
+
 }  // namespace Schema

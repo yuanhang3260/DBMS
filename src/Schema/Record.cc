@@ -299,7 +299,7 @@ bool RecordBase::InitRecordFields(const TableSchema* schema,
       key_indexes[i] = i;
     }
   }
-
+  clear();
   for (int index: key_indexes) {
     auto type = schema->fields(index).type();
     if (type == TableField::INTEGER) {

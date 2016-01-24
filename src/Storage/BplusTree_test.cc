@@ -188,7 +188,7 @@ class BplusTreeTest: public UnitTest {
     AssertEqual(0, tree.meta()->depth());
   }
 
-  void CheckBplusTree(FileType file_type) {
+  void CheckBplusTree(FileType file_type, std::vector<int>& key_indexes) {
     BplusTree tree(table, file_type, key_indexes);
     AssertTrue(tree.ValidityCheck(), "Check B+ tree failed");
     printf("Good B+ Tree!\n");
@@ -208,10 +208,10 @@ class BplusTreeTest: public UnitTest {
       auto tree = table->Tree(table->BplusTreeFileName(file_type, key_index));
       tree->SaveToDisk();
 
-      key_indexes = key_index;
-      CheckBplusTree(file_type);
+      CheckBplusTree(file_type, key_index);
       _VerifyAllRecordsInTree(tree, key_index);
     }
+    AssertTrue(table->ValidateAllIndexRecords(v.size()));
   }
 
   void _VerifyAllRecordsInTree(BplusTree* tree, std::vector<int> key_indexes) {
@@ -277,6 +277,7 @@ class BplusTreeTest: public UnitTest {
     // Create index for field "name".
     std::vector<int> key_index{0};
     BplusTree tree(table, INDEX, key_indexes);
+    std::vector<Schema::DataRecordRidMutation> rid_mutations;
 
     {
       // page 1 <--> page2
@@ -295,8 +296,7 @@ class BplusTreeTest: public UnitTest {
       Schema::IndexRecord irecord;
       _GenerateIndeRecord(&irecord, 'a', 60);
       AssertTrue(irecord.InsertToRecordPage(leave) < 0);
-      
-      auto result = prmanager.InsertRecordAndSplitPage(&irecord);
+      auto result = prmanager.InsertRecordAndSplitPage(&irecord, rid_mutations);
       AssertEqual(2, (int)result.size());
       result[0].record->Print();
       AssertEqual(3, (int)result[0].page->Meta()->num_records());
@@ -321,7 +321,7 @@ class BplusTreeTest: public UnitTest {
       _GenerateIndeRecord(&irecord, 'b', 60);
       AssertTrue(irecord.InsertToRecordPage(leave) < 0);
       
-      auto result = prmanager.InsertRecordAndSplitPage(&irecord);
+      auto result = prmanager.InsertRecordAndSplitPage(&irecord, rid_mutations);
       AssertEqual(2, (int)result.size());
       result[0].record->Print();
       AssertEqual(1, (int)result[0].page->Meta()->num_records());
@@ -332,11 +332,11 @@ class BplusTreeTest: public UnitTest {
       // check overflow page.
       int of_page_id = result[1].page->Meta()->overflow_page();
       AssertTrue(of_page_id > 0);
-      AssertTrue(tree.FetchPage(of_page_id) > 0);
-      AssertEqual(tree.FetchPage(of_page_id)->Meta()->prev_page(),
+      AssertTrue(tree.Page(of_page_id) > 0);
+      AssertEqual(tree.Page(of_page_id)->Meta()->prev_page(),
                   result[1].page->id());
       AssertEqual(result[1].page->Meta()->next_page(),
-                  tree.FetchPage(of_page_id)->id());
+                  tree.Page(of_page_id)->id());
     }
 
     {
@@ -355,7 +355,7 @@ class BplusTreeTest: public UnitTest {
       _GenerateIndeRecord(&irecord, 'b', 55);
       AssertTrue(irecord.InsertToRecordPage(leave) < 0);
       
-      auto result = prmanager.InsertRecordAndSplitPage(&irecord);
+      auto result = prmanager.InsertRecordAndSplitPage(&irecord, rid_mutations);
       AssertEqual(3, (int)result.size());
       result[0].record->Print();
       AssertEqual(2, (int)result[0].page->Meta()->num_records());
@@ -369,16 +369,16 @@ class BplusTreeTest: public UnitTest {
       // check overflow page.
       int of_page_id = result[1].page->Meta()->overflow_page();
       AssertTrue(of_page_id > 0);
-      AssertTrue(tree.FetchPage(of_page_id) > 0);
-      AssertEqual(tree.FetchPage(of_page_id)->Meta()->prev_page(),
+      AssertTrue(tree.Page(of_page_id) > 0);
+      AssertEqual(tree.Page(of_page_id)->Meta()->prev_page(),
                   result[1].page->id(), "page 2 <- overflow");
       AssertEqual(result[1].page->Meta()->next_page(),
-                  tree.FetchPage(of_page_id)->id(), "page 2 -> overflow");
+                  tree.Page(of_page_id)->id(), "page 2 -> overflow");
 
-      AssertEqual(tree.FetchPage(of_page_id)->Meta()->next_page(),
+      AssertEqual(tree.Page(of_page_id)->Meta()->next_page(),
                   result[2].page->id(), "overflow -> page 3");
       AssertEqual(result[2].page->Meta()->prev_page(),
-                  tree.FetchPage(of_page_id)->id(), "overflow <- page 3");
+                  tree.Page(of_page_id)->id(), "overflow <- page 3");
     }
 
     {
@@ -396,7 +396,7 @@ class BplusTreeTest: public UnitTest {
       _GenerateIndeRecord(&irecord, 'b', 50);
       AssertTrue(irecord.InsertToRecordPage(leave) < 0);
       
-      auto result = prmanager.InsertRecordAndSplitPage(&irecord);
+      auto result = prmanager.InsertRecordAndSplitPage(&irecord, rid_mutations);
       AssertEqual(3, (int)result.size());
       result[0].record->Print();
       AssertEqual(1, (int)result[0].page->Meta()->num_records());
@@ -429,7 +429,7 @@ class BplusTreeTest: public UnitTest {
       _GenerateIndeRecord(&irecord, 'a', 40);
       AssertTrue(irecord.InsertToRecordPage(leave) < 0);
 
-      auto result = prmanager.InsertRecordAndSplitPage(&irecord);
+      auto result = prmanager.InsertRecordAndSplitPage(&irecord, rid_mutations);
       AssertEqual(2, (int)result.size());
       result[0].record->Print();
       AssertEqual(3, (int)result[0].page->Meta()->num_records());
@@ -454,7 +454,7 @@ class BplusTreeTest: public UnitTest {
       _GenerateIndeRecord(&irecord, 'e', 30);
       AssertTrue(irecord.InsertToRecordPage(leave) < 0);
 
-      auto result = prmanager.InsertRecordAndSplitPage(&irecord);
+      auto result = prmanager.InsertRecordAndSplitPage(&irecord, rid_mutations);
       AssertEqual(2, (int)result.size());
       result[0].record->Print();
       AssertEqual(3, (int)result[0].page->Meta()->num_records());
@@ -479,7 +479,7 @@ class BplusTreeTest: public UnitTest {
       _GenerateIndeRecord(&irecord, 'a', 50);
       AssertTrue(irecord.InsertToRecordPage(leave) < 0);
 
-      auto result = prmanager.InsertRecordAndSplitPage(&irecord);
+      auto result = prmanager.InsertRecordAndSplitPage(&irecord, rid_mutations);
       AssertEqual(2, (int)result.size());
       result[0].record->Print();
       AssertEqual(4, (int)result[0].page->Meta()->num_records());
@@ -488,15 +488,15 @@ class BplusTreeTest: public UnitTest {
 
       int of_page_id = result[0].page->Meta()->overflow_page();
       AssertTrue(of_page_id > 0);
-      AssertTrue(tree.FetchPage(of_page_id) > 0);
-      AssertEqual(tree.FetchPage(of_page_id)->Meta()->prev_page(),
+      AssertTrue(tree.Page(of_page_id) > 0);
+      AssertEqual(tree.Page(of_page_id)->Meta()->prev_page(),
                   result[0].page->id(), "page 1 <- overflow");
       AssertEqual(result[0].page->Meta()->next_page(),
-                  tree.FetchPage(of_page_id)->id(), "page 1 -> overflow");
-      AssertEqual(tree.FetchPage(of_page_id)->Meta()->next_page(),
+                  tree.Page(of_page_id)->id(), "page 1 -> overflow");
+      AssertEqual(tree.Page(of_page_id)->Meta()->next_page(),
                   result[1].page->id(), "overflow -> page 2");
       AssertEqual(result[1].page->Meta()->prev_page(),
-                  tree.FetchPage(of_page_id)->id(), "overflow <- page 2");
+                  tree.Page(of_page_id)->id(), "overflow <- page 2");
     }
 
     {
@@ -514,7 +514,7 @@ class BplusTreeTest: public UnitTest {
       _GenerateIndeRecord(&irecord, 'b', 50);
       AssertTrue(irecord.InsertToRecordPage(leave) < 0);
 
-      auto result = prmanager.InsertRecordAndSplitPage(&irecord);
+      auto result = prmanager.InsertRecordAndSplitPage(&irecord, rid_mutations);
       AssertEqual(3, (int)result.size());
       result[0].record->Print();
       AssertEqual(1, (int)result[0].page->Meta()->num_records());
@@ -548,7 +548,7 @@ class BplusTreeTest: public UnitTest {
       _GenerateIndeRecord(&irecord, 'b', 55);
       AssertTrue(irecord.InsertToRecordPage(leave) < 0);
 
-      auto result = prmanager.InsertRecordAndSplitPage(&irecord);
+      auto result = prmanager.InsertRecordAndSplitPage(&irecord, rid_mutations);
       AssertEqual(3, (int)result.size());
       result[0].record->Print();
       AssertEqual(1, (int)result[0].page->Meta()->num_records());
@@ -559,70 +559,75 @@ class BplusTreeTest: public UnitTest {
 
       int of_page_id = result[1].page->Meta()->overflow_page();
       AssertTrue(of_page_id > 0);
-      AssertTrue(tree.FetchPage(of_page_id) > 0);
-      AssertEqual(tree.FetchPage(of_page_id)->Meta()->prev_page(),
+      AssertTrue(tree.Page(of_page_id) > 0);
+      AssertEqual(tree.Page(of_page_id)->Meta()->prev_page(),
                   result[1].page->id(), "page 2 <- overflow");
       AssertEqual(result[1].page->Meta()->next_page(),
-                  tree.FetchPage(of_page_id)->id(), "page 2 -> overflow");
-      AssertEqual(tree.FetchPage(of_page_id)->Meta()->next_page(),
+                  tree.Page(of_page_id)->id(), "page 2 -> overflow");
+      AssertEqual(tree.Page(of_page_id)->Meta()->next_page(),
                   result[2].page->id(), "overflow -> page 3");
       AssertEqual(result[2].page->Meta()->prev_page(),
-                  tree.FetchPage(of_page_id)->id(), "overflow <- page 3");
+                  tree.Page(of_page_id)->id(), "overflow <- page 3");
     }
   }
 
-  void Test_InsertRecord(FileType file_type_, int key_index) {
+  void Test_InsertRecord(FileType file_type_, std::vector<int> key_index) {
     InitRecordResource();
-    key_indexes = std::vector<int>{key_index};
 
-    BplusTree tree(table, file_type_, key_indexes);
+    BplusTree tree(table, file_type_, key_index);
     tree.CreateBplusTreeFile();
     for (int i = 0; i < kNumRecordsSource; i++) {
       // printf("-------------------------------------------------------------\n");
       // printf("-------------------------------------------------------------\n");
       // printf("i = %d, record size = %d\n", i, record_resource[i]->size());
       // record_resource[i]->Print();
+      std::vector<Schema::DataRecordRidMutation> rid_mutations;
       if (file_type_ == INDEX_DATA) {
-        tree.Do_InsertRecord(record_resource[i].get());
+        tree.Do_InsertRecord(record_resource[i].get(), rid_mutations);
       }
       else {
         Schema::IndexRecord irecord;
         ((Schema::DataRecord*)record_resource[i].get())->
-            ExtractKey(&irecord, key_indexes);
-        tree.Do_InsertRecord(&irecord);
+            ExtractKey(&irecord, key_index);
+        tree.Do_InsertRecord(&irecord, rid_mutations);
       }
+      // printf("rid mutations\n");
+      // for (const auto& m: rid_mutations) {
+      //   m.Print();
+      // }
     }
     // Search and verify records.
-    _VerifyAllRecordsInTree(&tree, key_indexes);
+    _VerifyAllRecordsInTree(&tree, key_index);
   }
 };
 
 }  // namespace DataBaseFiles
 
 int main(int argc, char** argv) {
-  // DataBaseFiles::FileType file_type = DataBaseFiles::INDEX_DATA;
-  // int key_index = 0;
-  // if (argc >= 2 && std::string(argv[1]) == "INDEX") {
-  //   file_type = DataBaseFiles::INDEX;
-  // }
-  // if (argc >= 3) {
-  //   key_index = std::stoi(argv[2]);
-  // }
+  DataBaseFiles::FileType file_type = DataBaseFiles::INDEX_DATA;
+  std::vector<int> key_index{0};
+  if (argc >= 2 && std::string(argv[1]) == "INDEX") {
+    file_type = DataBaseFiles::INDEX;
+  }
+  if (argc >= 3) {
+    key_index.clear();
+    key_index.push_back(std::stoi(argv[2]));
+  }
 
   DataBaseFiles::BplusTreeTest test;
   test.setup();
   //test.Test_Header_Page_Consistency_Check();
   // test.Test_Create_Load_Empty_Tree();
   
-  for (int i = 0; i < 1; i++) {
-    test.Test_BulkLoading();
-  }
+  // for (int i = 0; i < 1; i++) {
+  //   test.Test_BulkLoading();
+  // }
 
   // test.Test_SplitLeave();
-  // for (int i = 0; i < 1; i++) {
-  //   test.Test_InsertRecord(file_type, key_index);
-  //   test.CheckBplusTree(file_type);
-  // }
+  for (int i = 0; i < 1; i++) {
+    test.Test_InsertRecord(file_type, key_index);
+    test.CheckBplusTree(file_type, key_index);
+  }
 
   test.teardown();
   std::cout << "\033[2;32mAll Passed ^_^\033[0m" << std::endl;

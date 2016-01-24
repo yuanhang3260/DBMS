@@ -33,6 +33,7 @@ class PageRecordsManager {
   int NumRecords() const { return plrecords_.size(); }
   std::vector<PageLoadedRecord>& plrecords() { return plrecords_; }
   RecordBase* Record(int index) const;
+  std::shared_ptr<RecordBase> Shared_Record(int index);
   int RecordSlotID(int index) const;
   template<class T>
   T* GetRecord(int index) {
@@ -79,6 +80,9 @@ class PageRecordsManager {
 
   int CompareRecords(const RecordBase* r1, const RecordBase* r2) const;
 
+  // Update rid of an IndexRecord.
+  bool UpdateRecordID(int slot_id, const RecordID& rid);
+
   class SplitLeaveResults {
    public:
     SplitLeaveResults(DataBaseFiles::RecordPage* page_) : page(page_) {}
@@ -88,8 +92,9 @@ class PageRecordsManager {
   };
 
   // Insert a new data record to the plrecords list.
-  std::vector<SplitLeaveResults>
-  InsertRecordAndSplitPage(const RecordBase* record);
+  std::vector<SplitLeaveResults> InsertRecordAndSplitPage(
+      const RecordBase* record,
+      std::vector<Schema::DataRecordRidMutation>& rid_mutations);
 
   friend class DataBaseFiles::BplusTree;
 
