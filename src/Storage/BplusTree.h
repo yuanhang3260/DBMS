@@ -108,11 +108,14 @@ class BplusTree {
   bool ValidityCheck();
 
   // Serach records by a key. Returns all records that matches this key.
-  int SearchByKey(const Schema::RecordBase* key,
-                  std::vector<std::shared_ptr<Schema::RecordBase>>* result);
+  int SearchRecords(const Schema::RecordBase* key,
+                    std::vector<std::shared_ptr<Schema::RecordBase>>* result);
+
+  // Search a key and return the leave.
+  RecordPage* SearchByKey(const Schema::RecordBase* key);
 
   // Insert a data record to the B+ tree.
-  bool Do_InsertRecord(
+  Schema::RecordID Do_InsertRecord(
            const Schema::RecordBase* record,
            std::vector<Schema::DataRecordRidMutation>& rid_mutations);
 
@@ -189,6 +192,9 @@ class BplusTree {
   // Check overflow page.
   bool VerifyOverflowPage(RecordPage* page);
 
+  // Verify a record in B+ tree is same as the given record.
+  bool VerifyRecord(const Schema::RecordID& rid, const Schema::RecordBase* r);
+
   class SearchTreeNodeResult {
    public:
     int slot = -1;
@@ -223,20 +229,20 @@ class BplusTree {
         const Schema::RecordBase* leave_record, Schema::RecordBase* tn_record);
 
   // Redistribute records with next leave.
-  bool ReDistributeToNextLeave(
+  Schema::RecordID ReDistributeToNextLeave(
            RecordPage* leave,
            SearchTreeNodeResult* search_result,
            const Schema::RecordBase* record,
            std::vector<Schema::DataRecordRidMutation>& rid_mutations);
 
   // Incurring overflow page when inserting new record.
-  bool InsertAfterOverflowLeave(
+  Schema::RecordID InsertAfterOverflowLeave(
            RecordPage* leave,
            SearchTreeNodeResult* search_result,
            const Schema::RecordBase* record,
            std::vector<Schema::DataRecordRidMutation>& rid_mutations);
   // Insert record to next leave.
-  bool InsertNewRecordToNextLeave(RecordPage* leave,
+  Schema::RecordID InsertNewRecordToNextLeave(RecordPage* leave,
                                   SearchTreeNodeResult* search_result,
                                   const Schema::RecordBase* record);
   // Re-distribute records from next leave.
@@ -245,7 +251,7 @@ class BplusTree {
            std::vector<Schema::DataRecordRidMutation>& rid_mutations);
 
   // Insert a new record to leave which will split the leave.
-  bool InsertNewRecordToLeaveWithSplit(
+  Schema::RecordID InsertNewRecordToLeaveWithSplit(
            RecordPage* leave,
            int next_leave_id,
            const Schema::RecordBase* record,
@@ -255,7 +261,7 @@ class BplusTree {
   RecordPage* GotoOverflowChainEnd(RecordPage* leave);
 
   // Insert a new record to the end of a overflow chain of leaves.
-  bool InsertNewRecordToOverFlowChain(
+  Schema::RecordID InsertNewRecordToOverFlowChain(
            RecordPage* leave, const Schema::RecordBase* record);
 
   // Create a new leave with a new record inserted.

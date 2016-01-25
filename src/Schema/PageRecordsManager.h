@@ -89,6 +89,7 @@ class PageRecordsManager {
 
     DataBaseFiles::RecordPage* page;
     std::shared_ptr<RecordBase> record;
+    RecordID rid;
   };
 
   // Insert a new data record to the plrecords list.

@@ -72,7 +72,10 @@ bool Table::BuildFieldIndexMap() {
 }
 
 DataBaseFiles::BplusTree* Table::Tree(std::string filename) {
-  return tree_map_.at(filename).get();
+  if (tree_map_.find(filename) != tree_map_.end()) {
+    return tree_map_.at(filename).get();  
+  }
+  return nullptr;
 }
 
 std::string Table::BplusTreeFileName(DataBaseFiles::FileType file_type,
@@ -116,6 +119,12 @@ bool Table::IsDataFileKey(int index) const {
 
 bool Table::PreLoadData(
          std::vector<std::shared_ptr<Schema::RecordBase>>& records) {
+  if (records.empty()) {
+    //(TODO): create empty trees?
+    LogERROR("Can't load empty records");
+    return false;
+  }
+
   // Sort the record based on idata_indexes_ (preferably primary key).
   Schema::PageRecordsManager::SortRecords(records, idata_indexes_);
 
@@ -182,7 +191,8 @@ bool Table::PreLoadData(
       (reinterpret_cast<Schema::DataRecord*>(r.record.get()))
           ->ExtractKey(&irecord, key_index);
       irecord.set_rid(r.rid);
-      //r.rid.Print();
+      // printf("insertng index record:\n");
+      // irecord.Print();
       tree->BulkLoadRecord(&irecord);
     }
     tree->SaveToDisk();
@@ -219,20 +229,27 @@ bool Table::ValidateAllIndexRecords(int num_records) {
                                DataBaseFiles::TREE_LEAVE);
 
     auto leave = tree->Page(1);
-    int count_num_records = 0;
+    std::set<Schema::RecordID> rid_set;
     while (leave) {
       auto slot_directory = leave->Meta()->slot_directory();
       for (int slot_id = 0; slot_id < (int)slot_directory.size(); slot_id++) {
         if (slot_directory[slot_id].offset() < 0) {
           continue;
         }
-        count_num_records++;
         // Load this IndexRecord.
-        irecord.LoadFromMem(leave->Record(slot_id));
-        drecord.LoadFromMem(data_tree->Record(irecord.rid()));
+        CheckLogFATAL(irecord.LoadFromMem(leave->Record(slot_id)) >= 0,
+                      "Load index record failed");
+        auto rid = irecord.rid();
+        // Check no duplicated RecordID.
+        CheckLogFATAL(rid_set.find(rid) == rid_set.end(), "duplicated rid");
+        rid_set.insert(rid);
+        // Load the DataRecord pointed by this rid.
+        CheckLogFATAL(drecord.LoadFromMem(data_tree->Record(rid)) >= 0,
+                      "Load data record failed");
         if (Schema::RecordBase::CompareRecordWithKey(&irecord, &drecord,
                                                      key_index) != 0) {
-          LogERROR("Compare index record failed with original data record");
+          LogERROR("Compare index %d record failed with original data record",
+                   key_index[0]);
           drecord.Print();
           irecord.Print();
           printf("*********\n");
@@ -241,13 +258,178 @@ bool Table::ValidateAllIndexRecords(int num_records) {
       }
       leave = tree->Page(leave->Meta()->next_page());
     }
-    if (count_num_records != num_records) {
+    if ((int)rid_set.size() != num_records) {
       LogERROR("count %d index records, expect %d",
-               count_num_records, num_records);
+               (int)rid_set.size(), num_records);
       return false;
     }
   }
   return true;
+}
+
+bool Table::UpdateIndexRecords(
+                std::vector<Schema::DataRecordRidMutation>& rid_mutations) {
+  if (rid_mutations.empty()) {
+    return true;
+  }
+
+  for (auto field: schema_->fields()) {
+    auto key_index = std::vector<int>{field.index()};
+    if (IsDataFileKey(key_index[0])) {
+      continue;
+    }
+    // printf("************** Updating Rid for index %d *******************\n",
+    //        key_index[0]);
+
+    // Index Tree.
+    auto tree = Tree(BplusTreeFileName(DataBaseFiles::INDEX, key_index));
+    if (!tree) {
+      // (TODO): Skip or Fatal ?
+      LogERROR("Can't find B+ tree for index %d", key_index[0]);
+      continue;
+    }
+    // Sort DataRecordRidMutation list.
+    Schema::DataRecordRidMutation::Sort(rid_mutations, key_index);
+
+    std::vector<Schema::RecordGroup> rgroups;
+    GroupDataRecordRidMutations(rid_mutations, key_index, &rgroups);
+
+    for (const auto& group: rgroups) {
+      auto crt_record = rid_mutations[group.start_index].record;
+      Schema::RecordBase key;
+      (reinterpret_cast<const Schema::DataRecord*>(crt_record.get()))
+        ->ExtractKey(&key, key_index);
+
+      auto leave = tree->SearchByKey(&key);
+      CheckLogFATAL(leave, "Failed to search key at index %d", key_index[0]);
+      // printf("---------- udpate for key ----------: \n");
+      // key.Print();
+      // printf("leave id = %d\n", leave->id());
+
+      auto crt_leave = leave;
+      int num_rids_updated = 0;
+      while (crt_leave) {
+        Schema::PageRecordsManager prmanager(crt_leave, schema_.get(),
+                                             key_index,
+                                             DataBaseFiles::INDEX,
+                                             DataBaseFiles::TREE_LEAVE);
+        for (int i = 0; i < (int)prmanager.NumRecords(); i++) {
+          int re = prmanager.CompareRecordWithKey(&key, prmanager.Record(i));
+          //printf("scanning index record: re %d, slot %d\n",
+          //       re, prmanager.RecordSlotID(i));
+          //prmanager.Record(i)->Print();
+          if (re < 0) {
+            break;
+          } else if (re > 0) {
+            continue;
+          }
+          Schema::RecordID rid =
+            reinterpret_cast<Schema::IndexRecord*>(prmanager.Record(i))->rid();
+          //printf("scanning old rid\n");
+          //rid.Print();
+          for (int rid_m_index = group.start_index;
+               rid_m_index < group.start_index + group.num_records;
+               rid_m_index++) {
+            if (rid == rid_mutations[rid_m_index].old_rid) {
+              // Update the rid for the IndexRecord.
+              //printf("updating slot %d to new: \n", prmanager.RecordSlotID(i));
+              //rid_mutations[rid_m_index].new_rid.Print();
+              prmanager.UpdateRecordID(prmanager.RecordSlotID(i),
+                                       rid_mutations[rid_m_index].new_rid);
+              num_rids_updated++;
+            }
+          }
+        }
+        crt_leave = tree->Page(crt_leave->Meta()->overflow_page());
+      }
+      if (num_rids_updated != group.num_records) {
+        LogERROR("Updated error %d number of rids, expect %d",
+                 num_rids_updated, group.num_records);
+        key.Print();
+        return false;
+      }
+    }
+  }
+
+  return true;
+}
+
+void Table::GroupDataRecordRidMutations(
+                std::vector<Schema::DataRecordRidMutation>& rid_mutations,
+                std::vector<int> key_index,
+                std::vector<Schema::RecordGroup>* rgroups) {
+  if (rid_mutations.empty()) {
+    return;
+  }
+
+  auto crt_record = rid_mutations[0].record;
+  int crt_start = 0;
+  int num_records = 0;
+  for (int i = 0; i < (int)rid_mutations.size(); i++) {
+    if (Schema::RecordBase::CompareRecordsBasedOnIndex(
+            crt_record.get(), rid_mutations[i].record.get(), key_index) == 0) {
+      num_records++;
+    }
+    else {
+      rgroups->push_back(Schema::RecordGroup(crt_start, num_records, -1));
+      crt_start = i;
+      num_records = 1;
+      crt_record = rid_mutations[crt_start].record;
+    }
+  }
+  rgroups->push_back(Schema::RecordGroup(crt_start, num_records, -1));
+}
+
+bool Table::InsertRecord(const Schema::RecordBase* record) {
+  if (record->type() != Schema::DATA_RECORD) {
+    LogERROR("Can't insert record other than DataRecord");
+    return false;
+  }
+
+  auto tree_name = BplusTreeFileName(DataBaseFiles::INDEX_DATA, idata_indexes_);
+  auto data_tree = Tree(tree_name);
+  if (!data_tree) {
+    LogERROR("Can't get DataRecord B+ tree, filename is %s", tree_name.c_str());
+    return false;
+  }
+  std::vector<Schema::DataRecordRidMutation> rid_mutations;
+  auto rid = data_tree->Do_InsertRecord(record, rid_mutations);
+  if (!rid.IsValid()) {
+    LogFATAL("Failed to insert data record");
+  }
+
+  // debug(0);
+  // for (auto& m: rid_mutations) {
+  //   m.Print();
+  // }
+  // debug(1);
+
+  // Update changed RecordIDs of existing records in the B+ tree.
+  if (!UpdateIndexRecords(rid_mutations)) {
+    LogFATAL("Failed to Update IndexRecords");
+  }
+
+  // Insert IndexRecord of the new record to index files.
+  rid_mutations.clear();
+  for (auto field: schema_->fields()) {
+    auto key_index = std::vector<int>{field.index()};
+    if (IsDataFileKey(key_index[0])) {
+      continue;
+    }
+    // Index Tree.
+    auto index_tree = Tree(BplusTreeFileName(DataBaseFiles::INDEX, key_index));
+    Schema::IndexRecord irecord;
+      (reinterpret_cast<const Schema::DataRecord*>(record))
+        ->ExtractKey(&irecord, key_index);
+    irecord.set_rid(rid);
+    auto irid = index_tree->Do_InsertRecord(&irecord, rid_mutations);
+    if (!irid.IsValid()) {
+      LogFATAL("Failed to insert index record for the new record at index %d",
+               key_index[0]);
+    }
+  }
+
+  return true;;
 }
 
 }  // namespace DATABASE

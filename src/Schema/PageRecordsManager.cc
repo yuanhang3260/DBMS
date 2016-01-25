@@ -360,20 +360,23 @@ PageRecordsManager::InsertRecordAndSplitPage(
   // std::cout << "re1.right_records: " << re1.right_records << std::endl;
   // std::cout << "re1.right_size: " << re1.right_size << std::endl;
   // std::cout << "re1.left_larger: " << re1.left_larger << std::endl;
+  RecordID rid;
   if (re1.left_larger) {
     // Corner case - all recors are same. We need to add new record to
     // overflow page.
     if (re1.mid_index >= (int)rgroups.size()) {
       auto of_page = tree_->AppendOverflowPageTo(page_);
-      if (record->InsertToRecordPage(of_page) < 0) {
+      int slot_id = record->InsertToRecordPage(of_page);
+      if (slot_id < 0) {
         LogFATAL("Insert new record to first page's overflow page failed");
       }
       result.emplace_back(page_);
       result[0].record = plrecords_[0].Record();
+      result[0].rid = RecordID(of_page->id(), slot_id);
       return result;
     }
 
-    int new_record_inserted = false;
+    int new_record_page = -1;
     auto page = tree_->AllocateNewPage(DataBaseFiles::TREE_LEAVE);
     // Allocate a new leave and insert right half records to it.
     for (int i = rgroups.at(re1.mid_index).start_index;
@@ -383,7 +386,8 @@ PageRecordsManager::InsertRecordAndSplitPage(
       CheckLogFATAL(new_slot_id >= 0, "Insert right half to new leave failed.");
       int slot_id = plrecords_.at(i).slot_id();
       if (slot_id < 0) {
-        new_record_inserted = true;
+        new_record_page = 1;
+        rid = RecordID(page->id(), new_slot_id);
       }
       else {
         page_->DeleteRecord(slot_id);
@@ -398,13 +402,21 @@ PageRecordsManager::InsertRecordAndSplitPage(
     // half records can definitely fit in the original leave and we are done;
     // Otherwise we try inserting the new record to original leave and if
     // success we are also done.
-    if (new_record_inserted || record->InsertToRecordPage(page_) >= 0) {
+    if (new_record_page < 0) {
+      int slot_id = record->InsertToRecordPage(page_);
+      if (slot_id >= 0) {
+        rid = RecordID(page_->id(), slot_id);
+        new_record_page = 0;
+      }
+    }
+    if (new_record_page >= 0) {
       DataBaseFiles::BplusTree::ConnectLeaves(page_, page);
       result.emplace_back(page_);
       result[0].record = plrecords_[0].Record();
       result.emplace_back(page);
       result[1].record =
           plrecords_[rgroups.at(re1.mid_index).start_index].Record();
+      result[0].rid = rid;  // RecordID of the new record.
       return result;
     }
     else {
@@ -414,7 +426,8 @@ PageRecordsManager::InsertRecordAndSplitPage(
         // This is special case. The first records group becomes so large that
         // original leave can't hold them all.
         auto of_page = tree_->AppendOverflowPageTo(page_);
-        if (record->InsertToRecordPage(of_page) < 0) {
+        int slot_id = record->InsertToRecordPage(of_page);
+        if (slot_id < 0) {
           LogFATAL("Insert new record to first page's overflow page failed");
         }
         DataBaseFiles::BplusTree::ConnectLeaves(of_page, page);
@@ -423,6 +436,7 @@ PageRecordsManager::InsertRecordAndSplitPage(
         result.emplace_back(page);
         result[1].record =
           plrecords_[rgroups.at(re1.mid_index).start_index].Record();
+        result[0].rid = RecordID(of_page->id(), slot_id);
         return result;
       }
       else {
@@ -445,6 +459,7 @@ PageRecordsManager::InsertRecordAndSplitPage(
           int slot_id = plrecords_.at(i).slot_id();
           if (slot_id < 0) {
             new_record_in_second_page = true;
+            rid = RecordID(tail_page->id(), new_slot_id);
           }
           else {
             page_->DeleteRecord(slot_id);
@@ -456,9 +471,11 @@ PageRecordsManager::InsertRecordAndSplitPage(
           }
         }
         if (!new_record_in_second_page) {
-          if (record->InsertToRecordPage(page_) < 0) {
+          int slot_id = record->InsertToRecordPage(page_);
+          if (slot_id < 0) {
             LogFATAL("Failed to insert new record to first page");
           }
+          rid = RecordID(page_->id(), slot_id);
         }
 
         DataBaseFiles::BplusTree::ConnectLeaves(page_, page2);
@@ -469,6 +486,7 @@ PageRecordsManager::InsertRecordAndSplitPage(
         result[1].record = plrecords_[group.start_index].Record();
         result.emplace_back(page);
         result[2].record = plrecords_[i].Record();
+        result[0].rid = rid;
         return result;
       }
     }
@@ -500,6 +518,7 @@ PageRecordsManager::InsertRecordAndSplitPage(
       int slot_id = plrecords_.at(index).slot_id();
       if (slot_id < 0) {
         new_record_inserted = true;
+        rid = RecordID(tail_page->id(), new_slot_id);
       }
       else {
         page_->DeleteRecord(slot_id);
@@ -531,6 +550,7 @@ PageRecordsManager::InsertRecordAndSplitPage(
           int slot_id = plrecords_.at(index).slot_id(); 
           if (slot_id < 0) {
             new_record_inserted = true;
+            rid = RecordID(page2->id(), new_slot_id);
           }
           else {
             page_->DeleteRecord(slot_id);
@@ -556,6 +576,7 @@ PageRecordsManager::InsertRecordAndSplitPage(
         int slot_id = plrecords_.at(index).slot_id();
         if (slot_id < 0) {
           new_record_inserted = true;
+          rid = RecordID(page3->id(), new_slot_id);
         }
         else {
           page_->DeleteRecord(slot_id);
@@ -569,9 +590,11 @@ PageRecordsManager::InsertRecordAndSplitPage(
     }
 
     if (!new_record_inserted) {
-      if (record->InsertToRecordPage(page_) < 0) {
+      int slot_id = record->InsertToRecordPage(page_);
+      if (slot_id < 0) {
         LogFATAL("Failed to insert new record to first page");
       }
+      rid = RecordID(page_->id(), slot_id);
     }
     // Return result
     DataBaseFiles::BplusTree::ConnectLeaves(page_, page2);
@@ -582,6 +605,7 @@ PageRecordsManager::InsertRecordAndSplitPage(
     }
   }
 
+  result[0].rid = rid;
   return result;
 }
 
@@ -592,7 +616,8 @@ bool PageRecordsManager::UpdateRecordID(int slot_id, const RecordID& rid) {
     return false;
   }
 
-  rid.DumpToMem(page_->Record(slot_id) - rid.size());
+  rid.DumpToMem(page_->Record(slot_id) + page_->RecordLength(slot_id) -
+                rid.size());
   return true;
 }
 

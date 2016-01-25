@@ -38,6 +38,36 @@ class RecordID {
 
   void reset() { page_id_ = -1; slot_id_ = -1; }
 
+  bool operator==(const RecordID& other) const {
+    return page_id_ == other.page_id_ && slot_id_ == other.slot_id_;
+  }
+
+  bool operator<(const RecordID& other) const {
+    if (page_id_ != other.page_id_) {
+      return page_id_ < other.page_id_;
+    }
+    return slot_id_ < other.slot_id_;
+  }
+
+  bool operator>(const RecordID& other) const {
+    if (page_id_ != other.page_id_) {
+      return page_id_ > other.page_id_;
+    }
+    return slot_id_ > other.slot_id_;
+  }
+
+  bool operator<=(const RecordID& other) const {
+    return !((*this) > other);
+  }
+
+  bool operator>=(const RecordID& other) const {
+    return !((*this) < other);
+  }
+
+  bool operator!=(const RecordID& other) const {
+    return !((*this) == other);
+  }
+
  private:
   int page_id_ = -1;
   int slot_id_ = -1;
