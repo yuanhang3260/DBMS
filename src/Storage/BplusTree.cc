@@ -193,12 +193,16 @@ BplusTree::~BplusTree() {
 
 BplusTree::BplusTree(DataBase::Table* table,
                      FileType file_type,
-                     std::vector<int> key_indexes) :
+                     std::vector<int> key_indexes,
+                     bool create) :
     table_(table),
     file_type_(file_type),
     key_indexes_(key_indexes) {
-  if (!LoadTree()) {
+  if (create) {
     CheckLogFATAL(CreateBplusTreeFile(), "Failed to create new B+ tree file");
+  }
+  else {
+    CheckLogFATAL(LoadTree(), "Failed to load B+ tree");
   }
 }
 
@@ -265,7 +269,7 @@ bool BplusTree::LoadRootNode() {
     page_map_.at(root_page_id)->LoadPageData();
   }
   else {
-    LogINFO("LoadRootNodroot_page_id = %d", root_page_id);
+    LogINFO("LoadRootNode() root_page_id = %d", root_page_id);
   }
   return true;
 }

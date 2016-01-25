@@ -31,9 +31,12 @@ class Table {
   // Bulkload data records and generate all index files.
   bool PreLoadData(std::vector<std::shared_ptr<Schema::RecordBase>>& records);
 
-  DataBaseFiles::BplusTree* Tree(std::string filename);
+  DataBaseFiles::BplusTree* Tree(DataBaseFiles::FileType,
+                                 std::vector<int> key_indexes);
 
   bool IsDataFileKey(int index) const;
+
+  bool InitTrees();
 
   bool ValidateAllIndexRecords(int num_records);
 

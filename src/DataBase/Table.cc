@@ -71,10 +71,17 @@ bool Table::BuildFieldIndexMap() {
   return true;
 }
 
-DataBaseFiles::BplusTree* Table::Tree(std::string filename) {
+DataBaseFiles::BplusTree* Table::Tree(DataBaseFiles::FileType file_type,
+                                      std::vector<int> key_indexes) {
+  std::string filename = BplusTreeFileName(file_type, key_indexes);
   if (tree_map_.find(filename) != tree_map_.end()) {
     return tree_map_.at(filename).get();  
   }
+
+  auto tree = std::make_shared<DataBaseFiles::BplusTree>(
+                   this, file_type, key_indexes);
+  tree_map_.emplace(filename, tree);
+
   return nullptr;
 }
 
@@ -117,6 +124,31 @@ bool Table::IsDataFileKey(int index) const {
   return idata_indexes_[0] == index;
 }
 
+bool Table::InitTrees() {
+  // Data tree.
+  auto filename = BplusTreeFileName(DataBaseFiles::INDEX_DATA, idata_indexes_);
+  auto tree = std::make_shared<DataBaseFiles::BplusTree>(
+                   this, DataBaseFiles::INDEX_DATA, idata_indexes_, true);
+  tree_map_.emplace(filename, tree);
+  tree->SaveToDisk();
+
+  // Index trees.
+  for (auto field: schema_->fields()) {
+    auto key_index = std::vector<int>{field.index()};
+    if (IsDataFileKey(key_index[0])) {
+      continue;
+    }
+    filename = BplusTreeFileName(DataBaseFiles::INDEX, key_index);
+    tree = std::make_shared<DataBaseFiles::BplusTree>(
+                     this, DataBaseFiles::INDEX, key_index, true);
+    tree->CreateBplusTreeFile();
+    tree_map_.emplace(filename, tree);
+    tree->SaveToDisk();
+  }
+
+  return true;
+}
+
 bool Table::PreLoadData(
          std::vector<std::shared_ptr<Schema::RecordBase>>& records) {
   if (records.empty()) {
@@ -131,8 +163,7 @@ bool Table::PreLoadData(
   // BulkLoad DataRecord.
   auto filename = BplusTreeFileName(DataBaseFiles::INDEX_DATA, idata_indexes_);
   auto tree = std::make_shared<DataBaseFiles::BplusTree>(
-                   this, DataBaseFiles::INDEX_DATA, idata_indexes_);
-  tree->CreateBplusTreeFile();
+                   this, DataBaseFiles::INDEX_DATA, idata_indexes_, true);
   tree_map_.emplace(filename, tree);
 
   std::vector<Schema::DataRecordWithRid> record_rids;
@@ -182,8 +213,7 @@ bool Table::PreLoadData(
     // printf("***********************\n");
     filename = BplusTreeFileName(DataBaseFiles::INDEX, key_index);
     tree = std::make_shared<DataBaseFiles::BplusTree>(
-                     this, DataBaseFiles::INDEX, key_index);
-    tree->CreateBplusTreeFile();
+                     this, DataBaseFiles::INDEX, key_index, true);
     tree_map_.emplace(filename, tree);
 
     Schema::IndexRecord irecord;
@@ -203,8 +233,7 @@ bool Table::PreLoadData(
 
 bool Table::ValidateAllIndexRecords(int num_records) {
   // Get the data tree.
-  auto data_tree =
-           Tree(BplusTreeFileName(DataBaseFiles::INDEX_DATA, idata_indexes_));
+  auto data_tree = Tree(DataBaseFiles::INDEX_DATA, idata_indexes_);
   CheckLogFATAL(data_tree, "Can't find data B+ tree");
 
   Schema::DataRecord drecord;
@@ -219,7 +248,7 @@ bool Table::ValidateAllIndexRecords(int num_records) {
     }
     //printf("Verifying index %d file\n", key_index[0]);
     // Get the index tree.
-    auto tree = Tree(BplusTreeFileName(DataBaseFiles::INDEX, key_index));
+    auto tree = Tree(DataBaseFiles::INDEX, key_index);
     CheckLogFATAL(tree, "Can't find B+ tree for index %d", key_index[0]);
 
     // An IndexRecord instance to load index records from tree leaves.
@@ -282,7 +311,7 @@ bool Table::UpdateIndexRecords(
     //        key_index[0]);
 
     // Index Tree.
-    auto tree = Tree(BplusTreeFileName(DataBaseFiles::INDEX, key_index));
+    auto tree = Tree(DataBaseFiles::INDEX, key_index);
     if (!tree) {
       // (TODO): Skip or Fatal ?
       LogERROR("Can't find B+ tree for index %d", key_index[0]);
@@ -386,23 +415,17 @@ bool Table::InsertRecord(const Schema::RecordBase* record) {
     return false;
   }
 
-  auto tree_name = BplusTreeFileName(DataBaseFiles::INDEX_DATA, idata_indexes_);
-  auto data_tree = Tree(tree_name);
+  auto data_tree = Tree(DataBaseFiles::INDEX_DATA, idata_indexes_);
   if (!data_tree) {
-    LogERROR("Can't get DataRecord B+ tree, filename is %s", tree_name.c_str());
+    LogERROR("Can't get DataRecord B+ tree");
     return false;
   }
+  // Insert record to data B+ tree.
   std::vector<Schema::DataRecordRidMutation> rid_mutations;
   auto rid = data_tree->Do_InsertRecord(record, rid_mutations);
   if (!rid.IsValid()) {
     LogFATAL("Failed to insert data record");
   }
-
-  // debug(0);
-  // for (auto& m: rid_mutations) {
-  //   m.Print();
-  // }
-  // debug(1);
 
   // Update changed RecordIDs of existing records in the B+ tree.
   if (!UpdateIndexRecords(rid_mutations)) {
@@ -417,7 +440,7 @@ bool Table::InsertRecord(const Schema::RecordBase* record) {
       continue;
     }
     // Index Tree.
-    auto index_tree = Tree(BplusTreeFileName(DataBaseFiles::INDEX, key_index));
+    auto index_tree = Tree(DataBaseFiles::INDEX, key_index);
     Schema::IndexRecord irecord;
       (reinterpret_cast<const Schema::DataRecord*>(record))
         ->ExtractKey(&irecord, key_index);

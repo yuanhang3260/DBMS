@@ -205,7 +205,7 @@ class BplusTreeTest: public UnitTest {
     for (const auto& field: schema->fields()) {
       auto key_index = std::vector<int>{field.index()};
       file_type = table->IsDataFileKey(key_index[0]) ? INDEX_DATA : INDEX;
-      auto tree = table->Tree(table->BplusTreeFileName(file_type, key_index));
+      auto tree = table->Tree(file_type, key_index);
       tree->SaveToDisk();
 
       CheckBplusTree(file_type, key_index);
@@ -640,7 +640,7 @@ class BplusTreeTest: public UnitTest {
     for (const auto& field: schema->fields()) {
       auto key_index = std::vector<int>{field.index()};
       file_type = table->IsDataFileKey(key_index[0]) ? INDEX_DATA : INDEX;
-      auto tree = table->Tree(table->BplusTreeFileName(file_type, key_index));
+      auto tree = table->Tree(file_type, key_index);
       tree->SaveToDisk();
 
       CheckBplusTree(file_type, key_index);

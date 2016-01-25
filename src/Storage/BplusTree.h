@@ -65,7 +65,8 @@ class BplusTree {
   // Contruct B+ tree from an existing file.
   BplusTree(DataBase::Table* table,
             FileType file_type,
-            std::vector<int> key_indexes);
+            std::vector<int> key_indexes,
+            bool create=false);
 
   // Destructor
   virtual ~BplusTree();
