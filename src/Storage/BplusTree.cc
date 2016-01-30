@@ -57,9 +57,6 @@ bool BplusTreeHeaderPage::DumpToMem(byte* buf) const {
   // depth
   memcpy(buf + offset, &depth_, sizeof(depth_));
   offset += sizeof(depth_);
-  // next_id
-  memcpy(buf + offset, &next_id_, sizeof(next_id_));
-  offset += sizeof(next_id_);
 
   return true;
 }
@@ -96,9 +93,6 @@ bool BplusTreeHeaderPage::ParseFromMem(const byte* buf) {
   // depth
   memcpy(&depth_, buf + offset, sizeof(depth_));
   offset += sizeof(depth_);
-  // depth
-  memcpy(&next_id_, buf + offset, sizeof(next_id_));
-  offset += sizeof(next_id_);
 
   // Do consistency check.
   if (!ConsistencyCheck("Load")) {
@@ -237,6 +231,8 @@ bool BplusTree::CreateBplusTreeFile() {
 
   // Create header page.
   header_.reset(new BplusTreeHeaderPage(file_, file_type_));
+  header_->set_num_pages(1);
+  header_->set_num_used_pages(1);
 
   return true;
 }
@@ -339,8 +335,7 @@ RecordPage* BplusTree::AllocateNewPage(PageType page_type) {
   }
   else {
     // Append new page at the end of file.
-    new_page_id = header_->next_id();
-    header_->increment_next_id(1);
+    new_page_id = header_->num_pages();
     header_->increment_num_pages(1);
     page = new RecordPage(new_page_id, file_);
     page->InitInMemoryPage();
@@ -781,8 +776,8 @@ bool BplusTree::ValidityCheck() {
   std::queue<RecordPage*> page_q;
   RecordPage* root = Page(header_->root_page());
   page_q.push(root);
-  vc_status_.count_num_pages = 1;
-  vc_status_.count_num_used_pages = 1;
+  vc_status_.count_num_pages = 2; // header page + root
+  vc_status_.count_num_used_pages = 2;
   while (!page_q.empty()) {
     RecordPage* crt_page = page_q.front();
     page_q.pop();
