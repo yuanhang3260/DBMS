@@ -1,4 +1,6 @@
 #include <vector>
+#include <map>
+#include <set>
 #include <algorithm>
 
 #include "Base/Utils.h"
@@ -83,6 +85,59 @@ void DataRecordRidMutation::Print() const {
   printf("rid: (%d, %d) --> (%d, %d)\n",
          old_rid.page_id(), old_rid.slot_id(),
          new_rid.page_id(), new_rid.slot_id());
+}
+
+bool DataRecordRidMutation::ValidityCheck(
+         const std::vector<DataRecordRidMutation>& v) {
+  std::set<RecordID> old_rid_set;
+  std::set<RecordID> new_rid_set;
+  for (const auto& r : v) {
+    if (old_rid_set.find(r.old_rid) != old_rid_set.end()) {
+      return false;
+    }
+    old_rid_set.insert(r.old_rid);
+    if (new_rid_set.find(r.new_rid) != new_rid_set.end()) {
+      return false;
+    }
+    new_rid_set.insert(r.new_rid);
+  }
+  return true;
+}
+
+bool DataRecordRidMutation::Merge(std::vector<DataRecordRidMutation>& v1,
+                                  std::vector<DataRecordRidMutation>& v2) {
+  if (!ValidityCheck(v1)) {
+    return false;
+  }
+  if (!ValidityCheck(v2)) {
+    return false;
+  }
+
+  std::map<int, int> rid_m_cascade_map;
+  std::vector<int> insert_list;
+  for (int i = 0; i < (int)v2.size(); i++) {
+    bool cascade = false;
+    for (int j = 0; j < (int)v1.size(); j++) {
+      if (rid_m_cascade_map.find(j) == rid_m_cascade_map.end() &&
+          v1[j].new_rid == v2[i].old_rid) {
+        rid_m_cascade_map.emplace(j, i);
+        cascade = true;
+      }
+    }
+    if (!cascade) {
+      insert_list.push_back(i);
+    }
+  }
+  // update cascaded rid mutations.
+  for (auto const& e: rid_m_cascade_map) {
+    v1[e.first].new_rid = v2[e.second].new_rid;
+  }
+
+  for (auto const i: insert_list) {
+    v1.push_back(v2[i]);
+  }
+
+  return true;
 }
 
 }  // namespace Schema

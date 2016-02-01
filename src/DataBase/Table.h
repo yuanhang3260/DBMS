@@ -55,6 +55,29 @@ class Table {
            std::vector<int> key_index,
            std::vector<Schema::RecordGroup>* rgroups);
 
+  // Given a sorted list of DataRecordRidMutation groups, we further group them
+  // into leave groups - that is, group them based on the index B+ tree leave 
+  // reside in. It's an optimization so that we batch update/delete rids records
+  // based on leaves. 
+  class RidMutationLeaveGroup {
+   public:
+    RidMutationLeaveGroup(int start, int end, int id) :
+        start_rgroup(start),
+        end_rgroup(end),
+        leave_id(id) {
+    }
+    int start_rgroup;
+    int end_rgroup;
+    int leave_id;
+  };
+
+  void GroupRidMutationLeaveGroups(
+           std::vector<Schema::DataRecordRidMutation>& rid_mutations,
+           std::vector<Schema::RecordGroup>& rgroups,
+           DataBaseFiles::BplusTree* tree,
+           std::vector<int> key_index,
+           std::vector<RidMutationLeaveGroup>* ridmlgroup);
+
   std::string name_;
   std::unique_ptr<Schema::TableSchema> schema_;
 

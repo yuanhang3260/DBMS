@@ -108,6 +108,11 @@ class DataRecordRidMutation {
 
   static void Sort(std::vector<Schema::DataRecordRidMutation>& records,
                    const std::vector<int>& key_indexes);
+
+  static bool ValidityCheck(const std::vector<DataRecordRidMutation>& v);
+
+  static bool Merge(std::vector<DataRecordRidMutation>& v1,
+                    std::vector<DataRecordRidMutation>& v2);
 };
 
 

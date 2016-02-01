@@ -323,60 +323,80 @@ bool Table::UpdateIndexRecords(
     std::vector<Schema::RecordGroup> rgroups;
     GroupDataRecordRidMutations(rid_mutations, key_index, &rgroups);
 
-    for (const auto& group: rgroups) {
-      auto crt_record = rid_mutations[group.start_index].record;
-      Schema::RecordBase key;
-      (reinterpret_cast<const Schema::DataRecord*>(crt_record.get()))
-        ->ExtractKey(&key, key_index);
+    std::vector<RidMutationLeaveGroup> ridmlgroup;
+    GroupRidMutationLeaveGroups(rid_mutations, rgroups, tree, key_index,
+                                &ridmlgroup);
 
-      auto leave = tree->SearchByKey(&key);
-      CheckLogFATAL(leave, "Failed to search key at index %d", key_index[0]);
+    for (const auto& rmlgroup: ridmlgroup) {
+      auto crt_leave = tree->Page(rmlgroup.leave_id);
+      CheckLogFATAL(crt_leave, "Failed to get leave of RidMutationLeaveGroup");
+      std::shared_ptr<Schema::PageRecordsManager> prmanager(
+          new Schema::PageRecordsManager(
+              crt_leave, schema_.get(), key_index,
+              DataBaseFiles::INDEX, DataBaseFiles::TREE_LEAVE)
+      );
+      int i = 0;
+      for (int rgroup_index = rmlgroup.start_rgroup;
+           rgroup_index <= rmlgroup.end_rgroup;
+           rgroup_index++) {
+        auto group = rgroups[rgroup_index];
+        auto crt_record = rid_mutations[group.start_index].record;
+        Schema::RecordBase key;
+        (reinterpret_cast<const Schema::DataRecord*>(crt_record.get()))
+          ->ExtractKey(&key, key_index);
+
+        int num_rids_updated = 0;
+        while (crt_leave) {
+          for (; i < (int)prmanager->NumRecords(); i++) {
+            int re = prmanager->CompareRecordWithKey(&key,prmanager->Record(i));
+            //printf("scanning index record: re %d, slot %d\n",
+            //       re, prmanager.RecordSlotID(i));
+            //prmanager.Record(i)->Print();
+            if (re < 0) {
+              break;
+            } else if (re > 0) {
+              continue;
+            }
+            Schema::RecordID rid = reinterpret_cast<Schema::IndexRecord*>(
+                                       prmanager->Record(i))->rid();
+            //printf("scanning old rid\n");
+            //rid.Print();
+            for (int rid_m_index = group.start_index;
+                 rid_m_index < group.start_index + group.num_records;
+                 rid_m_index++) {
+              if (rid == rid_mutations[rid_m_index].old_rid) {
+                // Update the rid for the IndexRecord.
+                prmanager->UpdateRecordID(prmanager->RecordSlotID(i),
+                                          rid_mutations[rid_m_index].new_rid);
+                num_rids_updated++;
+              }
+            }
+          }
+
+          // This is not overflow page because it has more than 1 keys groups.
+          if (rmlgroup.start_rgroup != rmlgroup.end_rgroup) {
+            break;
+          }
+          // Otherwise we might need to continue searching overflow pages.
+          crt_leave = tree->Page(crt_leave->Meta()->overflow_page());
+          if (crt_leave) {
+            prmanager.reset(new Schema::PageRecordsManager(
+                crt_leave, schema_.get(), key_index,
+                DataBaseFiles::INDEX, DataBaseFiles::TREE_LEAVE)
+            );
+            i = 0;
+          }
+        }
+        if (num_rids_updated != group.num_records) {
+          LogERROR("Updated %d number of rids, expect %d",
+                   num_rids_updated, group.num_records);
+          key.Print();
+          return false;
+        }
+      }
       // printf("---------- udpate for key ----------: \n");
       // key.Print();
       // printf("leave id = %d\n", leave->id());
-
-      auto crt_leave = leave;
-      int num_rids_updated = 0;
-      while (crt_leave) {
-        Schema::PageRecordsManager prmanager(crt_leave, schema_.get(),
-                                             key_index,
-                                             DataBaseFiles::INDEX,
-                                             DataBaseFiles::TREE_LEAVE);
-        for (int i = 0; i < (int)prmanager.NumRecords(); i++) {
-          int re = prmanager.CompareRecordWithKey(&key, prmanager.Record(i));
-          //printf("scanning index record: re %d, slot %d\n",
-          //       re, prmanager.RecordSlotID(i));
-          //prmanager.Record(i)->Print();
-          if (re < 0) {
-            break;
-          } else if (re > 0) {
-            continue;
-          }
-          Schema::RecordID rid =
-            reinterpret_cast<Schema::IndexRecord*>(prmanager.Record(i))->rid();
-          //printf("scanning old rid\n");
-          //rid.Print();
-          for (int rid_m_index = group.start_index;
-               rid_m_index < group.start_index + group.num_records;
-               rid_m_index++) {
-            if (rid == rid_mutations[rid_m_index].old_rid) {
-              // Update the rid for the IndexRecord.
-              //printf("updating slot %d to new: \n", prmanager.RecordSlotID(i));
-              //rid_mutations[rid_m_index].new_rid.Print();
-              prmanager.UpdateRecordID(prmanager.RecordSlotID(i),
-                                       rid_mutations[rid_m_index].new_rid);
-              num_rids_updated++;
-            }
-          }
-        }
-        crt_leave = tree->Page(crt_leave->Meta()->overflow_page());
-      }
-      if (num_rids_updated != group.num_records) {
-        LogERROR("Updated error %d number of rids, expect %d",
-                 num_rids_updated, group.num_records);
-        key.Print();
-        return false;
-      }
     }
   }
 
@@ -409,6 +429,55 @@ void Table::GroupDataRecordRidMutations(
   rgroups->push_back(Schema::RecordGroup(crt_start, num_records, -1));
 }
 
+void Table::GroupRidMutationLeaveGroups(
+                std::vector<Schema::DataRecordRidMutation>& rid_mutations,
+                std::vector<Schema::RecordGroup>& rgroups,
+                DataBaseFiles::BplusTree* tree,
+                std::vector<int> key_index,
+                std::vector<RidMutationLeaveGroup>* ridmlgroup) {
+  if (rgroups.empty()) {
+    return;
+  }
+
+  int crt_leave_id = -1;
+  int crt_start = -1;
+  int crt_end = -1;
+  for (int i = 0; i < (int)rgroups.size(); i++) {
+    auto crt_record = rid_mutations[rgroups[i].start_index].record;
+    Schema::RecordBase key;
+    (reinterpret_cast<const Schema::DataRecord*>(crt_record.get()))
+      ->ExtractKey(&key, key_index);
+
+    auto leave = tree->SearchByKey(&key);
+    CheckLogFATAL(leave, "Failed to search key at index %d", key_index[0]);
+    if (leave->id() == crt_leave_id) {
+      crt_end = i;
+    }
+    else {
+      // new leave group.
+      if (i > 0) {
+        ridmlgroup->emplace_back(crt_start, crt_end, crt_leave_id);
+      }
+      crt_start = i;
+      crt_end = i;
+      crt_leave_id = leave->id();
+    }
+  }
+  ridmlgroup->emplace_back(crt_start, crt_end, crt_leave_id);
+
+  // printf("rid_mutations size = %d\n", rid_mutations.size());
+  // for (const auto& i : rgroups) {
+  //   printf("%d, %d\n", i.start_index, i.num_records);
+  // }
+  // printf("rgroups size = %d\n", rgroups.size());
+  // for (const auto& i: *ridmlgroup) {
+  //   printf("(%d, %d), id = %d\n", i.start_rgroup, i.end_rgroup, i.leave_id);
+  //   for (int ii = i.start_rgroup; ii <= i.end_rgroup; ii++) {
+  //     printf("  %d\n", rgroups[ii].start_index);
+  //   }
+  // }
+}
+
 bool Table::InsertRecord(const Schema::RecordBase* record) {
   if (record->type() != Schema::DATA_RECORD) {
     LogERROR("Can't insert record other than DataRecord");
@@ -430,6 +499,10 @@ bool Table::InsertRecord(const Schema::RecordBase* record) {
   // Update changed RecordIDs of existing records in the B+ tree.
   if (!UpdateIndexRecords(rid_mutations)) {
     LogFATAL("Failed to Update IndexRecords");
+  }
+
+  if (!Schema::DataRecordRidMutation::ValidityCheck(rid_mutations)) {
+    LogFATAL("Got invalid rid_mutations list");
   }
 
   // Insert IndexRecord of the new record to index files.

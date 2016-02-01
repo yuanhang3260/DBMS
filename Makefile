@@ -35,6 +35,8 @@ TESTOBJ = $(OBJ_DIR)/Utility/Strings_test.o \
           $(OBJ_DIR)/Storage/RecordPage_test.o \
           $(OBJ_DIR)/Schema/DataTypes_test.o \
           $(OBJ_DIR)/Schema/Record_test.o \
+					$(OBJ_DIR)/Schema/PageRecord_Common_test.o \
+
 
 TESTEXE = test/Strings_test.out \
           test/StringBuilder_test.out \
@@ -42,6 +44,7 @@ TESTEXE = test/Strings_test.out \
           test/RecordPage_test.out \
           test/DataTypes_test.out \
           test/Record_test.out \
+          test/PageRecord_Common_test.out \
           test/BplusTree_test.out
 
 library: $(OBJ)
