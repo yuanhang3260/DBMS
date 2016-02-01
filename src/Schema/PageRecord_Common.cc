@@ -23,11 +23,11 @@ bool PageLoadedRecord::GenerateRecordPrototype(
     record_.reset(new DataRecord());
   }
   else if (file_type == DataBaseFiles::INDEX &&
-      page_type == DataBaseFiles::TREE_LEAVE) {
+           page_type == DataBaseFiles::TREE_LEAVE) {
     record_.reset(new IndexRecord());
   }
   else if (page_type == DataBaseFiles::TREE_NODE ||
-      page_type == DataBaseFiles::TREE_ROOT) {
+           page_type == DataBaseFiles::TREE_ROOT) {
     record_.reset(new TreeNodeRecord());
   }
 

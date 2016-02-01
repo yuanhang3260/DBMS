@@ -198,16 +198,24 @@ class BplusTree {
     int slot = -1;
     int child_id = -1;
     std::shared_ptr<Schema::RecordBase> record;
+
     int next_slot = -1;
     int next_child_id = -1;
     std::shared_ptr<Schema::RecordBase> next_record;
     int next_leave_id = -1;
+
+    int prev_slot = -1;
+    int prev_child_id = -1;
+    std::shared_ptr<Schema::RecordBase> prev_record;
+    int prev_leave_id = -1;    
   };
 
   // Search for a key in the page and returns next level page this key
   // should reside in.
   SearchTreeNodeResult SearchInTreeNode(RecordPage* page,
                                         const Schema::RecordBase* key);
+
+  SearchTreeNodeResult LookUpTreeNodeInfoForPage(RecordPage* page);
 
   // Fetch all matching records from BB+ tree.
   int FetchResultsFromLeave(
@@ -223,7 +231,7 @@ class BplusTree {
   // Create a new overflow leave in bulk loading.
   RecordPage* AppendNewOverflowLeave();
 
-  bool ProduceKeyRecordFromLeaveRecord(
+  bool ProduceKeyRecordFromNodeRecord(
         const Schema::RecordBase* leave_record, Schema::RecordBase* tn_record);
 
   // Redistribute records with next leave.
@@ -244,9 +252,10 @@ class BplusTree {
                                   SearchTreeNodeResult* search_result,
                                   const Schema::RecordBase* record);
   // Re-distribute records from next leave.
-  bool ReDistributeRecordsFromNextLeave(
-           RecordPage* leave, SearchTreeNodeResult* search_result,
-           std::vector<Schema::DataRecordRidMutation>& rid_mutations);
+  bool ReDistributeRecordsWithinTwoPages(
+           RecordPage* page1, RecordPage* page2, int page2_slot_id_in_parent,
+           std::vector<Schema::DataRecordRidMutation>& rid_mutations,
+           bool force_redistribute=true);
 
   // Insert a new record to leave which will split the leave.
   Schema::RecordID InsertNewRecordToLeaveWithSplit(
