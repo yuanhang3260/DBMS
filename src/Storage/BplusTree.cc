@@ -1245,9 +1245,12 @@ bool BplusTree::ProduceKeyRecordFromNodeRecord(
            node_record->type() == Schema::INDEX_RECORD){
     tn_record->CopyFieldsFrom(node_record);
   }
+  else if (node_record->type() == Schema::TREENODE_RECORD) {
+    tn_record->CopyFieldsFrom(node_record);
+  }
   else {
-    LogFATAL("Inconsistent B+ tree type and leave record type (%d, %d)",
-             file_type_, node_record->type());
+    LogFATAL("Unsupported B+ tree type and leave record type (%d, %d)",
+         file_type_, node_record->type());
   }
   return true;
 }
