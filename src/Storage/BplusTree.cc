@@ -326,20 +326,16 @@ RecordPage* BplusTree::AllocateNewPage(PageType page_type) {
   if (header_->num_free_pages() > 0) {
     new_page_id = header_->free_page();
     header_->decrement_num_free_pages(1);
-    RecordPage* page = Page(header_->free_page());
-    if (!page) {
-      LogFATAL("Fetch free page %d failed", header_->free_page());
-    }
     header_->set_free_page(page->Meta()->next_page());
-    page->Meta()->reset();
   }
   else {
     // Append new page at the end of file.
     new_page_id = header_->num_pages();
     header_->increment_num_pages(1);
-    page = new RecordPage(new_page_id, file_);
-    page->InitInMemoryPage();
   }
+
+  page = new RecordPage(new_page_id, file_);
+  page->InitInMemoryPage();
 
   page->Meta()->set_page_type(page_type);
   page_map_[page->id()] = std::shared_ptr<RecordPage>(page);
@@ -349,6 +345,32 @@ RecordPage* BplusTree::AllocateNewPage(PageType page_type) {
     //printf("Allocated new leave %d\n", page->id());
   }
   return page;
+}
+
+bool BplusTree::RecyclePage(int page_id) {
+  // Fetch page in case it's been swapped to disk. We need to write one field
+  // in the page - next_page, to link to the free page list.
+  auto page = Page(page_id);
+  auto type = page->Meta()->page_type();
+  if (!page) {
+    LogERROR("Failed to fetch page %d", page_id);
+    return false;
+  }
+  page->Meta()->set_next_page(header_->free_page());
+  header_->set_free_page(page_id);
+  if (!page->DumpPageData()) {
+    LogERROR("Save page %d to disk failed", page_id);
+    return false;
+  }
+  page_map_.erase(page_id);
+
+  header_->decrement_num_pages(1);
+  header_->decrement_num_used_pages(1);
+  header_->increment_num_free_pages(1);
+  if (type == TREE_LEAVE) {
+    header_->decrement_num_leaves(1);
+  }
+  return true;
 }
 
 RecordPage* BplusTree::Page(int page_id) {
@@ -1388,6 +1410,122 @@ bool BplusTree::ReDistributeRecordsWithinTwoPages(
   tn_record.set_page_id(page2->id());
   CheckLogFATAL(InsertTreeNodeRecord(&tn_record, parent),
                 "Failed to insert new tree node record for next leave");
+
+  return true;
+}
+
+bool BplusTree::MergeTwoNodes(
+         RecordPage* page1, RecordPage* page2,
+         int page2_slot_id_in_parent,
+         std::vector<Schema::DataRecordRidMutation>& rid_mutations) {
+  if (!page1 || !page2) {
+    LogERROR("nullptr page1/page2 input to MergeTwoNodes");
+    return false;
+  }
+
+  // We always merge forward - page1 <-- page2.
+  // Page2 is deleted so that we don't need to update tree node record of page1
+  // in parent.
+  if (!page1->PreCheckCanInsert(page2->Meta()->num_records(),
+                                page2->Meta()->space_used())) {
+    return false;
+  }
+
+  Schema::PageRecordsManager prmanager(page2, schema(), key_indexes_,
+                                       file_type_, page2->Meta()->page_type());
+
+  for (int i = 0; i < prmanager.NumRecords(); i++) {
+    int slot_id = prmanager.RecordSlotID(i);
+    if (page2->Meta()->page_type() == TREE_NODE) {
+      auto tn_record = prmanager.GetRecord<Schema::TreeNodeRecord>(i);
+      int child_page_id = tn_record->page_id();
+      RecordPage* child_page = Page(child_page_id);
+      if (child_page) {
+        child_page->Meta()->set_parent_page(page1->id());
+      }        
+    }
+
+    // Move to page1.
+    int new_slot_id = prmanager.Record(i)->InsertToRecordPage(page1);
+    if (new_slot_id < 0) {
+      LogFATAL("Failed to move record from page2 to page1");
+    }
+    if (file_type_ == INDEX_DATA &&
+        page2->Meta()->page_type() == TREE_LEAVE) {
+      rid_mutations.emplace_back(prmanager.Shared_Record(i),
+                        Schema::RecordID(page2->id(), slot_id),
+                        Schema::RecordID(page1->id(), new_slot_id));
+    }
+  }
+
+  // Delete tree node record of page2 from parent.
+  DeleteNodeFromTree(page2, page2_slot_id_in_parent);
+
+  return true;
+}
+
+bool BplusTree::DeleteNodeFromTree(RecordPage* page, int slot_id_in_parent) {
+  if (!page) {
+    LogERROR("can't delete nullptr page");
+    return false;
+  }
+
+  // TODO: handle root page.
+  if (page->id() == header_->root_page()) {
+    header_->set_root_page(-1);
+    CheckLogFATAL(RecyclePage(page->id()),
+                  "Failed to recycle root node %d", page->id());
+  }
+
+  auto parent = Page(page->Meta()->parent_page());
+  CheckLogFATAL(parent, "can't find parent for non-root page %d", page->id());
+
+  if (slot_id_in_parent < 0) {
+    auto result = LookUpTreeNodeInfoForPage(page);
+    slot_id_in_parent = result.slot;
+  }
+  CheckLogFATAL(slot_id_in_parent >= 0, "Invalid slot id of page %d in parent");
+
+  // Parse the TreeNodeRecord in parent and check it matches this page id.
+  int page_id = *(reinterpret_cast<int32*>(
+                      parent->Record(slot_id_in_parent) +
+                      parent->RecordLength(slot_id_in_parent) - sizeof(int32))
+                  );
+  if (page_id != page->id()) {
+    LogFATAL("tree node record inconsistent with child page id %d", page->id());
+  }
+
+  CheckLogFATAL(parent->DeleteRecord(slot_id_in_parent),
+                "Failed to delete tree node record of page %d", page->id());
+
+  // put the deleted page into free page pool.
+  CheckLogFATAL(RecyclePage(page->id()),
+                "Failed to recycle page %d", page->id());
+
+  // TODO: parent node need to do a re-distribute or merge because of
+  // record deletion. Maybe all the following code should be in a recursive
+  // function, e.g. PostDeletionProcessNode(parent) ?
+
+  if (parent->Meta()->num_records() == 0) {
+    // Pass -1 to recursive calls so that parent's parent will be looked up.
+    DeleteNodeFromTree(parent, -1);
+  }
+
+  // When parent is root, and has one remaining record after deleting this
+  // child node, this root should be deleted. Instead, the remaining child
+  // becomes new root.
+  if (parent->id() == header_->root_page() &&
+      parent->Meta()->num_records() == 1) {
+    header_->decrement_depth(1);
+    for (auto& slot: parent->Meta()->slot_directory()) {
+      if (slot.offset() < 0) {
+        continue;
+      }
+      page_id = *(reinterpret_cast<int32*>(parent->data() + slot.offset() +
+                                           slot.length() - sizeof(int32)));
+    }
+    header_->set_root_page(page_id);
+  }
 
   return true;
 }

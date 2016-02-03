@@ -120,6 +120,9 @@ class BplusTree {
   // Allocate a new page in bulkloading.
   RecordPage* AllocateNewPage(PageType page_type);
 
+  // Recycle a page into free page list.
+  bool RecyclePage(int page_id);
+
   // Append a overflow page to an existing page.
   RecordPage* AppendOverflowPageTo(RecordPage* page);
 
@@ -151,6 +154,9 @@ class BplusTree {
 
   bool BlukLoadInsertRecordToLeave(RecordPage* leave,
                                    Schema::RecordBase* record);
+
+  // Delete a node from the B+ tree.
+  bool DeleteNodeFromTree(RecordPage* page, int slot_id_in_parent);
 
   // Used in bulk loading. We don't allow records with same key are spread
   // to 2 successive pages. Same keys must be merged into a single page and
@@ -251,11 +257,17 @@ class BplusTree {
   Schema::RecordID InsertNewRecordToNextLeave(RecordPage* leave,
                                   SearchTreeNodeResult* search_result,
                                   const Schema::RecordBase* record);
+
   // Re-distribute records from next leave.
   bool ReDistributeRecordsWithinTwoPages(
            RecordPage* page1, RecordPage* page2, int page2_slot_id_in_parent,
            std::vector<Schema::DataRecordRidMutation>& rid_mutations,
            bool force_redistribute=true);
+
+  // Merge two nodes.
+  bool MergeTwoNodes(RecordPage* page1, RecordPage* page2,
+                     int page2_slot_id_in_parent,
+                     std::vector<Schema::DataRecordRidMutation>& rid_mutations);
 
   // Insert a new record to leave which will split the leave.
   Schema::RecordID InsertNewRecordToLeaveWithSplit(
