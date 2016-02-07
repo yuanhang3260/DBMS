@@ -8,6 +8,7 @@
 #include "Schema/Record.h"
 #include "Schema/DBTable_pb.h"
 #include "Storage/BplusTree.h"
+#include "Operation.h"
 
 namespace DataBaseFiles {
   class BplusTree;
@@ -44,6 +45,8 @@ class Table {
            std::vector<Schema::DataRecordRidMutation>& rid_mutations);
 
   bool InsertRecord(const Schema::RecordBase* record);
+
+  bool DeleteRecord(const DeleteOp* op);
 
  private:
   bool BuildFieldIndexMap();

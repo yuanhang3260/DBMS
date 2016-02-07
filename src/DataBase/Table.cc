@@ -528,4 +528,37 @@ bool Table::InsertRecord(const Schema::RecordBase* record) {
   return true;;
 }
 
+bool Table::DeleteRecord(const DeleteOp* op) {
+  if (!op) {
+    LogERROR("Nullptr DeleteOp");
+    return false;
+  }
+
+  if (op->key_index < 0 || op->key_index >= schema_->fields_size()) {
+    LogERROR("Invalid key_index %d for DeleteOp, expect in [%d, %d]",
+             op->key_index, 0, schema_->fields_size());
+    return false;
+  }
+
+  DeleteResult delete_result;
+  if (op->op_cond == EQ) {
+    if (IsDataFileKey(op->key_index)) {
+      auto data_tree = Tree(DataBaseFiles::INDEX_DATA, idata_indexes_);
+      if (!data_tree) {
+        LogERROR("Can't get DataRecord B+ tree");
+        return false;
+      }
+      data_tree->Do_DeleteRecordByKey(op->keys, &delete_result);
+    }
+    else {
+      auto index_tree = Tree(DataBaseFiles::INDEX,
+                             std::vector<int>{op->key_index});
+      index_tree->Do_DeleteRecordByKey(op->keys, &delete_result);
+      // TODO: Sort rids and delete data records from data tree.
+    }
+  }
+
+  return true;
+}
+
 }  // namespace DATABASE

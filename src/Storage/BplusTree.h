@@ -9,6 +9,7 @@
 #include "Schema/DBTable_pb.h"
 #include "Schema/PageRecord_Common.h"
 #include "DataBase/Table.h"
+#include "DataBase/Operation.h"
 #include "PageBase.h"
 #include "RecordPage.h"
 
@@ -117,6 +118,11 @@ class BplusTree {
            const Schema::RecordBase* record,
            std::vector<Schema::DataRecordRidMutation>& rid_mutations);
 
+  // Delete records by key.
+  bool Do_DeleteRecordByKey(
+         const std::vector<std::shared_ptr<Schema::RecordBase>>& keys,
+         DataBase::DeleteResult* result);
+
   // Allocate a new page in bulkloading.
   RecordPage* AllocateNewPage(PageType page_type);
 
@@ -125,6 +131,8 @@ class BplusTree {
 
   // Append a overflow page to an existing page.
   RecordPage* AppendOverflowPageTo(RecordPage* page);
+
+  bool DeleteOverflowLeave(RecordPage* leave);
 
   // Connect two leaves.
   static bool ConnectLeaves(RecordPage* page1, RecordPage* page2);
@@ -157,6 +165,14 @@ class BplusTree {
 
   // Delete a node from the B+ tree.
   bool DeleteNodeFromTree(RecordPage* page, int slot_id_in_parent);
+
+  // Process a node when it has a record deleted. Mostly it check if space
+  // occpution is below 1/2. If yes, probably we need to re-distribute records
+  // or merge node with sibling nodes, and a merging operation may also
+  // propagate tree node record deletion to upper nodes.
+  bool ProcessNodeAfterRecordDeletion(
+           RecordPage* page,
+           std::vector<Schema::DataRecordRidMutation>* rid_mutations);
 
   // Used in bulk loading. We don't allow records with same key are spread
   // to 2 successive pages. Same keys must be merged into a single page and
@@ -229,6 +245,11 @@ class BplusTree {
           const Schema::RecordBase* key,
           std::vector<std::shared_ptr<Schema::RecordBase>>* result);
 
+  int DeleteMatchedRecordsFromLeave(
+         RecordPage* leave,
+         const Schema::RecordBase* key,
+         std::vector<Schema::DataRecordRidMutation>* rid_deleted);
+
   bool CheckKeyFieldsType(const Schema::RecordBase* key) const;
   bool CheckRecordFieldsType(const Schema::RecordBase* record) const;
 
@@ -261,13 +282,13 @@ class BplusTree {
   // Re-distribute records from next leave.
   bool ReDistributeRecordsWithinTwoPages(
            RecordPage* page1, RecordPage* page2, int page2_slot_id_in_parent,
-           std::vector<Schema::DataRecordRidMutation>& rid_mutations,
-           bool force_redistribute=true);
+           std::vector<Schema::DataRecordRidMutation>* rid_mutations,
+           bool force_redistribute=false);
 
   // Merge two nodes.
   bool MergeTwoNodes(RecordPage* page1, RecordPage* page2,
                      int page2_slot_id_in_parent,
-                     std::vector<Schema::DataRecordRidMutation>& rid_mutations);
+                     std::vector<Schema::DataRecordRidMutation>* rid_mutations);
 
   // Insert a new record to leave which will split the leave.
   Schema::RecordID InsertNewRecordToLeaveWithSplit(

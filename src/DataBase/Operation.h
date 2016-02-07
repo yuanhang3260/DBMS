@@ -11,9 +11,10 @@ namespace DataBase {
 
 enum OpCondition {
   EQ = 0,
-  LT = 1,
+  LT = 1,  
   GT = 2,
   NE = 3,
+  BT = 4,  // Betwee two values
 };
 
 class DeleteOp {
@@ -25,7 +26,8 @@ class DeleteOp {
 
 class DeleteResult {
  public:
-  
+  std::vector<Schema::DataRecordRidMutation> rid_deleted;
+  std::vector<Schema::DataRecordRidMutation> rid_mutations;
 };
 
 }  // namespace DataBase
