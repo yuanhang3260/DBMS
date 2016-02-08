@@ -6,6 +6,7 @@
 #include "Schema/DBTable_pb.h"
 #include "Schema/PageRecordsManager.h"
 #include "DataBase/Table.h"
+#include "DataBase/Operation.h"
 
 namespace DataBaseFiles {
 
@@ -16,7 +17,7 @@ class BplusTreeTest: public UnitTest {
   Schema::TableSchema* schema = nullptr;
   DataBase::Table* table;
   std::map<int, std::shared_ptr<Schema::DataRecord>> record_resource;
-  const int kNumRecordsSource = 1000;
+  const int kNumRecordsSource = 10;
 
  public:
   void InitSchema() {
@@ -55,7 +56,7 @@ class BplusTreeTest: public UnitTest {
     field->set_type(Schema::TableField::CHARARR);
     field->set_size(20);
 
-    schema->add_primary_key_indexes(0);
+    schema->add_primary_key_indexes(2);
     // Create key_indexes.
     for (auto i: schema->primary_key_indexes()) {
       key_indexes.push_back(i);
@@ -70,29 +71,29 @@ class BplusTreeTest: public UnitTest {
       // Init fields to records.
       // name
       {
-        if (i >= 2 && i <= 6) {
-          record_resource.at(i)->AddField(new Schema::StringType("hello"));
-        }
-        else {
+        // if (i >= 2 && i <= 6) {
+        //   record_resource.at(i)->AddField(new Schema::StringType("hello"));
+        // }
+        // else {
           int str_len = Utils::RandomNumber(5);
           char buf[str_len];
           for (int i = 0; i < str_len; i++) {
             buf[i] = 'a' + Utils::RandomNumber(26);
           }
           record_resource.at(i)->AddField(new Schema::StringType(buf, str_len));
-        }
+        // }
       }
       // age
       int rand_int = Utils::RandomNumber(20);
       record_resource.at(i)->AddField(new Schema::IntType(rand_int));
       // money (we use this field as key for record resource map).
-      int rand_long = Utils::RandomNumber(10);
-      if (i >= 2 && i <= 6) {
-        record_resource.at(i)->AddField(new Schema::LongIntType(-1));
-      }
-      else {
+      int rand_long = i /* Utils::RandomNumber(10) */;
+      // if (i >= 2 && i <= 6) {
+      //   record_resource.at(i)->AddField(new Schema::LongIntType(-1));
+      // }
+      // else {
         record_resource.at(i)->AddField(new Schema::LongIntType(rand_long));
-      }
+      // }
       // weight
       double rand_double = 1.0 * Utils::RandomNumber() / Utils::RandomNumber();
       record_resource.at(i)->AddField(new Schema::DoubleType(rand_double));
@@ -574,13 +575,12 @@ class BplusTreeTest: public UnitTest {
   void Test_InsertRecord(FileType file_type_, std::vector<int> key_index) {
     InitRecordResource();
 
-    BplusTree tree(table, file_type_, key_index);
-    tree.CreateBplusTreeFile();
+    BplusTree tree(table, file_type_, key_index, true);  /* craete tree */
     for (int i = 0; i < kNumRecordsSource; i++) {
-      // printf("-------------------------------------------------------------\n");
-      // printf("-------------------------------------------------------------\n");
-      // printf("i = %d, record size = %d\n", i, record_resource[i]->size());
-      // record_resource[i]->Print();
+      printf("-------------------------------------------------------------\n");
+      printf("-------------------------------------------------------------\n");
+      printf("i = %d, record size = %d\n", i, record_resource[i]->size());
+      record_resource[i]->Print();
       std::vector<Schema::DataRecordRidMutation> rid_mutations;
       if (file_type_ == INDEX_DATA) {
         auto rid =tree.Do_InsertRecord(record_resource[i].get(), rid_mutations);
@@ -603,6 +603,28 @@ class BplusTreeTest: public UnitTest {
     }
     // Search and verify records.
     _VerifyAllRecordsInTree(&tree, key_index);
+  }
+
+  void Test_DeleteRecord(FileType file_type, std::vector<int> key_index) {
+    // Create a tree with records.
+    Test_InsertRecord(file_type, key_index);
+    printf("********************** Begin Deleting *************************\n");
+
+    // Delete records.
+    BplusTree tree(table, file_type, key_index);
+    std::vector<int> delete_key =
+                         Utils::RandomListFromRange(0, kNumRecordsSource - 1);
+    for (int i: delete_key) {
+      printf("--------------------- i = %d ---------------------------\n", i);
+      DataBase::DeleteOp op;
+      op.key_index = key_index[0];
+      op.keys.push_back(std::make_shared<Schema::RecordBase>());
+      op.keys.back()->AddField(new Schema::LongIntType(i));
+      op.keys.back()->Print();
+
+      DataBase::DeleteResult delete_result;
+      tree.Do_DeleteRecordByKey(op.keys, &delete_result);
+    }
   }
 
   void Test_UpdateRecordID() {
@@ -652,15 +674,15 @@ class BplusTreeTest: public UnitTest {
 }  // namespace DataBaseFiles
 
 int main(int argc, char** argv) {
-  // DataBaseFiles::FileType file_type = DataBaseFiles::INDEX_DATA;
-  // std::vector<int> key_index{0};
-  // if (argc >= 2 && std::string(argv[1]) == "INDEX") {
-  //   file_type = DataBaseFiles::INDEX;
-  // }
-  // if (argc >= 3) {
-  //   key_index.clear();
-  //   key_index.push_back(std::stoi(argv[2]));
-  // }
+  DataBaseFiles::FileType file_type = DataBaseFiles::INDEX_DATA;
+  std::vector<int> key_index{2};
+  if (argc >= 2 && std::string(argv[1]) == "INDEX") {
+    file_type = DataBaseFiles::INDEX;
+  }
+  if (argc >= 3) {
+    key_index.clear();
+    key_index.push_back(std::stoi(argv[2]));
+  }
 
   DataBaseFiles::BplusTreeTest test;
   test.setup();
@@ -677,7 +699,9 @@ int main(int argc, char** argv) {
   //   test.CheckBplusTree(file_type, key_index);
   // }
 
-  test.Test_UpdateRecordID();
+  test.Test_DeleteRecord(file_type, key_index);
+
+  //test.Test_UpdateRecordID();
 
   test.teardown();
   std::cout << "\033[2;32mAll Passed ^_^\033[0m" << std::endl;

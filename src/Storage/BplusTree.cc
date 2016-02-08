@@ -171,6 +171,15 @@ bool BplusTreeHeaderPage::ConsistencyCheck(const char* op) const {
   return true;
 }
 
+void BplusTreeHeaderPage::reset() {
+  root_page_ = -1;
+  num_leaves_ = 0;
+  depth_ = 0;
+  num_pages_ = 0;
+  num_free_pages_ = 0;
+  num_used_pages_ = 0;
+  free_page_ = -1;
+}
 
 // ****************************** BplusTree **********************************//
 BplusTree::~BplusTree() {
@@ -342,7 +351,7 @@ RecordPage* BplusTree::AllocateNewPage(PageType page_type) {
   header_->increment_num_used_pages(1);
   if (page_type == TREE_LEAVE) {
     header_->increment_num_leaves(1);
-    //printf("Allocated new leave %d\n", page->id());
+    printf("Allocated new leave %d\n", page->id());
   }
   return page;
 }
@@ -364,7 +373,6 @@ bool BplusTree::RecyclePage(int page_id) {
   }
   page_map_.erase(page_id);
 
-  header_->decrement_num_pages(1);
   header_->decrement_num_used_pages(1);
   header_->increment_num_free_pages(1);
   if (type == TREE_LEAVE) {
@@ -639,7 +647,7 @@ bool BplusTree::ConnectLeaves(RecordPage* page1, RecordPage* page2) {
     LogERROR("Can't connect nullptr leaves %p and %p", page1, page2);
     return false;
   }
-  //printf("Connecting %d and %d\n", page1->id(), page2->id());
+  printf("Connecting %d and %d\n", page1->id(), page2->id());
   page1->Meta()->set_next_page(page2->id());
   page2->Meta()->set_prev_page(page1->id());
   return true;
@@ -794,9 +802,13 @@ bool BplusTree::ValidityCheck() {
     return true;
   }
 
-  // Level-traverse the B+ tree.
   std::queue<RecordPage*> page_q;
   RecordPage* root = Page(header_->root_page());
+  if (!root) {
+    return VerifyEmptyTree();
+  }
+
+  // Level-traverse the B+ tree.
   page_q.push(root);
   vc_status_.count_num_pages = 2; // header page + root
   vc_status_.count_num_used_pages = 2;
@@ -823,6 +835,22 @@ bool BplusTree::ValidityCheck() {
     return false;
   }
 
+  return true;
+}
+
+bool BplusTree::VerifyEmptyTree() const {
+  if (header_->root_page() != -1) {
+    LogERROR("Expect root page = 1, actual %d", header_->root_page());
+    return false;
+  }
+  if (header_->num_used_pages() != 0) {
+    LogERROR("Expect num_used_pages = 0, actual %d", header_->num_used_pages());
+    return false;
+  }
+  if (header_->depth() != 0) {
+    LogERROR("Expect depth = 0, actual %d", header_->depth());
+    return false;
+  }
   return true;
 }
 
@@ -1436,6 +1464,8 @@ bool BplusTree::MergeTwoNodes(
     return false;
   }
 
+  printf("merging %d and %d\n", page1->id(), page2->id());
+
   if (page1->Meta()->overflow_page() > 0 ||
       page2->Meta()->overflow_page() > 0) {
     LogERROR("Can't re-distribute records between overflow pages");
@@ -1490,11 +1520,14 @@ bool BplusTree::DeleteNodeFromTree(RecordPage* page, int slot_id_in_parent) {
     return false;
   }
 
-  // TODO: handle root page.
+  // delete root page - tree will become empty and reset.
   if (page->id() == header_->root_page()) {
-    header_->set_root_page(-1);
-    CheckLogFATAL(RecyclePage(page->id()),
-                  "Failed to recycle root node %d", page->id());
+    header_->reset();
+    page_map_.clear();
+    if (ftruncate(fileno(file_), kPageSize) != 0) {
+      return false;
+    }
+    return true;
   }
 
   auto parent = Page(page->Meta()->parent_page());
@@ -1519,13 +1552,13 @@ bool BplusTree::DeleteNodeFromTree(RecordPage* page, int slot_id_in_parent) {
   CheckLogFATAL(parent->DeleteRecord(slot_id_in_parent),
                 "Failed to delete tree node record of page %d", page->id());
 
-  // Parent node need to re-distribute records or merge nodes because of tree
-  // node record deletion.
-  ProcessNodeAfterRecordDeletion(parent, nullptr);
-
   // put the deleted page into free page pool.
   CheckLogFATAL(RecyclePage(page->id()),
                 "Failed to recycle page %d", page->id());
+
+  // Parent node need to re-distribute records or merge nodes because of tree
+  // node record deletion.
+  ProcessNodeAfterRecordDeletion(parent, nullptr);
 
   return true;
 }
@@ -1538,10 +1571,16 @@ bool BplusTree::ProcessNodeAfterRecordDeletion(
     return false;
   }
 
+  // Check space occupation < 0.5
+  if (page->Occupation() >= 0.5) {
+    return true;
+  }
+
   // If current page becomes empty, delete this page from B+ tree and call
   // DeleteNodeFromTree() recursively.
   if (page->Meta()->num_records() == 0) {
     // Pass -1 to recursive calls so that page's parent will be looked up.
+    debug(0);
     return DeleteNodeFromTree(page, -1);
   }
 
@@ -1551,48 +1590,63 @@ bool BplusTree::ProcessNodeAfterRecordDeletion(
   if (page->id() == header_->root_page()) {
     if (page->Meta()->num_records() > 1) {
       return true;
+      debug(1);
     }
+    if (header_->depth() <= 1) {
+      debug(10);
+      return true;
+    }
+
+    debug(2);
+    printf("root remained %d records\n", page->Meta()->num_records());
     header_->decrement_depth(1);
     int page_id = -1;
-    for (auto& slot: page->Meta()->slot_directory()) {
-      if (slot.offset() < 0) {
+    Schema::PageRecordsManager prmanager(page, schema(), key_indexes_,
+                                         file_type_, page->Meta()->page_type());
+    for (int i = 0 ; i < (int)prmanager.NumRecords(); i++) {
+      if (prmanager.RecordSlotID(i) < 0) {
         continue;
       }
-      page_id = *(reinterpret_cast<int32*>(page->data() + slot.offset() +
-                                           slot.length() - sizeof(int32)));
-      // TOOD: Check this record is MIN record?
+      page_id = (prmanager.GetRecord<Schema::TreeNodeRecord>(i))->page_id();
+      printf("page_id = %d\n", page_id);
     }
     CheckLogFATAL(page_id > 0,  // new root id must > 0 (page 0 is meta page).
                   "Failed to find new root, current root is %d", page->id());
     header_->set_root_page(page_id);
+    return true;
   }
 
   // Parse current page's parent and tries to find its siblings.
   // We prefer re-distribute records rather than merging, since merging might
   // propagate into upper nodes, and make nodes more occupied.
+  debug(3);
   SearchTreeNodeResult result = LookUpTreeNodeInfoForPage(page);
   CheckLogFATAL(result.slot >= 0, "Invalid slot id of page %d in parent");
   if (result.next_child_id >= 0) {
     if (ReDistributeRecordsWithinTwoPages(page, Page(result.next_child_id),
                                           result.next_slot, rid_mutations)) {
+      debug(4);
       return true;
     }
   }
   if (result.prev_child_id >= 0) {
     if (ReDistributeRecordsWithinTwoPages(page, Page(result.prev_child_id),
                                           result.prev_slot, rid_mutations)) {
+      debug(5);
       return true;
     }
   }
   if (result.next_child_id >= 0) {
     if (MergeTwoNodes(page, Page(result.next_child_id),
                       result.next_slot, rid_mutations)) {
+      debug(6);
       return true;
     }
   }
   if (result.prev_child_id >= 0) {
     if (MergeTwoNodes(page, Page(result.prev_child_id),
                       result.prev_slot, rid_mutations)) {
+      debug(7);
       return true;
     }
   }
@@ -1602,7 +1656,7 @@ bool BplusTree::ProcessNodeAfterRecordDeletion(
 
 bool BplusTree::Do_DeleteRecordByKey(
          const std::vector<std::shared_ptr<Schema::RecordBase>>& keys,
-        DataBase::DeleteResult* result) {
+         DataBase::DeleteResult* result) {
   // TODO: only implement single key deletion.
   auto leave = SearchByKey(keys[0].get());
   if (!leave) {
@@ -1612,7 +1666,10 @@ bool BplusTree::Do_DeleteRecordByKey(
   }
 
   // Delete records.
-  DeleteMatchedRecordsFromLeave(leave, keys[0].get(), &result->rid_deleted);
+  int num = DeleteMatchedRecordsFromLeave(leave, keys[0].get(),
+                                          &result->rid_deleted);
+  //printf("deleted %d matching records\n", num);
+  (void)num;
 
   // Post process for the node after record deletion.
   ProcessNodeAfterRecordDeletion(leave, &result->rid_mutations);

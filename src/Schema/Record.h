@@ -94,7 +94,7 @@ class RecordBase {
   // Print this record.
   virtual void Print() const;
 
-  // Add a new fiild. This method takes ownership of SchemaFieldType pointer.
+  // Add a new field. This method takes ownership of SchemaFieldType pointer.
   void AddField(SchemaFieldType* new_field);
 
   // Reset all fields to minimum.

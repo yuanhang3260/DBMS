@@ -133,7 +133,7 @@ class RecordPage {
   // meta data area. It won't count in empty record slots among records.
   int FreeSize() const;
   // Space occupied by record data.
-  double Occupation() const; 
+  double Occupation() const;
   // Re-organize records.
   bool ReorganizeRecords();
   // Pre-check if some records can be inserted to this page.

@@ -48,6 +48,8 @@ class BplusTreeHeaderPage: public HeaderPage {
   // Load header page from disk.
   bool LoadFromDisk() override;
 
+  void reset();
+
  private:
   bool ConsistencyCheck(const char* op) const;
 
@@ -149,6 +151,9 @@ class BplusTree {
   // Load table schema from schema file, which is a serialized protocal buffer
   // raw file. It saves message TableSchema defined in Schema/DBTable.proto.
   bool LoadSchema();
+
+  // Verify an empty tree.
+  bool VerifyEmptyTree() const;
 
   // Insert a record to a leave node.
   bool InsertRecordToLeave(const Schema::DataRecord* record);
