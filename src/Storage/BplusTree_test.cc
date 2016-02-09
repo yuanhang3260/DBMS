@@ -1,3 +1,6 @@
+#include <iostream>
+#include <algorithm>
+
 #include "UnitTest/UnitTest.h"
 #include "Base/Utils.h"
 #include "Base/Log.h"
@@ -614,6 +617,7 @@ class BplusTreeTest: public UnitTest {
     BplusTree tree(table, file_type, key_index);
     std::vector<int> delete_key =
                          Utils::RandomListFromRange(0, kNumRecordsSource - 1);
+    //std::sort(delete_key.begin(), delete_key.end(), std::greater<int>());
     for (int i: delete_key) {
       printf("--------------------- i = %d ---------------------------\n", i);
       DataBase::DeleteOp op;
@@ -624,6 +628,9 @@ class BplusTreeTest: public UnitTest {
 
       DataBase::DeleteResult delete_result;
       tree.Do_DeleteRecordByKey(op.keys, &delete_result);
+
+      tree.SaveToDisk();
+      CheckBplusTree(file_type, key_index);
     }
   }
 

@@ -228,9 +228,10 @@ int PageRecordsManager::SearchForKey(const RecordBase* key) const {
   }
   index--;
   if (index < 0) {
-    LogFATAL("Search for key less than all record keys of this page");
+    LogERROR("Search for key less than all record keys of this page");
     key->Print();
     Record(0)->Print();
+    LogFATAL("SearchForKey fatal error");
   }
 
   return index;

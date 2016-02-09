@@ -302,10 +302,11 @@ Schema::TableSchema* BplusTree::schema() const {
 bool BplusTree::SaveToDisk() const {
   // Save header page
   if (header_ && !header_->SaveToDisk()) {
+    LogERROR("Failed to saven B+ tree meta to disk");
     return false;
   }
 
-    // Save B+ tree nodes. Root node, tree node and leaves.
+  // Save B+ tree nodes. Root node, tree node and leaves.
   for (auto& entry: page_map_) {
     if (!entry.second->DumpPageData()) {
       LogERROR("Save page %d to disk failed", entry.first);
@@ -359,6 +360,7 @@ RecordPage* BplusTree::AllocateNewPage(PageType page_type) {
 bool BplusTree::RecyclePage(int page_id) {
   // Fetch page in case it's been swapped to disk. We need to write one field
   // in the page - next_page, to link to the free page list.
+  //printf("Recycling page %d\n", page_id);
   auto page = Page(page_id);
   auto type = page->Meta()->page_type();
   if (!page) {
@@ -643,13 +645,15 @@ RecordPage* BplusTree::AppendOverflowPageTo(RecordPage* page) {
 }
 
 bool BplusTree::ConnectLeaves(RecordPage* page1, RecordPage* page2) {
-  if (!page1 || !page2) {
-    LogERROR("Can't connect nullptr leaves %p and %p", page1, page2);
-    return false;
+  int page1_id = page1 ? page1->id() : -1;
+  int page2_id = page2 ? page2->id() : -1;
+  printf("Connecting %d and %d\n", page1_id, page2_id);
+  if (page1) {
+    page1->Meta()->set_next_page(page2_id);
   }
-  printf("Connecting %d and %d\n", page1->id(), page2->id());
-  page1->Meta()->set_next_page(page2->id());
-  page2->Meta()->set_prev_page(page1->id());
+  if (page2) {
+    page2->Meta()->set_prev_page(page1_id);
+  }
   return true;
 }
 
@@ -831,6 +835,13 @@ bool BplusTree::ValidityCheck() {
     CheckoutPage(crt_page->id(), false);
   }
 
+  // Collect free pages
+  auto free_page = Page(header_->free_page());
+  while (free_page) {
+    vc_status_.count_num_free_pages++;
+    free_page = Page(free_page->Meta()->next_page());
+  }
+
   if (!MetaConsistencyCheck()) {
     return false;
   }
@@ -886,6 +897,13 @@ bool BplusTree::VerifyChildRecordsRange(RecordPage* child_page,
                                         Schema::RecordBase* right_bound) {
   if (!child_page) {
     LogFATAL("Child page is nullptr, can't verify it's range");
+  }
+
+  if (left_bound && right_bound && *left_bound >= *right_bound) {
+    LogERROR("left_bound should be no greater than right_bound, but:");
+    left_bound->Print();
+    right_bound->Print();
+    return false;
   }
 
   Schema::PageRecordsManager prmanager(child_page, schema(), key_indexes_,
@@ -1035,9 +1053,11 @@ bool BplusTree::VerifyOverflowPage(RecordPage* page) {
 }
 
 bool BplusTree::MetaConsistencyCheck() const {
-  if (vc_status_.count_num_pages != header_->num_pages()) {
-    LogERROR("num_pages inconsistent - expect %d, actual %d",
-             header_->num_pages(), vc_status_.count_num_pages);
+  if (vc_status_.count_num_pages !=
+      header_->num_pages() - header_->num_free_pages()) {
+    LogERROR("num valid pages inconsistent - expect %d, actual %d",
+             header_->num_pages() - header_->num_free_pages(),
+             vc_status_.count_num_pages);
     return false;
   }
 
@@ -1377,8 +1397,8 @@ bool BplusTree::ReDistributeRecordsWithinTwoPages(
   }
   else {
     // move records: page1 --> page2
-    src_page = page2,
-    dest_page = page1;
+    src_page = page1,
+    dest_page = page2;
   }
   Schema::PageRecordsManager prmanager(src_page, schema(), key_indexes_,
                                        file_type_, page1->Meta()->page_type());
@@ -1431,9 +1451,11 @@ bool BplusTree::ReDistributeRecordsWithinTwoPages(
   }
   // No record is re-distributed.
   if (gindex == gindex_start) {
+    printf("No record moved\n");
     return true;
   }
 
+  printf("gindex = %d, gindex_start = %d\n", gindex, gindex_start);
   if (move_direction > 0) {
     gindex++;
   }
@@ -1545,12 +1567,19 @@ bool BplusTree::DeleteNodeFromTree(RecordPage* page, int slot_id_in_parent) {
                       parent->RecordLength(slot_id_in_parent) - sizeof(int32))
                   );
   if (page_id != page->id()) {
-    LogFATAL("tree node record inconsistent with child page id %d", page->id());
+    LogFATAL("tree node record %d inconsistent with child page id %d",
+             page_id, page->id());
   }
 
   // Delete the tree node record of this page from its parent.
   CheckLogFATAL(parent->DeleteRecord(slot_id_in_parent),
                 "Failed to delete tree node record of page %d", page->id());
+
+  // Connect leaves after deleting.
+  if (page->Meta()->page_type() == TREE_LEAVE) {
+    ConnectLeaves(Page(page->Meta()->prev_page()),
+                  Page(page->Meta()->next_page()));
+  }
 
   // put the deleted page into free page pool.
   CheckLogFATAL(RecyclePage(page->id()),
@@ -1613,6 +1642,8 @@ bool BplusTree::ProcessNodeAfterRecordDeletion(
     CheckLogFATAL(page_id > 0,  // new root id must > 0 (page 0 is meta page).
                   "Failed to find new root, current root is %d", page->id());
     header_->set_root_page(page_id);
+    CheckLogFATAL(RecyclePage(page->id()),
+                  "Failed to recycle root %d", page->id());
     return true;
   }
 
@@ -1630,8 +1661,8 @@ bool BplusTree::ProcessNodeAfterRecordDeletion(
     }
   }
   if (result.prev_child_id >= 0) {
-    if (ReDistributeRecordsWithinTwoPages(page, Page(result.prev_child_id),
-                                          result.prev_slot, rid_mutations)) {
+    if (ReDistributeRecordsWithinTwoPages(Page(result.prev_child_id), page,
+                                          result.slot, rid_mutations)) {
       debug(5);
       return true;
     }
@@ -1644,8 +1675,8 @@ bool BplusTree::ProcessNodeAfterRecordDeletion(
     }
   }
   if (result.prev_child_id >= 0) {
-    if (MergeTwoNodes(page, Page(result.prev_child_id),
-                      result.prev_slot, rid_mutations)) {
+    if (MergeTwoNodes(Page(result.prev_child_id), page,
+                      result.slot, rid_mutations)) {
       debug(7);
       return true;
     }
