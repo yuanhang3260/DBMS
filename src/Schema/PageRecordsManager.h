@@ -35,9 +35,17 @@ class PageRecordsManager {
   RecordBase* Record(int index) const;
   std::shared_ptr<RecordBase> Shared_Record(int index);
   int RecordSlotID(int index) const;
+
   template<class T>
   T* GetRecord(int index) {
     return reinterpret_cast<T*>(Record(index));
+  }
+
+  template<class T>
+  static T* ParseRecordField(DataBaseFiles::RecordPage* page, int slot_id) {
+    return reinterpret_cast<T*>(page->Record(slot_id) +
+                                page->RecordLength(slot_id) -
+                                sizeof(T));
   }
 
   // Print this page.

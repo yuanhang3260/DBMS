@@ -1571,9 +1571,22 @@ bool BplusTree::DeleteNodeFromTree(RecordPage* page, int slot_id_in_parent) {
              page_id, page->id());
   }
 
-  // Delete the tree node record of this page from its parent.
-  CheckLogFATAL(parent->DeleteRecord(slot_id_in_parent),
-                "Failed to delete tree node record of page %d", page->id());
+  if (page->Meta()->page_type() == TREE_LEAVE &&
+      page->Meta()->overflow_page() > 0) {
+    // Delete header of a overflow chain - the first overflow page becomee
+    // new header.
+    auto new_header = Page(page->Meta()->overflow_page());
+    new_header->Meta()->set_parent_page(parent->id());
+    new_header->Meta()->set_is_overflow_page(0);
+    *(reinterpret_cast<int32*>(parent->Record(slot_id_in_parent) +
+                               parent->RecordLength(slot_id_in_parent) -
+                               sizeof(int32))) = new_header->id();
+  }
+  else {
+    // Delete the tree node record of this page from its parent.
+    CheckLogFATAL(parent->DeleteRecord(slot_id_in_parent),
+                  "Failed to delete tree node record of page %d", page->id());
+  }
 
   // Connect leaves after deleting.
   if (page->Meta()->page_type() == TREE_LEAVE) {
@@ -1768,8 +1781,11 @@ bool BplusTree::DeleteOverflowLeave(RecordPage* leave) {
   auto prev_leave = Page(leave->Meta()->prev_page());
   auto next_leave = Page(leave->Meta()->next_page());
 
-  if (next_leave->Meta()->is_overflow_page()) {
+  if (next_leave && next_leave->Meta()->is_overflow_page()) {
     prev_leave->Meta()->set_overflow_page(next_leave->id());
+  }
+  else {
+    prev_leave->Meta()->set_overflow_page(-1);
   }
   ConnectLeaves(prev_leave, next_leave);
   RecyclePage(leave->id());

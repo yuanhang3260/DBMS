@@ -20,7 +20,7 @@ class BplusTreeTest: public UnitTest {
   Schema::TableSchema* schema = nullptr;
   DataBase::Table* table;
   std::map<int, std::shared_ptr<Schema::DataRecord>> record_resource;
-  const int kNumRecordsSource = 10;
+  const int kNumRecordsSource = 100;
 
  public:
   void InitSchema() {
@@ -90,7 +90,7 @@ class BplusTreeTest: public UnitTest {
       int rand_int = Utils::RandomNumber(20);
       record_resource.at(i)->AddField(new Schema::IntType(rand_int));
       // money (we use this field as key for record resource map).
-      int rand_long = i /* Utils::RandomNumber(10) */;
+      int rand_long = Utils::RandomNumber(10);
       // if (i >= 2 && i <= 6) {
       //   record_resource.at(i)->AddField(new Schema::LongIntType(-1));
       // }
@@ -615,8 +615,7 @@ class BplusTreeTest: public UnitTest {
 
     // Delete records.
     BplusTree tree(table, file_type, key_index);
-    std::vector<int> delete_key =
-                         Utils::RandomListFromRange(0, kNumRecordsSource - 1);
+    std::vector<int> delete_key = Utils::RandomListFromRange(0, 9);
     //std::sort(delete_key.begin(), delete_key.end(), std::greater<int>());
     for (int i: delete_key) {
       printf("--------------------- i = %d ---------------------------\n", i);

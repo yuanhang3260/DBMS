@@ -220,6 +220,14 @@ class BplusTree {
   // Verify a record in B+ tree is same as the given record.
   bool VerifyRecord(const Schema::RecordID& rid, const Schema::RecordBase* r);
 
+  // Parse page_id / RecordID at the end of a record.
+  template<class T>
+  T* ParseRecordField(const RecordPage* node, int slot_id) {
+    return reinterpret_cast<T*>(node->Record(slot_id) +
+                                node->RecordLength(slot_id) -
+                                sizeof(T));
+  }
+
   class SearchTreeNodeResult {
    public:
     int slot = -1;
