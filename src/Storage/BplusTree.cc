@@ -1601,10 +1601,6 @@ bool BplusTree::DeleteNodeFromTree(RecordPage* page, int slot_id_in_parent) {
       result = LookUpTreeNodeInfoForPage(page);
     }
     // Min tree node record re-point to second leave if exists.
-    if (result.prev_child_id < 0 && result.next_child_id < 0) {
-      // LogERROR("Deleting left-most page, next child is %d", result.next_child_id);
-      // LogERROR("Remaining leaves %d", header_->num_leaves());
-    }
     if (result.next_child_id > 0) {
       CheckLogFATAL(parent->DeleteRecord(result.next_slot),
                     "Failed to delete tree node record of second leave %d",
