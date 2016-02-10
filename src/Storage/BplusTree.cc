@@ -1369,7 +1369,6 @@ bool BplusTree::ReDistributeRecordsWithinTwoPages(
 
   if (page1->Meta()->overflow_page() > 0 ||
       page2->Meta()->overflow_page() > 0) {
-    LogERROR("Can't re-distribute records between overflow pages");
     return false;
   }
 
@@ -1410,7 +1409,7 @@ bool BplusTree::ReDistributeRecordsWithinTwoPages(
   int gindex = gindex_start;
   for (; gindex != gindex_end; gindex -= move_direction) {
     if (std::abs(dest_page->Meta()->space_used() + rgroups[gindex].size -
-                 src_page->Meta()->space_used() - rgroups[gindex].size)
+                 src_page->Meta()->space_used() + rgroups[gindex].size)
         > min_gap) {
       break;
     }
@@ -1448,6 +1447,9 @@ bool BplusTree::ReDistributeRecordsWithinTwoPages(
                            Schema::RecordID(dest_page->id(), new_slot_id));
       }
     }
+    // Update min_map
+    min_gap = std::abs(page1->Meta()->space_used() -
+                       page2->Meta()->space_used());
   }
   // No record is re-distributed.
   if (gindex == gindex_start) {
@@ -1490,7 +1492,6 @@ bool BplusTree::MergeTwoNodes(
 
   if (page1->Meta()->overflow_page() > 0 ||
       page2->Meta()->overflow_page() > 0) {
-    LogERROR("Can't re-distribute records between overflow pages");
     return false;
   }
 
@@ -1542,6 +1543,8 @@ bool BplusTree::DeleteNodeFromTree(RecordPage* page, int slot_id_in_parent) {
     return false;
   }
 
+  bool need_lookup_parent = slot_id_in_parent < 0;
+
   // delete root page - tree will become empty and reset.
   if (page->id() == header_->root_page()) {
     header_->reset();
@@ -1555,35 +1558,68 @@ bool BplusTree::DeleteNodeFromTree(RecordPage* page, int slot_id_in_parent) {
   auto parent = Page(page->Meta()->parent_page());
   CheckLogFATAL(parent, "can't find parent for non-root page %d", page->id());
 
+  SearchTreeNodeResult result;
   if (slot_id_in_parent < 0) {
-    auto result = LookUpTreeNodeInfoForPage(page);
+    result = LookUpTreeNodeInfoForPage(page);
     slot_id_in_parent = result.slot;
   }
   CheckLogFATAL(slot_id_in_parent >= 0, "Invalid slot id of page %d in parent");
 
   // Parse the TreeNodeRecord in parent and check it matches this page id.
-  int page_id = *(reinterpret_cast<int32*>(
-                      parent->Record(slot_id_in_parent) +
-                      parent->RecordLength(slot_id_in_parent) - sizeof(int32))
-                  );
+  int page_id = *(ParseRecordField<int32>(parent, slot_id_in_parent));
   if (page_id != page->id()) {
     LogFATAL("tree node record %d inconsistent with child page id %d",
              page_id, page->id());
   }
 
+  // TODO: remove this
+  if (page->Meta()->page_type() == TREE_NODE) {
+    result = LookUpTreeNodeInfoForPage(page);
+    if (result.prev_child_id < 0 && result.next_child_id >= 0) {
+      LogERROR("This shouldn't happen!! node %d", page->id());
+      LogERROR("next node has %d records",
+               Page(result.next_child_id)->Meta()->num_records());
+    }
+  }
+
+  // Special cases:
   if (page->Meta()->page_type() == TREE_LEAVE &&
       page->Meta()->overflow_page() > 0) {
-    // Delete header of a overflow chain - the first overflow page becomee
+    // 1. Delete header of a overflow chain - the first overflow page becomee
     // new header.
     auto new_header = Page(page->Meta()->overflow_page());
     new_header->Meta()->set_parent_page(parent->id());
     new_header->Meta()->set_is_overflow_page(0);
-    *(reinterpret_cast<int32*>(parent->Record(slot_id_in_parent) +
-                               parent->RecordLength(slot_id_in_parent) -
-                               sizeof(int32))) = new_header->id();
+    *(ParseRecordField<int32>(parent, slot_id_in_parent)) = new_header->id();
+  }
+  else if (page->Meta()->page_type() == TREE_LEAVE && need_lookup_parent) {
+    // 2. Delete the left-most leave of a tree node while there are still
+    // siblings on the right - Don't delete its tree node. Instead, we let min
+    // tree node point to second leave. One case is that when second leave is
+    // overflowed and first leave can't re-distribute nor merge with it.
+    if (result.slot < 0) {
+      result = LookUpTreeNodeInfoForPage(page);
+    }
+    // Min tree node record re-point to second leave if exists.
+    if (result.prev_child_id < 0 && result.next_child_id < 0) {
+      // LogERROR("Deleting left-most page, next child is %d", result.next_child_id);
+      // LogERROR("Remaining leaves %d", header_->num_leaves());
+    }
+    if (result.next_child_id > 0) {
+      CheckLogFATAL(parent->DeleteRecord(result.next_slot),
+                    "Failed to delete tree node record of second leave %d",
+                    result.next_child_id);
+      *(ParseRecordField<int32>(parent, slot_id_in_parent)) =
+                                                        result.next_child_id;
+    }
+    else {
+      // No leaves on the right.
+      CheckLogFATAL(parent->DeleteRecord(slot_id_in_parent),
+                    "Failed to delete tree node record of page %d", page->id());
+    }
   }
   else {
-    // Delete the tree node record of this page from its parent.
+    // 3. Common - Delete the tree node record of this page from its parent.
     CheckLogFATAL(parent->DeleteRecord(slot_id_in_parent),
                   "Failed to delete tree node record of page %d", page->id());
   }
@@ -1620,7 +1656,10 @@ bool BplusTree::ProcessNodeAfterRecordDeletion(
 
   // If current page becomes empty, delete this page from B+ tree and call
   // DeleteNodeFromTree() recursively.
-  if (page->Meta()->num_records() == 0) {
+  // Only one exception - we never delete the left-most leave.
+  if (page->Meta()->num_records() == 0 /*&&
+      !(page->Meta()->page_type() == TREE_LEAVE &&
+        page->Meta()->prev_page() < 0)*/) {
     // Pass -1 to recursive calls so that page's parent will be looked up.
     debug(0);
     return DeleteNodeFromTree(page, -1);
@@ -1640,7 +1679,7 @@ bool BplusTree::ProcessNodeAfterRecordDeletion(
     }
 
     debug(2);
-    printf("root remained %d records\n", page->Meta()->num_records());
+    printf("root %d remained %d records\n", page->id(), page->Meta()->num_records());
     header_->decrement_depth(1);
     int page_id = -1;
     Schema::PageRecordsManager prmanager(page, schema(), key_indexes_,
@@ -1666,6 +1705,7 @@ bool BplusTree::ProcessNodeAfterRecordDeletion(
   debug(3);
   SearchTreeNodeResult result = LookUpTreeNodeInfoForPage(page);
   CheckLogFATAL(result.slot >= 0, "Invalid slot id of page %d in parent");
+
   if (result.next_child_id >= 0) {
     if (ReDistributeRecordsWithinTwoPages(page, Page(result.next_child_id),
                                           result.next_slot, rid_mutations)) {
@@ -1701,6 +1741,10 @@ bool BplusTree::ProcessNodeAfterRecordDeletion(
 bool BplusTree::Do_DeleteRecordByKey(
          const std::vector<std::shared_ptr<Schema::RecordBase>>& keys,
          DataBase::DeleteResult* result) {
+  if (header_->root_page() < 0) {
+    return true;
+  }
+
   // TODO: only implement single key deletion.
   auto leave = SearchByKey(keys[0].get());
   if (!leave) {
@@ -1713,7 +1757,9 @@ bool BplusTree::Do_DeleteRecordByKey(
   int num = DeleteMatchedRecordsFromLeave(leave, keys[0].get(),
                                           &result->rid_deleted);
   //printf("deleted %d matching records\n", num);
-  (void)num;
+  if (num <= 0) {
+    return true;
+  }
 
   // Post process for the node after record deletion.
   ProcessNodeAfterRecordDeletion(leave, &result->rid_mutations);
@@ -1730,6 +1776,7 @@ int BplusTree::DeleteMatchedRecordsFromLeave(
     return -1;
   }
 
+  int count_deleted = 0;
   while (leave) {
     Schema::PageRecordsManager prmanager(leave, schema(), key_indexes_,
                                          file_type_, TREE_LEAVE);
@@ -1743,6 +1790,7 @@ int BplusTree::DeleteMatchedRecordsFromLeave(
         rid_deleted->emplace_back(prmanager.plrecords().at(index).Record(),
                                   Schema::RecordID(leave->id(), slot_id),
                                   Schema::RecordID());
+        count_deleted++;
         last_is_match = true;
       }
       else {
@@ -1770,7 +1818,7 @@ int BplusTree::DeleteMatchedRecordsFromLeave(
     }
   }
 
-  return rid_deleted->size();
+  return count_deleted;
 }
 
 bool BplusTree::DeleteOverflowLeave(RecordPage* leave) {

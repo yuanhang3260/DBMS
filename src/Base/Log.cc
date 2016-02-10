@@ -17,7 +17,7 @@ void LogToINFO(const char* file, int line, const char* func,
 
 void LogToERROR(const char* file, int line, const char* func,
                 const char* error_msg, ...) {
-  fprintf(stderr, "\033[1;31m[\033[0m%s.%d\033[1;31m]\033[0m ",
+  fprintf(stderr, "\033[1;31m[\033[0m%s.%d] ",
           file, line);
   va_list args;
   va_start(args, error_msg);
@@ -28,7 +28,7 @@ void LogToERROR(const char* file, int line, const char* func,
 
 void LogToFATAL(const char* file, int line, const char* func,
                 const char* error_msg, ...) {
-  fprintf(stderr, "\033[1;31m[\033[0m%s.%d\033[1;31m]\033[0m ",
+  fprintf(stderr, "\033[1;31m[\033[0m%s.%d] ",
           file, line);
   va_list args;
   va_start(args, error_msg);

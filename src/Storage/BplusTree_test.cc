@@ -74,29 +74,25 @@ class BplusTreeTest: public UnitTest {
       // Init fields to records.
       // name
       {
-        // if (i >= 2 && i <= 6) {
-        //   record_resource.at(i)->AddField(new Schema::StringType("hello"));
-        // }
-        // else {
-          int str_len = Utils::RandomNumber(5);
-          char buf[str_len];
-          for (int i = 0; i < str_len; i++) {
-            buf[i] = 'a' + Utils::RandomNumber(26);
-          }
-          record_resource.at(i)->AddField(new Schema::StringType(buf, str_len));
-        // }
+        int str_len = Utils::RandomNumber(5);
+        char buf[str_len];
+        for (int i = 0; i < str_len; i++) {
+          buf[i] = 'a' + Utils::RandomNumber(26);
+        }
+        record_resource.at(i)->AddField(new Schema::StringType(buf, str_len));
       }
       // age
       int rand_int = Utils::RandomNumber(20);
       record_resource.at(i)->AddField(new Schema::IntType(rand_int));
       // money (we use this field as key for record resource map).
       int rand_long = Utils::RandomNumber(10);
-      // if (i >= 2 && i <= 6) {
-      //   record_resource.at(i)->AddField(new Schema::LongIntType(-1));
-      // }
-      // else {
+      if (i < kNumRecordsSource / 2) {
         record_resource.at(i)->AddField(new Schema::LongIntType(rand_long));
-      // }
+      }
+      else {
+        rand_long = Utils::RandomNumber(kNumRecordsSource);
+        record_resource.at(i)->AddField(new Schema::LongIntType(rand_long));
+      }
       // weight
       double rand_double = 1.0 * Utils::RandomNumber() / Utils::RandomNumber();
       record_resource.at(i)->AddField(new Schema::DoubleType(rand_double));
@@ -615,8 +611,8 @@ class BplusTreeTest: public UnitTest {
 
     // Delete records.
     BplusTree tree(table, file_type, key_index);
-    std::vector<int> delete_key = Utils::RandomListFromRange(0, 9);
-    //std::sort(delete_key.begin(), delete_key.end(), std::greater<int>());
+    std::vector<int> delete_key = Utils::RandomListFromRange(0, kNumRecordsSource);
+    //std::sort(delete_key.begin(), delete_key.end());
     for (int i: delete_key) {
       printf("--------------------- i = %d ---------------------------\n", i);
       DataBase::DeleteOp op;
@@ -705,7 +701,11 @@ int main(int argc, char** argv) {
   //   test.CheckBplusTree(file_type, key_index);
   // }
 
-  test.Test_DeleteRecord(file_type, key_index);
+  for (int i = 0; i < 100; i++) {
+    // LogERROR("----------- ii = %d ----------", i);
+    // printf("----------- ii = %d ----------\n", i);
+    test.Test_DeleteRecord(file_type, key_index);
+  }
 
   //test.Test_UpdateRecordID();
 
