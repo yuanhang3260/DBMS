@@ -1592,7 +1592,8 @@ bool BplusTree::DeleteNodeFromTree(RecordPage* page, int slot_id_in_parent) {
     new_header->Meta()->set_is_overflow_page(0);
     *(ParseRecordField<int32>(parent, slot_id_in_parent)) = new_header->id();
   }
-  else if (page->Meta()->page_type() == TREE_LEAVE && need_lookup_parent) {
+  else if (page->Meta()->page_type() == TREE_LEAVE && need_lookup_parent &&
+           result.prev_child_id < 0 && result.next_child_id >= 0) {
     // 2. Delete the left-most leave of a tree node while there are still
     // siblings on the right - Don't delete its tree node. Instead, we let min
     // tree node point to second leave. One case is that when second leave is

@@ -318,6 +318,15 @@ HalfSplitResult HalfSplitRecordGroups(const std::vector<RecordGroup>* rgroups,
 }
 
 void PageRecordsManager::GroupRecords(std::vector<RecordGroup>* rgroups) {
+  // Tree node records are guaranteed different and each group contains exactly
+  // one record.
+  if (page_->Meta()->page_type() == DataBaseFiles::TREE_NODE) {
+    for (int i = 0; i < (int)plrecords_.size(); i++) {
+      rgroups->push_back(RecordGroup(i, 1, Record(i)->size()));
+    }
+    return;
+  }
+
   RecordBase* crt_record = Record(0);
   int crt_start = 0;
   int num_records = 0;
