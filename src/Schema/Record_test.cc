@@ -328,6 +328,18 @@ class RecordTest: public UnitTest {
     //   entry.second->Print();
     // }
   }
+
+  void Test_ParseFromText() {
+    std::string str = "Record: | String: \"nb\" | Int: 19 | LongInt: 46 | "
+                      "Double: 1.682927 | Bool: 0 | CharArray: \"qpecdcmrtb\" | ";
+    RecordBase record;
+    AssertTrue(record.ParseFromText(str, 20));
+    record.Print();
+
+    str = "i = 71, record size = 44";
+    record.clear();
+    AssertFalse(record.ParseFromText(str, 20));
+  }
 };
 
 }  // namespace Schema
@@ -335,11 +347,12 @@ class RecordTest: public UnitTest {
 int main() {
   Schema::RecordTest test;
   test.setup();
-  test.Test_Record_Operators();
-  test.Test_Record_LoadDump();
-  test.Test_SortRecords();
-  test.Test_PageRecords();
-  test.Test_ExtractKey();
+  // test.Test_Record_Operators();
+  // test.Test_Record_LoadDump();
+  // test.Test_SortRecords();
+  // test.Test_PageRecords();
+  // test.Test_ExtractKey();
+  test.Test_ParseFromText();
   test.teardown();
 
   std::cout << "\033[2;32mPassed ^_^\033[0m" << std::endl;

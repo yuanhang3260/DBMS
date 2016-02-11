@@ -1,4 +1,6 @@
 #include <iostream>
+#include <fstream>
+#include <sstream>
 #include <algorithm>
 
 #include "UnitTest/UnitTest.h"
@@ -113,10 +115,30 @@ class BplusTreeTest: public UnitTest {
     }
   }
 
+  void InitRecordResourceFromFile(std::string filename) {
+    record_resource.clear();
+    std::ifstream infile(filename);
+    std::string line;
+    int i = 0;
+    while (std::getline(infile, line)) {
+      std::istringstream iss(line);
+      auto record = std::make_shared<Schema::DataRecord>();
+      if (record->ParseFromText(line, 20)) {
+        record_resource.emplace(i, record);
+        i++;
+        record->Print();
+      }
+    }
+    printf("Parsed %d records from file %s\n",
+           (int)record_resource.size(), filename.c_str());
+  }
+
+
   void setup() override {
     InitSchema();
     CreateSchemaFile(tablename);
     InitRecordResource();
+    //InitRecordResourceFromFile("out1");
     table = new DataBase::Table(tablename);
   }
 
@@ -572,10 +594,8 @@ class BplusTreeTest: public UnitTest {
   }
 
   void Test_InsertRecord(FileType file_type_, std::vector<int> key_index) {
-    InitRecordResource();
-
     BplusTree tree(table, file_type_, key_index, true);  /* craete tree */
-    for (int i = 0; i < kNumRecordsSource; i++) {
+    for (int i = 0; i < (int)record_resource.size(); i++) {
       printf("-------------------------------------------------------------\n");
       printf("-------------------------------------------------------------\n");
       printf("i = %d, record size = %d\n", i, record_resource[i]->size());
@@ -607,13 +627,14 @@ class BplusTreeTest: public UnitTest {
   void Test_DeleteRecord(FileType file_type, std::vector<int> key_index) {
     // Create a tree with records.
     Test_InsertRecord(file_type, key_index);
+    CheckBplusTree(file_type, key_index);
     printf("********************** Begin Deleting *************************\n");
 
     // Delete records.
     BplusTree tree(table, file_type, key_index);
-    std::vector<int> delete_key = Utils::RandomListFromRange(0, kNumRecordsSource);
-    //std::sort(delete_key.begin(), delete_key.end());
-    for (int i: delete_key) {
+    std::vector<int> del_keys = Utils::RandomListFromRange(0,kNumRecordsSource);
+    //std::sort(del_keys.begin(), del_keys.end());
+    for (int i: del_keys) {
       printf("--------------------- i = %d ---------------------------\n", i);
       DataBase::DeleteOp op;
       op.key_index = key_index[0];

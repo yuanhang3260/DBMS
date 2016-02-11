@@ -1,7 +1,7 @@
 #include <sstream>
 
 #include "Strings.h"
-#include "Utils.h"
+#include "Base/Utils.h"
 #include "StringBuilder.h"
 
 std::string StringUtils::Strip(std::string str) {

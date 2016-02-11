@@ -5,6 +5,7 @@
 #include <algorithm>
 
 #include "Base/Utils.h"
+#include "Utility/Strings.h"
 #include "Base/Log.h"
 #include "Record.h"
 
@@ -367,6 +368,43 @@ bool RecordBase::CheckFieldsType(const TableSchema* schema) const {
     }
   }
   return true;
+}
+
+bool RecordBase::ParseFromText(std::string str, int chararray_len_limit) {
+  auto tokens = StringUtils::Split(str, '|');
+  for (auto& block: tokens) {
+    block = StringUtils::Strip(block);
+    if (block.length() == 0) {
+      continue;
+    }
+    auto pieces = StringUtils::Split(block, ':');
+    if ((int)pieces.size() != 2) {
+      continue;
+    }
+    for (int i = 0; i < (int)pieces.size(); i++) {
+      pieces[i] = StringUtils::Strip(pieces[i]);
+      pieces[i] = StringUtils::Strip(pieces[i], "\"\"");
+    }
+    if (pieces[0] == "Int") {
+      AddField(new IntType(std::stoi(pieces[1])));
+    }
+    else if (pieces[0] == "LongInt") {
+      AddField(new LongIntType(std::stol(pieces[1])));
+    }
+    else if (pieces[0] == "Double") {
+      AddField(new DoubleType(std::stod(pieces[1])));
+    }
+    else if (pieces[0] == "Bool") {
+      AddField(new BoolType(std::stoi(pieces[1])));
+    }
+    else if (pieces[0] == "String") {
+      AddField(new StringType(pieces[1]));
+    }
+    else if (pieces[0] == "CharArray") {
+      AddField(new CharArrayType(pieces[1], chararray_len_limit));
+    }
+  }
+  return (int)fields_.size() > 0;
 }
 
 // ****************************** DataRecord ******************************** //

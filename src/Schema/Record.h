@@ -113,6 +113,9 @@ class RecordBase {
                        std::vector<int> key_indexes) const;
   bool CheckFieldsType(const TableSchema* schema) const;
 
+  // Parse from text of format as Print() method prints.
+  bool ParseFromText(std::string str, int chararray_len_limit);
+
   // Compare 2 Schema fields. We first compare field type and then the value
   // if the field types are same.
   static int CompareSchemaFields(const SchemaFieldType* field1,

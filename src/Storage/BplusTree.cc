@@ -1404,15 +1404,26 @@ bool BplusTree::ReDistributeRecordsWithinTwoPages(
   std::vector<Schema::RecordGroup> rgroups;
   prmanager.GroupRecords(&rgroups);
 
+  // A very, very rare case that we force page2 move at least 1 record to page1
+  // when a tree node has only 1 record and it still has right siblings.
+  force_redistribute = (move_direction < 0) &&
+                       (page1->Meta()->page_type() == TREE_NODE) &&
+                       (page1->Meta()->num_records() == 1);
+  if (force_redistribute) {
+    LogERROR("Can't believe tihs happens!");
+  }
+
   int gindex_start = move_direction < 0 ? 0 : (rgroups.size() - 1);
   int gindex_end = move_direction < 0 ? rgroups.size() : -1;
   int gindex = gindex_start;
   for (; gindex != gindex_end; gindex -= move_direction) {
-    if (std::abs(dest_page->Meta()->space_used() + rgroups[gindex].size -
+    if (!force_redistribute &&
+        std::abs(dest_page->Meta()->space_used() + rgroups[gindex].size -
                  src_page->Meta()->space_used() + rgroups[gindex].size)
         > min_gap) {
       break;
     }
+    force_redistribute = false;
     if (!dest_page->PreCheckCanInsert(rgroups[gindex].num_records,
                                       rgroups[gindex].size)) {
       break;
@@ -1577,7 +1588,7 @@ bool BplusTree::DeleteNodeFromTree(RecordPage* page, int slot_id_in_parent) {
     result = LookUpTreeNodeInfoForPage(page);
     if (result.prev_child_id < 0 && result.next_child_id >= 0) {
       LogERROR("This shouldn't happen!! node %d", page->id());
-      LogERROR("next node has %d records",
+      LogFATAL("next node has %d records",
                Page(result.next_child_id)->Meta()->num_records());
     }
   }
@@ -1627,7 +1638,7 @@ bool BplusTree::DeleteNodeFromTree(RecordPage* page, int slot_id_in_parent) {
                   Page(page->Meta()->next_page()));
   }
 
-  // put the deleted page into free page pool.
+  // Put the deleted page into free page pool.
   CheckLogFATAL(RecyclePage(page->id()),
                 "Failed to recycle page %d", page->id());
 
@@ -1653,10 +1664,7 @@ bool BplusTree::ProcessNodeAfterRecordDeletion(
 
   // If current page becomes empty, delete this page from B+ tree and call
   // DeleteNodeFromTree() recursively.
-  // Only one exception - we never delete the left-most leave.
-  if (page->Meta()->num_records() == 0 /*&&
-      !(page->Meta()->page_type() == TREE_LEAVE &&
-        page->Meta()->prev_page() < 0)*/) {
+  if (page->Meta()->num_records() == 0) {
     // Pass -1 to recursive calls so that page's parent will be looked up.
     debug(0);
     return DeleteNodeFromTree(page, -1);
@@ -1742,24 +1750,26 @@ bool BplusTree::Do_DeleteRecordByKey(
     return true;
   }
 
-  // TODO: only implement single key deletion.
-  auto leave = SearchByKey(keys[0].get());
-  if (!leave) {
-    LogERROR("Can't search to leave by this key:");
-    keys[0]->Print();
-    return false;
-  }
+  RecordPage* crt_leave = nullptr;
+  for (const auto& key: keys) {
+    auto leave = SearchByKey(key.get());
+    if (!leave) {
+      LogERROR("Can't search to leave by this key:");
+      keys[0]->Print();
+      return false;
+    }
 
-  // Delete records.
-  int num = DeleteMatchedRecordsFromLeave(leave, keys[0].get(),
-                                          &result->rid_deleted);
-  //printf("deleted %d matching records\n", num);
-  if (num <= 0) {
-    return true;
-  }
+    // Post process for the node after record deletion.
+    if (crt_leave && crt_leave != leave) {
+      ProcessNodeAfterRecordDeletion(crt_leave, &result->rid_mutations);
+    }
 
-  // Post process for the node after record deletion.
-  ProcessNodeAfterRecordDeletion(leave, &result->rid_mutations);
+    // Delete records.
+    int num = DeleteMatchedRecordsFromLeave(leave, key.get(),
+                                            &result->rid_deleted);
+    //printf("deleted %d matching records\n", num);
+    crt_leave = leave;    
+  }
 
   return true;
 }
@@ -2265,6 +2275,7 @@ Schema::RecordID BplusTree::InsertNewRecordToLeaveWithSplit(
   // Insert back split leave pages to parent tree node(s).
   RecordPage* parent = Page(leave->Meta()->parent_page());
   CheckLogFATAL(parent, "Failed to fetch parent page of current leave");
+  printf("Got %d leaves\n", (int)leaves.size());
   if (leaves.size() > 1) {
     //printf("%d split leaves returned\n", (int)leaves.size());
     for (int i = 1; i < (int)leaves.size(); i++) {
@@ -2283,7 +2294,8 @@ Schema::RecordID BplusTree::InsertNewRecordToLeaveWithSplit(
     }
     // Connect last split leave with following leaves.
     if (next_leave_id >= 0) {
-      ConnectLeaves(leaves[leaves.size()-1].page, Page(next_leave_id));
+      auto tail_leave = GotoOverflowChainEnd(leaves[leaves.size()-1].page);
+      ConnectLeaves(tail_leave, Page(next_leave_id));
     }
   }
   else {

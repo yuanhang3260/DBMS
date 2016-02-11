@@ -372,7 +372,7 @@ PageRecordsManager::InsertRecordAndSplitPage(
   // std::cout << "re1.left_larger: " << re1.left_larger << std::endl;
   RecordID rid;
   if (re1.left_larger) {
-    // Corner case - all recors are same. We need to add new record to
+    // Corner case - all records are same. We need to add new record to
     // overflow page.
     if (re1.mid_index >= (int)rgroups.size()) {
       auto of_page = tree_->AppendOverflowPageTo(page_);
