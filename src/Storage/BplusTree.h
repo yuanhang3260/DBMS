@@ -177,7 +177,7 @@ class BplusTree {
   // propagate tree node record deletion to upper nodes.
   bool ProcessNodeAfterRecordDeletion(
            RecordPage* page,
-           std::vector<Schema::DataRecordRidMutation>* rid_mutations);
+           DataBase::DeleteResult* result);
 
   // Used in bulk loading. We don't allow records with same key are spread
   // to 2 successive pages. Same keys must be merged into a single page and
@@ -261,7 +261,7 @@ class BplusTree {
   int DeleteMatchedRecordsFromLeave(
          RecordPage* leave,
          const Schema::RecordBase* key,
-         std::vector<Schema::DataRecordRidMutation>* rid_deleted);
+         DataBase::DeleteResult* result);
 
   bool CheckKeyFieldsType(const Schema::RecordBase* key) const;
   bool CheckRecordFieldsType(const Schema::RecordBase* record) const;

@@ -26,6 +26,15 @@ class DeleteOp {
 
 class DeleteResult {
  public:
+  enum DeleteMode {
+    DEL_DATA,
+    DEL_INDEX_PRE,
+    DEL_INDEX_POS,
+  };
+
+  bool records_moved = true;
+  DeleteMode mode = DEL_DATA;
+  std::vector<int> mutated_leaves;
   std::vector<Schema::DataRecordRidMutation> rid_deleted;
   std::vector<Schema::DataRecordRidMutation> rid_mutations;
 };

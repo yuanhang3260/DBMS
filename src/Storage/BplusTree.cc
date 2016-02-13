@@ -1651,7 +1651,7 @@ bool BplusTree::DeleteNodeFromTree(RecordPage* page, int slot_id_in_parent) {
 
 bool BplusTree::ProcessNodeAfterRecordDeletion(
          RecordPage* page,
-         std::vector<Schema::DataRecordRidMutation>* rid_mutations) {
+         DataBase::DeleteResult* delete_result) {
   if (!page) {
     LogERROR("nullptr page input to ProcessNodeAfterRecordDeletion");
     return false;
@@ -1659,6 +1659,9 @@ bool BplusTree::ProcessNodeAfterRecordDeletion(
 
   // Check space occupation < 0.5
   if (page->Occupation() >= 0.5) {
+    if (page->Meta()->page_type() == TREE_LEAVE) {
+      delete_result->records_moved = false;
+    }
     return true;
   }
 
@@ -1711,10 +1714,16 @@ bool BplusTree::ProcessNodeAfterRecordDeletion(
   SearchTreeNodeResult result = LookUpTreeNodeInfoForPage(page);
   CheckLogFATAL(result.slot >= 0, "Invalid slot id of page %d in parent");
 
+  std::vector<Schema::DataRecordRidMutation>* rid_mutations =
+                   delete_result ? &delete_result->rid_mutations : nullptr;
+
   if (result.next_child_id >= 0) {
     if (ReDistributeRecordsWithinTwoPages(page, Page(result.next_child_id),
                                           result.next_slot, rid_mutations)) {
       debug(4);
+      if (page->Meta()->page_type() == TREE_LEAVE && delete_result) {
+        delete_result->mutated_leaves.push_back(result.next_child_id);
+      }
       return true;
     }
   }
@@ -1722,6 +1731,9 @@ bool BplusTree::ProcessNodeAfterRecordDeletion(
     if (ReDistributeRecordsWithinTwoPages(Page(result.prev_child_id), page,
                                           result.slot, rid_mutations)) {
       debug(5);
+      if (page->Meta()->page_type() == TREE_LEAVE && delete_result) {
+        delete_result->mutated_leaves.push_back(result.prev_child_id);
+      }
       return true;
     }
   }
@@ -1729,6 +1741,9 @@ bool BplusTree::ProcessNodeAfterRecordDeletion(
     if (MergeTwoNodes(page, Page(result.next_child_id),
                       result.next_slot, rid_mutations)) {
       debug(6);
+      if (page->Meta()->page_type() == TREE_LEAVE && delete_result) {
+        delete_result->mutated_leaves.push_back(result.next_child_id);
+      }
       return true;
     }
   }
@@ -1761,15 +1776,17 @@ bool BplusTree::Do_DeleteRecordByKey(
 
     // Post process for the node after record deletion.
     if (crt_leave && crt_leave != leave) {
-      ProcessNodeAfterRecordDeletion(crt_leave, &result->rid_mutations);
+      ProcessNodeAfterRecordDeletion(crt_leave, result);
     }
 
     // Delete records.
-    int num = DeleteMatchedRecordsFromLeave(leave, key.get(),
-                                            &result->rid_deleted);
+    int num = DeleteMatchedRecordsFromLeave(leave, key.get(), result);
     //printf("deleted %d matching records\n", num);
-    crt_leave = leave;    
+    (void)num;
+    crt_leave = leave;
   }
+
+  ProcessNodeAfterRecordDeletion(crt_leave, result);
 
   return true;
 }
@@ -1777,8 +1794,8 @@ bool BplusTree::Do_DeleteRecordByKey(
 int BplusTree::DeleteMatchedRecordsFromLeave(
          RecordPage* leave,
          const Schema::RecordBase* key,
-         std::vector<Schema::DataRecordRidMutation>* rid_deleted) {
-  if (!leave || !key || !rid_deleted) {
+         DataBase::DeleteResult* result) {
+  if (!leave || !key || !result) {
     LogERROR("Nullptr input to DeleteMatchedRecordsFromLeave");
     return -1;
   }
@@ -1794,9 +1811,10 @@ int BplusTree::DeleteMatchedRecordsFromLeave(
         int slot_id = prmanager.RecordSlotID(index);
         CheckLogFATAL(leave->DeleteRecord(slot_id),
                       "Failed to delete record from leave %d", leave->id());
-        rid_deleted->emplace_back(prmanager.plrecords().at(index).Record(),
-                                  Schema::RecordID(leave->id(), slot_id),
-                                  Schema::RecordID());
+        result->rid_deleted.emplace_back(
+                                prmanager.plrecords().at(index).Record(),
+                                Schema::RecordID(leave->id(), slot_id),
+                                Schema::RecordID());
         count_deleted++;
         last_is_match = true;
       }
