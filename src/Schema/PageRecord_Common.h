@@ -111,8 +111,11 @@ class DataRecordRidMutation {
 
   static bool ValidityCheck(const std::vector<DataRecordRidMutation>& v);
 
+  // Merge v2 into v1. After merging, v1 contains all valid RecordID mutations,
+  // and v2 contains RecordIDs to delete.
   static bool Merge(std::vector<DataRecordRidMutation>& v1,
-                    std::vector<DataRecordRidMutation>& v2);
+                    std::vector<DataRecordRidMutation>& v2,
+                    bool v2_is_deleted_rid=false);
 };
 
 

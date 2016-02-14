@@ -26,7 +26,8 @@ OBJ = $(OBJ_DIR)/Utility/Strings.o \
       $(OBJ_DIR)/Schema/PageRecordsManager.o \
       $(OBJ_DIR)/Schema/DBTable_pb.o \
       $(OBJ_DIR)/DataBase/Table.o \
-      
+      $(OBJ_DIR)/DataBase/Operation.o \
+
 
 TESTOBJ = $(OBJ_DIR)/Utility/Strings_test.o \
           $(OBJ_DIR)/Utility/StringBuilder_test.o \

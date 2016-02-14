@@ -1811,10 +1811,21 @@ int BplusTree::DeleteMatchedRecordsFromLeave(
         int slot_id = prmanager.RecordSlotID(index);
         CheckLogFATAL(leave->DeleteRecord(slot_id),
                       "Failed to delete record from leave %d", leave->id());
-        result->rid_deleted.emplace_back(
-                                prmanager.plrecords().at(index).Record(),
-                                Schema::RecordID(leave->id(), slot_id),
-                                Schema::RecordID());
+        if (result->del_mode == DataBase::DeleteResult::DEL_DATA) {
+          // Save all records deleted from data tree.
+          result->rid_deleted.emplace_back(
+                                  prmanager.plrecords().at(index).Record(),
+                                  Schema::RecordID(leave->id(), slot_id),
+                                  Schema::RecordID());
+        }
+        else if (result->del_mode == DataBase::DeleteResult::DEL_INDEX_PRE) {
+          // Save the rids to delete from data tree.
+          auto index_record = prmanager.GetRecord<Schema::IndexRecord>(index);
+          result->rid_deleted.emplace_back(
+                                  std::shared_ptr<Schema::RecordBase>(),
+                                  Schema::RecordID(index_record->rid()),
+                                  Schema::RecordID());
+        }
         count_deleted++;
         last_is_match = true;
       }

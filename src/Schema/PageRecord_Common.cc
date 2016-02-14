@@ -96,7 +96,8 @@ bool DataRecordRidMutation::ValidityCheck(
       return false;
     }
     old_rid_set.insert(r.old_rid);
-    if (new_rid_set.find(r.new_rid) != new_rid_set.end()) {
+    if (r.new_rid.IsValid() &&
+        new_rid_set.find(r.new_rid) != new_rid_set.end()) {
       return false;
     }
     new_rid_set.insert(r.new_rid);
@@ -105,7 +106,8 @@ bool DataRecordRidMutation::ValidityCheck(
 }
 
 bool DataRecordRidMutation::Merge(std::vector<DataRecordRidMutation>& v1,
-                                  std::vector<DataRecordRidMutation>& v2) {
+                                  std::vector<DataRecordRidMutation>& v2,
+                                  bool v2_is_deleted_rid) {
   if (!ValidityCheck(v1)) {
     return false;
   }
@@ -130,11 +132,32 @@ bool DataRecordRidMutation::Merge(std::vector<DataRecordRidMutation>& v1,
   }
   // update cascaded rid mutations.
   for (auto const& e: rid_m_cascade_map) {
-    v1[e.first].new_rid = v2[e.second].new_rid;
+    if (!v2_is_deleted_rid) {
+      v1[e.first].new_rid = v2[e.second].new_rid;
+    }
+    else {
+      v2[e.second].old_rid = v1[e.first].old_rid;
+      v1[e.first].new_rid = RecordID();
+    }
   }
 
-  for (auto const i: insert_list) {
-    v1.push_back(v2[i]);
+  if (!v2_is_deleted_rid) {
+    for (auto const i: insert_list) {
+      v1.push_back(v2[i]);
+    }
+  }
+
+  // Scan v1 - if v2 is a deleted_rid list, rid mutations in v1 now with empty
+  // "new_rid" are the rids to delete from tree. Remove them from v1.
+  if (v2_is_deleted_rid) {
+    for (auto it = v1.begin(); it != v1.end();) {
+      if (it->new_rid.IsValid()) {
+        it++;
+      }
+      else {
+        it = v1.erase(it);
+      }
+    }
   }
 
   return true;

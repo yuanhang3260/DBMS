@@ -33,10 +33,12 @@ class DeleteResult {
   };
 
   bool records_moved = true;
-  DeleteMode mode = DEL_DATA;
+  DeleteMode del_mode = DEL_DATA;
   std::vector<int> mutated_leaves;
   std::vector<Schema::DataRecordRidMutation> rid_deleted;
   std::vector<Schema::DataRecordRidMutation> rid_mutations;
+
+  void MergeFrom(DeleteResult& other);
 };
 
 }  // namespace DataBase
