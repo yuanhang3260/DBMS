@@ -89,6 +89,10 @@ void DataRecordRidMutation::Print() const {
 
 bool DataRecordRidMutation::ValidityCheck(
          const std::vector<DataRecordRidMutation>& v) {
+  if (v.empty()) {
+    return true;
+  }
+
   std::set<RecordID> old_rid_set;
   std::set<RecordID> new_rid_set;
   for (const auto& r : v) {

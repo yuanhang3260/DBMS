@@ -37,6 +37,8 @@ TESTOBJ = $(OBJ_DIR)/Utility/Strings_test.o \
           $(OBJ_DIR)/Schema/DataTypes_test.o \
           $(OBJ_DIR)/Schema/Record_test.o \
 					$(OBJ_DIR)/Schema/PageRecord_Common_test.o \
+					$(OBJ_DIR)/DataBase/Table_test.o \
+					$(OBJ_DIR)/DataBase/Operation_test.o \
 
 
 TESTEXE = test/Strings_test.out \
@@ -46,7 +48,8 @@ TESTEXE = test/Strings_test.out \
           test/DataTypes_test.out \
           test/Record_test.out \
           test/PageRecord_Common_test.out \
-          test/BplusTree_test.out
+          test/BplusTree_test.out \
+          test/Operation_test.out \
 
 library: $(OBJ)
 	ar cr libDBMS.a $(OBJ)
@@ -86,6 +89,12 @@ $(OBJ_DIR)/Schema/%.o: $(SRC_DIR)/Schema/%.cc $(SRC_DIR)/Schema/%.h
 $(OBJ_DIR)/Schema/%.o: $(SRC_DIR)/Schema/%.cc
 	$(CC) $(CFLAGS) $(IFLAGS) -c $< -o $@
 
+$(OBJ_DIR)/DataBase/%.o: $(SRC_DIR)/DataBase/%.cc $(SRC_DIR)/DataBase/%.h
+	$(CC) $(CFLAGS) $(IFLAGS) -c $< -o $@
+
+$(OBJ_DIR)/DataBase/%.o: $(SRC_DIR)/DataBase/%.cc
+	$(CC) $(CFLAGS) $(IFLAGS) -c $< -o $@
+
 
 # Tests
 test/%.out: $(OBJ_DIR)/Utility/%.o library
@@ -98,6 +107,9 @@ test/%.out: $(OBJ_DIR)/Base/%.o library
 	$(CC) $(CFLAGS) $< libDBMS.a $(ProtoBufLib) -o $@
 
 test/%.out: $(OBJ_DIR)/Schema/%.o library
+	$(CC) $(CFLAGS) $< libDBMS.a $(ProtoBufLib) -o $@
+
+test/%.out: $(OBJ_DIR)/DataBase/%.o library
 	$(CC) $(CFLAGS) $< libDBMS.a $(ProtoBufLib) -o $@
 
 clean:
