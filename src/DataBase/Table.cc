@@ -117,6 +117,10 @@ std::string Table::BplusTreeFileName(DataBaseFiles::FileType file_type,
   return "";
 }
 
+std::vector<int> Table::DataTreeKey() const {
+  return idata_indexes_;
+}
+
 bool Table::IsDataFileKey(int index) const {
   if (idata_indexes_.size() > 1) {
     return false;

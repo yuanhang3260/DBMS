@@ -352,7 +352,7 @@ RecordPage* BplusTree::AllocateNewPage(PageType page_type) {
   header_->increment_num_used_pages(1);
   if (page_type == TREE_LEAVE) {
     header_->increment_num_leaves(1);
-    printf("Allocated new leave %d\n", page->id());
+    //printf("Allocated new leave %d\n", page->id());
   }
   return page;
 }
@@ -647,7 +647,7 @@ RecordPage* BplusTree::AppendOverflowPageTo(RecordPage* page) {
 bool BplusTree::ConnectLeaves(RecordPage* page1, RecordPage* page2) {
   int page1_id = page1 ? page1->id() : -1;
   int page2_id = page2 ? page2->id() : -1;
-  printf("Connecting %d and %d\n", page1_id, page2_id);
+  //printf("Connecting %d and %d\n", page1_id, page2_id);
   if (page1) {
     page1->Meta()->set_next_page(page2_id);
   }
@@ -1084,6 +1084,29 @@ bool BplusTree::MetaConsistencyCheck() const {
   printf("count_num_records = %d\n", vc_status_.count_num_records);
 
   return true;
+}
+
+std::shared_ptr<Schema::RecordBase> BplusTree::GetRecord(Schema::RecordID rid) {
+  auto page = Page(rid.page_id());
+  if (!page) {
+    return std::shared_ptr<Schema::RecordBase>();
+  }
+
+  int slot_id = rid.slot_id();
+  Schema::PageLoadedRecord plrecord(slot_id);
+  plrecord.GenerateRecordPrototype(schema(), key_indexes_,
+                                   file_type_, page->Meta()->page_type());
+  int load_size = plrecord.record()->LoadFromMem(page->Record(slot_id));
+
+  int expect_len = page->RecordLength(slot_id);
+  if (load_size != expect_len) {
+    LogERROR("Error load slot %d from page %d - expect %d byte, actual %d ",
+             page->id(), slot_id, expect_len, load_size);
+    plrecord.record()->Print();
+    return std::shared_ptr<Schema::RecordBase>();
+  }
+  
+  return plrecord.Record();
 }
 
 int BplusTree::SearchRecords(
@@ -1791,6 +1814,55 @@ bool BplusTree::Do_DeleteRecordByKey(
   return true;
 }
 
+bool BplusTree::Do_DeleteRecordByRecordID(
+         DataBase::DeleteResult& index_del_result,
+         DataBase::DeleteResult* result) {
+  if (!result) {
+    LogERROR("nullptr input 'result' to Do_DeleteRecordByRecordID");
+    return false;
+  }
+
+  Schema::DataRecordRidMutation::SortByOldRid(index_del_result.rid_deleted);
+
+  auto& rid_deleted = index_del_result.rid_deleted;
+  int group_start = 0, group_end = 0;
+  for (int i = 0; i <= (int)rid_deleted.size(); i++) {
+    if (i < (int)rid_deleted.size() &&
+        (rid_deleted[group_start].old_rid.page_id() ==
+         rid_deleted[i].old_rid.page_id())) {
+      continue;
+    }
+    group_end = i;
+
+    // delete this rids in [group_start, group_end - 1]
+    auto page = Page(rid_deleted[group_start].old_rid.page_id());
+    DataBase::DeleteResult crt_result;
+    CheckLogFATAL(page, "Can't find data tree leave %d", page->id());
+    printf("-------------\n");
+    for (int j = group_start; j < group_end; j++) {
+      printf("deleting rid: ");
+      rid_deleted[j].old_rid.Print();
+      crt_result.rid_deleted.emplace_back(GetRecord(rid_deleted[j].old_rid),
+                                          rid_deleted[j].old_rid,
+                                          Schema::RecordID());
+      page->DeleteRecord(rid_deleted[j].old_rid.slot_id());
+    }
+    ProcessNodeAfterRecordDeletion(page, &crt_result);
+    printf("this time mutated %d\n", crt_result.rid_mutations.size());
+    index_del_result.MergeDeleteRidsFromMutatedRids(crt_result);
+    result->MergeFrom(crt_result);
+
+    // printf("#### after merging rids\n");
+    // for (const auto& m: index_del_result.rid_deleted) {
+    //   m.Print();
+    // }
+    group_start = group_end;
+    printf("-------------\n");
+  }
+
+  return true;
+}
+
 int BplusTree::DeleteMatchedRecordsFromLeave(
          RecordPage* leave,
          const Schema::RecordBase* key,
@@ -1809,8 +1881,6 @@ int BplusTree::DeleteMatchedRecordsFromLeave(
     for (int index = 0; index < prmanager.NumRecords(); index++) {
       if (prmanager.CompareRecordWithKey(key, prmanager.Record(index)) == 0) {
         int slot_id = prmanager.RecordSlotID(index);
-        CheckLogFATAL(leave->DeleteRecord(slot_id),
-                      "Failed to delete record from leave %d", leave->id());
         if (result->del_mode == DataBase::DeleteResult::DEL_DATA) {
           // Save all records deleted from data tree.
           result->rid_deleted.emplace_back(
@@ -1826,6 +1896,8 @@ int BplusTree::DeleteMatchedRecordsFromLeave(
                                   Schema::RecordID(index_record->rid()),
                                   Schema::RecordID());
         }
+        CheckLogFATAL(leave->DeleteRecord(slot_id),
+                      "Failed to delete record from leave %d", leave->id());
         count_deleted++;
         last_is_match = true;
       }
@@ -2304,7 +2376,6 @@ Schema::RecordID BplusTree::InsertNewRecordToLeaveWithSplit(
   // Insert back split leave pages to parent tree node(s).
   RecordPage* parent = Page(leave->Meta()->parent_page());
   CheckLogFATAL(parent, "Failed to fetch parent page of current leave");
-  printf("Got %d leaves\n", (int)leaves.size());
   if (leaves.size() > 1) {
     //printf("%d split leaves returned\n", (int)leaves.size());
     for (int i = 1; i < (int)leaves.size(); i++) {

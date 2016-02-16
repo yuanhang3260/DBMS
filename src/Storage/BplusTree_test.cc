@@ -84,16 +84,16 @@ class BplusTreeTest: public UnitTest {
         record_resource.at(i)->AddField(new Schema::StringType(buf, str_len));
       }
       // age
-      int rand_int = Utils::RandomNumber(20);
+      int rand_int = Utils::RandomNumber(10);
       record_resource.at(i)->AddField(new Schema::IntType(rand_int));
       // money (we use this field as key for record resource map).
-      int rand_long = Utils::RandomNumber(10);
+      //int rand_long = Utils::RandomNumber(10);
       if (i < kNumRecordsSource / 2) {
-        record_resource.at(i)->AddField(new Schema::LongIntType(rand_long));
+        record_resource.at(i)->AddField(new Schema::LongIntType(i));
       }
       else {
-        rand_long = Utils::RandomNumber(kNumRecordsSource);
-        record_resource.at(i)->AddField(new Schema::LongIntType(rand_long));
+        //rand_long = Utils::RandomNumber(kNumRecordsSource);
+        record_resource.at(i)->AddField(new Schema::LongIntType(i));
       }
       // weight
       double rand_double = 1.0 * Utils::RandomNumber() / Utils::RandomNumber();
@@ -692,6 +692,46 @@ class BplusTreeTest: public UnitTest {
       _VerifyAllRecordsInTree(tree, key_index);
     }
   }
+
+  void Test_DeleteIndexRecordPre(FileType file_type, std::vector<int> key_index)
+  {
+    Test_UpdateRecordID();
+    printf("********************** Begin Deleting *************************\n");
+
+    BplusTree tree(table, DataBaseFiles::INDEX, key_index);
+    DataBase::DeleteResult delete_result;
+    delete_result.del_mode = DataBase::DeleteResult::DEL_INDEX_PRE;
+
+    DataBase::DeleteOp op;
+    for (int age = 0; age < 10; age++) {
+      op.key_index = key_index[0];
+      op.keys.push_back(std::make_shared<Schema::RecordBase>());
+      op.keys.back()->AddField(new Schema::IntType(age));
+    }
+
+    AssertTrue(tree.Do_DeleteRecordByKey(op.keys, &delete_result),
+               "delete failed");
+    printf("Got %d deleted rids from index tree %d\n",
+           delete_result.rid_deleted.size(), key_index[0]);
+    for (const auto& m: delete_result.rid_deleted) {
+      m.old_rid.Print();
+    }
+
+    BplusTree data_tree(table, DataBaseFiles::INDEX_DATA, table->DataTreeKey());
+    for (const auto& m: delete_result.rid_deleted) {
+      auto data_record = data_tree.GetRecord(m.old_rid);
+      AssertTrue(data_record.get());
+      data_record->Print();
+    }
+
+    // Delete data records from data tree.
+    DataBase::DeleteResult data_del_result;
+    data_tree.Do_DeleteRecordByRecordID(delete_result, &data_del_result);
+    printf("deleted %d data records from data tree\n",
+           (int)data_del_result.rid_deleted.size());
+    printf("mutated %d data records in data tree\n",
+           (int)data_del_result.rid_mutations.size());
+  }
 };
 
 }  // namespace DataBaseFiles
@@ -709,6 +749,7 @@ int main(int argc, char** argv) {
 
   DataBaseFiles::BplusTreeTest test;
   test.setup();
+
   //test.Test_Header_Page_Consistency_Check();
   // test.Test_Create_Load_Empty_Tree();
   
@@ -722,13 +763,15 @@ int main(int argc, char** argv) {
   //   test.CheckBplusTree(file_type, key_index);
   // }
 
-  for (int i = 0; i < 100; i++) {
-    // LogERROR("----------- ii = %d ----------", i);
-    // printf("----------- ii = %d ----------\n", i);
-    test.Test_DeleteRecord(file_type, key_index);
-  }
+  // for (int i = 0; i < 100; i++) {
+  //   // LogERROR("----------- ii = %d ----------", i);
+  //   // printf("----------- ii = %d ----------\n", i);
+  //   test.Test_DeleteRecord(file_type, key_index);
+  // }
 
   //test.Test_UpdateRecordID();
+
+  test.Test_DeleteIndexRecordPre(file_type, key_index);
 
   test.teardown();
   std::cout << "\033[2;32mAll Passed ^_^\033[0m" << std::endl;

@@ -8,13 +8,32 @@
 namespace DataBase {
 
 bool DeleteResult::MergeFrom(DeleteResult& other) {
-  if (!ValidityCheck() || !other.ValidityCheck()) {
-    LogERROR("Pre-check DeleteResult failed - Invalid");
+  // printf("^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n");
+  // printf("my rid_mutations\n");
+  // for (const auto& m: rid_mutations) {
+  //   m.Print();
+  // }
+  // printf("my rid_deleted\n");
+  // for (const auto& m: rid_deleted) {
+  //   m.Print();
+  // }
+  // printf("other rid_mutations\n");
+  // for (const auto& m: other.rid_mutations) {
+  //   m.Print();
+  // }
+  // printf("other rid_deleted\n");
+  // for (const auto& m: other.rid_deleted) {
+  //   m.Print();
+  // }
+  // printf("^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n");
+
+  if (!ValidityCheck()) {
+    LogERROR("Self Pre-check DeleteResult failed - Invalid");
     return false;
   }
 
-  // Merge mutated rids.
-  if (!Schema::DataRecordRidMutation::Merge(rid_mutations,other.rid_mutations)){
+  if (!other.ValidityCheck()) {
+    LogERROR("Pre-check DeleteResult failed - Invalid");
     return false;
   }
 
@@ -22,15 +41,28 @@ bool DeleteResult::MergeFrom(DeleteResult& other) {
   // Find them and append to deleted_rid list.
   if (!Schema::DataRecordRidMutation::Merge(rid_mutations, other.rid_deleted,
                                             true)) {
+    LogERROR("Failed to merge rid_deleted to rid mutations");
     return false;
   }
   rid_deleted.insert(rid_deleted.end(),
                      other.rid_deleted.begin(), other.rid_deleted.end());
 
   if (!ValidityCheck()) {
-    LogERROR("Malicious merge - got an invalid DeleteResult");
+    LogFATAL("Malicious merge 1 - got an invalid DeleteResult");
     return false;
   }
+
+  // Merge mutated rids.
+  if (!Schema::DataRecordRidMutation::Merge(rid_mutations,other.rid_mutations)){
+    LogERROR("Failed to merge rid mutations");
+    return false;
+  }
+
+  if (!ValidityCheck()) {
+    LogFATAL("Malicious merge 2 - got an invalid DeleteResult");
+    return false;
+  }
+
   return true;
 }
 
@@ -39,7 +71,17 @@ bool DeleteResult::MergeDeleteRidsFromMutatedRids(DeleteResult& other) {
     return true;
   }
 
-  if (!ValidityCheck() || !other.ValidityCheck()) {
+  // printf("$$$$ other mutation $$$$\n");
+  // for (const auto& m: other.rid_mutations) {
+  //   m.Print();
+  // }
+  // printf("#### rids\n");
+  // for (const auto& m: rid_deleted) {
+  //   m.Print();
+  // }
+  // printf("**************************\n");
+
+  if (!other.ValidityCheck()) {
     LogERROR("Pre-check DeleteResult failed - Invalid");
     return false;
   }
@@ -70,6 +112,8 @@ bool DeleteResult::ValidityCheck() {
   // Checks rid mutations.
   for (const auto& r : rid_mutations) {
     if (old_rid_set.find(r.old_rid) != old_rid_set.end()) {
+      LogERROR("Found duplicated rid_mutations");
+      r.old_rid.Print();
       return false;
     }
     old_rid_set.insert(r.old_rid);
@@ -82,6 +126,8 @@ bool DeleteResult::ValidityCheck() {
   // Checks rid deleted - no duplicated old_rid
   for (const auto& r : rid_deleted) {
     if (old_rid_set.find(r.old_rid) != old_rid_set.end()) {
+      LogERROR("Found duplicated rid_deleted");
+      r.old_rid.Print();
       return false;
     }
     old_rid_set.insert(r.old_rid);

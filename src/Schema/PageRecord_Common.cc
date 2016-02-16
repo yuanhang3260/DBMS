@@ -2,6 +2,7 @@
 #include <map>
 #include <set>
 #include <algorithm>
+#include <functional>
 
 #include "Base/Utils.h"
 #include "Base/MacroUtils.h"
@@ -80,11 +81,27 @@ void DataRecordRidMutation::Sort(
   std::stable_sort(records.begin(), records.end(), comparator);
 }
 
+void DataRecordRidMutation::SortByOldRid(
+         std::vector<Schema::DataRecordRidMutation>& records) {
+  std::function<bool (const DataRecordRidMutation& r1,
+                      const DataRecordRidMutation& r2)> comparator =
+      [](const DataRecordRidMutation& r1,
+         const DataRecordRidMutation& r2) {
+        return r1.old_rid < r2.old_rid;
+      };
+  std::stable_sort(records.begin(), records.end(), comparator);
+}
+
 void DataRecordRidMutation::Print() const {
-  record->Print();
-  printf("rid: (%d, %d) --> (%d, %d)\n",
+  printf("rid: (%d, %d) --> (%d, %d)   ",
          old_rid.page_id(), old_rid.slot_id(),
          new_rid.page_id(), new_rid.slot_id());
+  if (record) {
+    record->Print();
+  }
+  else {
+    printf("(null)\n");
+  }
 }
 
 bool DataRecordRidMutation::ValidityCheck(

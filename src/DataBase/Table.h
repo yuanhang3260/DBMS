@@ -36,6 +36,7 @@ class Table {
                                  std::vector<int> key_indexes);
 
   bool IsDataFileKey(int index) const;
+  std::vector<int> DataTreeKey() const;
 
   bool InitTrees();
 

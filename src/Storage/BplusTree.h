@@ -108,6 +108,9 @@ class BplusTree {
   // Validity check for the B+ tree.
   bool ValidityCheck();
 
+  // Fetch record from tree given record ID.
+  std::shared_ptr<Schema::RecordBase> GetRecord(Schema::RecordID rid);
+
   // Serach records by a key. Returns all records that matches this key.
   int SearchRecords(const Schema::RecordBase* key,
                     std::vector<std::shared_ptr<Schema::RecordBase>>* result);
@@ -123,6 +126,13 @@ class BplusTree {
   // Delete records by key.
   bool Do_DeleteRecordByKey(
          const std::vector<std::shared_ptr<Schema::RecordBase>>& keys,
+         DataBase::DeleteResult* result);
+
+  // Delete records by Record ID - This is used in deleting data records after
+  // deletion from index tree.
+  // arg index_del_result: delete result from index tree deletion.
+  bool Do_DeleteRecordByRecordID(
+         DataBase::DeleteResult& index_del_result,
          DataBase::DeleteResult* result);
 
   // Allocate a new page in bulkloading.

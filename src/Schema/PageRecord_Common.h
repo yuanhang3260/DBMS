@@ -109,6 +109,8 @@ class DataRecordRidMutation {
   static void Sort(std::vector<Schema::DataRecordRidMutation>& records,
                    const std::vector<int>& key_indexes);
 
+  static void SortByOldRid(std::vector<Schema::DataRecordRidMutation>& records);
+
   static bool ValidityCheck(const std::vector<DataRecordRidMutation>& v);
 
   // Merge v2 into v1. After merging, v1 contains all valid RecordID mutations,
