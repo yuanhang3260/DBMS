@@ -377,6 +377,10 @@ class BplusTree {
   };
 
   ValidityCheckStatus vc_status_;
+
+  // Only for test - to allocated pages randomly.
+  std::vector<int> new_page_id_list;
+  int next_index = 0;
 };
 
 }

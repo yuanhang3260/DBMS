@@ -207,6 +207,9 @@ BplusTree::BplusTree(DataBase::Table* table,
   else {
     CheckLogFATAL(LoadTree(), "Failed to load B+ tree");
   }
+
+  new_page_id_list = Utils::RandomListFromRange(2,1000);
+  new_page_id_list.insert(new_page_id_list.begin(), 1);
 }
 
 bool BplusTree::LoadTree() {
@@ -218,6 +221,7 @@ bool BplusTree::LoadTree() {
     }
     return true;
   }
+  LogERROR("Can't load B+ tree %s", filename.c_str());
   return false;
 }
 
@@ -330,6 +334,9 @@ bool BplusTree::LoadFromDisk() {
 }
 
 RecordPage* BplusTree::AllocateNewPage(PageType page_type) {
+  //int new_page_id = new_page_id_list[next_index++];
+  //header_->increment_num_pages(1);
+  
   int new_page_id = 0;
   RecordPage* page = nullptr;
   // Look up free page list first.
@@ -360,7 +367,7 @@ RecordPage* BplusTree::AllocateNewPage(PageType page_type) {
 bool BplusTree::RecyclePage(int page_id) {
   // Fetch page in case it's been swapped to disk. We need to write one field
   // in the page - next_page, to link to the free page list.
-  //printf("Recycling page %d\n", page_id);
+  printf("Recycling page %d\n", page_id);
   auto page = Page(page_id);
   auto type = page->Meta()->page_type();
   if (!page) {
@@ -1791,6 +1798,7 @@ bool BplusTree::Do_DeleteRecordByKey(
   RecordPage* crt_leave = nullptr;
   for (const auto& key: keys) {
     auto leave = SearchByKey(key.get());
+    int leave_id = leave->id();
     if (!leave) {
       LogERROR("Can't search to leave by this key:");
       keys[0]->Print();
@@ -1798,17 +1806,24 @@ bool BplusTree::Do_DeleteRecordByKey(
     }
 
     // Post process for the node after record deletion.
-    if (crt_leave && crt_leave != leave) {
+    if (crt_leave && crt_leave->id() != leave->id()) {
+      result->mutated_leaves.clear();
       ProcessNodeAfterRecordDeletion(crt_leave, result);
     }
 
     // Delete records.
+    // The leave we previously searched might have been 'mutated' (deleted
+    // or has records re-distributed) from last run of/
+    // ProcessNodeAfterRecordDeletion(). We need to re-search the key.
+    if (!result->mutated_leaves.empty() &&
+        result->mutated_leaves[0] == leave_id) {
+      leave = SearchByKey(key.get());
+    }
     int num = DeleteMatchedRecordsFromLeave(leave, key.get(), result);
     //printf("deleted %d matching records\n", num);
     (void)num;
     crt_leave = leave;
   }
-
   ProcessNodeAfterRecordDeletion(crt_leave, result);
 
   return true;
@@ -1848,7 +1863,7 @@ bool BplusTree::Do_DeleteRecordByRecordID(
       page->DeleteRecord(rid_deleted[j].old_rid.slot_id());
     }
     ProcessNodeAfterRecordDeletion(page, &crt_result);
-    printf("this time mutated %d\n", crt_result.rid_mutations.size());
+
     index_del_result.MergeDeleteRidsFromMutatedRids(crt_result);
     result->MergeFrom(crt_result);
 
@@ -1872,6 +1887,7 @@ int BplusTree::DeleteMatchedRecordsFromLeave(
     return -1;
   }
 
+  printf("deleting records from leave %d \n", leave->id());
   int count_deleted = 0;
   while (leave) {
     Schema::PageRecordsManager prmanager(leave, schema(), key_indexes_,

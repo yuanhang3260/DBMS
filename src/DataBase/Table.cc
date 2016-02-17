@@ -161,6 +161,8 @@ bool Table::PreLoadData(
     return false;
   }
 
+  tree_map_.clear();
+
   // Sort the record based on idata_indexes_ (preferably primary key).
   Schema::PageRecordsManager::SortRecords(records, idata_indexes_);
 

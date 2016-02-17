@@ -22,7 +22,7 @@ class BplusTreeTest: public UnitTest {
   Schema::TableSchema* schema = nullptr;
   DataBase::Table* table;
   std::map<int, std::shared_ptr<Schema::DataRecord>> record_resource;
-  const int kNumRecordsSource = 100;
+  const int kNumRecordsSource = 150;
 
  public:
   void InitSchema() {
@@ -661,10 +661,10 @@ class BplusTreeTest: public UnitTest {
     std::vector<std::shared_ptr<Schema::RecordBase>> v1;
     for (int i = 0; i < kNumRecordsSource / 2; i++) {
       v1.push_back(v[i]);
-      // printf("-------------------------------------------------------------\n");
-      // printf("-------------------------------------------------------------\n");
-      // printf("i = %d, record size = %d\n", i, v[i]->size());
-      // v[i]->Print();
+      printf("-------------------------------------------------------------\n");
+      printf("-------------------------------------------------------------\n");
+      printf("i = %d, record size = %d\n", i, v[i]->size());
+      v[i]->Print();
     }
     table->PreLoadData(v1);
     AssertTrue(table->ValidateAllIndexRecords(v1.size()));
@@ -672,10 +672,10 @@ class BplusTreeTest: public UnitTest {
     // Insert another half records.
     int end = kNumRecordsSource;
     for (int i = kNumRecordsSource / 2; i < end; i++) {
-      // printf("-------------------------------------------------------------\n");
-      // printf("-------------------------------------------------------------\n");
-      // printf("i = %d, record size = %d\n", i, v[i]->size());
-      // v[i]->Print();
+      printf("-------------------------------------------------------------\n");
+      printf("-------------------------------------------------------------\n");
+      printf("i = %d, record size = %d\n", i, v[i]->size());
+      v[i]->Print();
       table->InsertRecord(v[i].get());
     }
     AssertTrue(table->ValidateAllIndexRecords(end));
@@ -702,29 +702,32 @@ class BplusTreeTest: public UnitTest {
     DataBase::DeleteResult delete_result;
     delete_result.del_mode = DataBase::DeleteResult::DEL_INDEX_PRE;
 
+    // Generate delete operator.
     DataBase::DeleteOp op;
-    for (int age = 0; age < 10; age++) {
+    std::vector<int> ages = Utils::RandomListFromRange(0,10);
+    for (int i = 0; i < (int)ages.size(); i++) {
       op.key_index = key_index[0];
       op.keys.push_back(std::make_shared<Schema::RecordBase>());
-      op.keys.back()->AddField(new Schema::IntType(age));
+      op.keys.back()->AddField(new Schema::IntType(ages[i]));
     }
 
+    // Delete from index tree.
     AssertTrue(tree.Do_DeleteRecordByKey(op.keys, &delete_result),
                "delete failed");
     printf("Got %d deleted rids from index tree %d\n",
-           delete_result.rid_deleted.size(), key_index[0]);
+           (int)delete_result.rid_deleted.size(), key_index[0]);
     for (const auto& m: delete_result.rid_deleted) {
       m.old_rid.Print();
     }
 
+    // Delete from data tree by RecordID.
     BplusTree data_tree(table, DataBaseFiles::INDEX_DATA, table->DataTreeKey());
     for (const auto& m: delete_result.rid_deleted) {
       auto data_record = data_tree.GetRecord(m.old_rid);
       AssertTrue(data_record.get());
       data_record->Print();
     }
-
-    // Delete data records from data tree.
+    // Delete data records.
     DataBase::DeleteResult data_del_result;
     data_tree.Do_DeleteRecordByRecordID(delete_result, &data_del_result);
     printf("deleted %d data records from data tree\n",
@@ -771,7 +774,11 @@ int main(int argc, char** argv) {
 
   //test.Test_UpdateRecordID();
 
-  test.Test_DeleteIndexRecordPre(file_type, key_index);
+  for (int i = 0; i < 1; i++) {
+    // LogERROR("i == %d", i);
+    // printf("i == %d\n", i);
+    test.Test_DeleteIndexRecordPre(file_type, key_index);
+  }
 
   test.teardown();
   std::cout << "\033[2;32mAll Passed ^_^\033[0m" << std::endl;
