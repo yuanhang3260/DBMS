@@ -775,7 +775,7 @@ int main(int argc, char** argv) {
   //test.Test_UpdateRecordID();
 
   for (int i = 0; i < 1; i++) {
-    // LogERROR("i == %d", i);
+    //LogERROR("i == %d", i);
     // printf("i == %d\n", i);
     test.Test_DeleteIndexRecordPre(file_type, key_index);
   }

@@ -32,7 +32,6 @@ class DeleteResult {
     DEL_INDEX_POS,
   };
 
-  bool records_moved = true;
   DeleteMode del_mode = DEL_DATA;
   std::vector<int> mutated_leaves;
   std::vector<Schema::DataRecordRidMutation> rid_deleted;

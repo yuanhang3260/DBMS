@@ -1668,7 +1668,7 @@ bool BplusTree::DeleteNodeFromTree(RecordPage* page, int slot_id_in_parent) {
                   Page(page->Meta()->next_page()));
   }
 
-  // Put the deleted page into free page pool.
+  // Recycle the page.
   CheckLogFATAL(RecyclePage(page->id()),
                 "Failed to recycle page %d", page->id());
 
@@ -1687,11 +1687,8 @@ bool BplusTree::ProcessNodeAfterRecordDeletion(
     return false;
   }
 
-  // Check space occupation < 0.5
+  // Check space occupation less than 50%
   if (page->Occupation() >= 0.5) {
-    if (page->Meta()->page_type() == TREE_LEAVE) {
-      delete_result->records_moved = false;
-    }
     return true;
   }
 
@@ -1717,7 +1714,6 @@ bool BplusTree::ProcessNodeAfterRecordDeletion(
     }
 
     debug(2);
-    printf("root %d remained %d records\n", page->id(), page->Meta()->num_records());
     header_->decrement_depth(1);
     int page_id = -1;
     Schema::PageRecordsManager prmanager(page, schema(), key_indexes_,
@@ -1813,7 +1809,7 @@ bool BplusTree::Do_DeleteRecordByKey(
 
     // Delete records.
     // The leave we previously searched might have been 'mutated' (deleted
-    // or has records re-distributed) from last run of/
+    // or has records re-distributed) during the last run of
     // ProcessNodeAfterRecordDeletion(). We need to re-search the key.
     if (!result->mutated_leaves.empty() &&
         result->mutated_leaves[0] == leave_id) {
