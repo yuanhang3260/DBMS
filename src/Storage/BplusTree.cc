@@ -1794,12 +1794,12 @@ bool BplusTree::Do_DeleteRecordByKey(
   RecordPage* crt_leave = nullptr;
   for (const auto& key: keys) {
     auto leave = SearchByKey(key.get());
-    int leave_id = leave->id();
     if (!leave) {
       LogERROR("Can't search to leave by this key:");
       keys[0]->Print();
       return false;
     }
+    int leave_id = leave->id();
 
     // Post process for the node after record deletion.
     if (crt_leave && crt_leave->id() != leave->id()) {
@@ -1821,6 +1821,124 @@ bool BplusTree::Do_DeleteRecordByKey(
     crt_leave = leave;
   }
   ProcessNodeAfterRecordDeletion(crt_leave, result);
+
+  return true;
+}
+
+bool BplusTree::UpdateIndexRecords(
+                std::vector<Schema::DataRecordRidMutation>& rid_mutations) {
+  if (rid_mutations.empty()) {
+    return true;
+  }
+
+  bool is_delete_irecord = !(rid_mutations[0].new_rid.IsValid());
+
+  // Sort DataRecordRidMutation list.
+  Schema::DataRecordRidMutation::Sort(rid_mutations, key_indexes_);
+  // Group DataRecordRidMutation list by key.
+  std::vector<Schema::RecordGroup> rgroups;
+  Schema::DataRecordRidMutation::GroupDataRecordRidMutations(
+                                     rid_mutations, key_indexes_, &rgroups);
+
+  RecordPage* crt_leave = nullptr;
+  std::shared_ptr<Schema::PageRecordsManager> prmanager;
+  int i = 0;
+  for (int rg_index = 0; rg_index <= (int)rgroups.size(); rg_index++) {
+    if (rg_index == (int)rgroups.size()) {
+      if (is_delete_irecord) {
+        DataBase::DeleteResult result;
+        ProcessNodeAfterRecordDeletion(crt_leave, &result);
+      }
+      break;
+    }
+
+    // Get key of this rgroup.
+    auto group = rgroups[rg_index];
+    auto crt_record = rid_mutations[group.start_index].record;
+    Schema::RecordBase key;
+    (reinterpret_cast<const Schema::DataRecord*>(crt_record.get()))
+                                            ->ExtractKey(&key, key_indexes_);
+
+    auto leave = SearchByKey(&key);
+    CheckLogFATAL(leave, "Failed to search key of rgroup.");
+    //int leave_id = leave->id();
+
+    // If we search to a different leave for this rgroup, post-process current
+    // leave after deletion.
+    DataBase::DeleteResult result;
+    if (crt_leave && crt_leave->id() != leave->id()) {
+      result.mutated_leaves.clear();
+      if (is_delete_irecord) {
+        ProcessNodeAfterRecordDeletion(crt_leave, &result);
+      }
+      crt_leave = leave;
+      prmanager.reset();
+    }
+
+    if (!crt_leave) {
+      crt_leave = leave;
+      prmanager.reset();
+    }
+
+    // Load current leave if it's not loaded.
+    if (!prmanager) {
+      // Load new leave.
+      prmanager.reset(new Schema::PageRecordsManager(
+          leave, schema(), key_indexes_,
+          DataBaseFiles::INDEX, DataBaseFiles::TREE_LEAVE)
+      );
+      i = 0;
+    }
+
+    // Begin updating or deleting index records to the leave.
+    int num_rids_updated = 0;
+    while (leave) {
+      for (; i < (int)prmanager->NumRecords(); i++) {
+        int re = prmanager->CompareRecordWithKey(&key, prmanager->Record(i));
+        //printf("scanning index record: re %d, slot %d\n",
+        //       re, prmanager.RecordSlotID(i));
+        //prmanager.Record(i)->Print();
+        if (re < 0) {
+          break;
+        } else if (re > 0) {
+          continue;
+        }
+        Schema::RecordID rid = reinterpret_cast<Schema::IndexRecord*>(
+                                   prmanager->Record(i))->rid();
+        //printf("scanning old rid\n");
+        //rid.Print();
+        for (int rid_m_index = group.start_index;
+             rid_m_index < group.start_index + group.num_records;
+             rid_m_index++) {
+          if (rid == rid_mutations[rid_m_index].old_rid) {
+            // Update the rid for the IndexRecord.
+            prmanager->UpdateRecordID(prmanager->RecordSlotID(i),
+                                      rid_mutations[rid_m_index].new_rid);
+            num_rids_updated++;
+          }
+        }
+      }
+
+      // We might need to continue searching overflow pages.
+      leave = Page(leave->Meta()->overflow_page());
+      if (leave) {
+        prmanager.reset(new Schema::PageRecordsManager(
+            leave, schema(), key_indexes_,
+            DataBaseFiles::INDEX, DataBaseFiles::TREE_LEAVE)
+        );
+        i = 0;
+      }
+    }
+    if (num_rids_updated != group.num_records) {
+      LogERROR("Updated %d number of rids, expect %d",
+               num_rids_updated, group.num_records);
+      key.Print();
+      return false;
+    }
+    // printf("---------- udpate for key ----------: \n");
+    // key.Print();
+    // printf("leave id = %d\n", leave->id());
+  }
 
   return true;
 }

@@ -125,15 +125,20 @@ class BplusTree {
 
   // Delete records by key.
   bool Do_DeleteRecordByKey(
-         const std::vector<std::shared_ptr<Schema::RecordBase>>& keys,
-         DataBase::DeleteResult* result);
+           const std::vector<std::shared_ptr<Schema::RecordBase>>& keys,
+           DataBase::DeleteResult* result);
 
   // Delete records by Record ID - This is used in deleting data records after
   // deletion from index tree.
   // arg index_del_result: delete result from index tree deletion.
   bool Do_DeleteRecordByRecordID(
-         DataBase::DeleteResult& index_del_result,
-         DataBase::DeleteResult* result);
+           DataBase::DeleteResult& index_del_result,
+           DataBase::DeleteResult* result);
+
+  // Update/Delete index records for an index tree, after data tree has been
+  // modified (delete or insert records).
+  bool UpdateIndexRecords(
+           std::vector<Schema::DataRecordRidMutation>& rid_mutations);
 
   // Allocate a new page in bulkloading.
   RecordPage* AllocateNewPage(PageType page_type);

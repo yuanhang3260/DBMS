@@ -661,10 +661,10 @@ class BplusTreeTest: public UnitTest {
     std::vector<std::shared_ptr<Schema::RecordBase>> v1;
     for (int i = 0; i < kNumRecordsSource / 2; i++) {
       v1.push_back(v[i]);
-      printf("-------------------------------------------------------------\n");
-      printf("-------------------------------------------------------------\n");
-      printf("i = %d, record size = %d\n", i, v[i]->size());
-      v[i]->Print();
+      // printf("-------------------------------------------------------------\n");
+      // printf("-------------------------------------------------------------\n");
+      // printf("i = %d, record size = %d\n", i, v[i]->size());
+      // v[i]->Print();
     }
     table->PreLoadData(v1);
     AssertTrue(table->ValidateAllIndexRecords(v1.size()));
@@ -672,10 +672,10 @@ class BplusTreeTest: public UnitTest {
     // Insert another half records.
     int end = kNumRecordsSource;
     for (int i = kNumRecordsSource / 2; i < end; i++) {
-      printf("-------------------------------------------------------------\n");
-      printf("-------------------------------------------------------------\n");
-      printf("i = %d, record size = %d\n", i, v[i]->size());
-      v[i]->Print();
+      // printf("-------------------------------------------------------------\n");
+      // printf("-------------------------------------------------------------\n");
+      // printf("i = %d, record size = %d\n", i, v[i]->size());
+      // v[i]->Print();
       table->InsertRecord(v[i].get());
     }
     AssertTrue(table->ValidateAllIndexRecords(end));

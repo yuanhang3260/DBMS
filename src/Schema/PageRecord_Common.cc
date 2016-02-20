@@ -184,4 +184,30 @@ bool DataRecordRidMutation::Merge(std::vector<DataRecordRidMutation>& v1,
   return true;
 }
 
+void DataRecordRidMutation::GroupDataRecordRidMutations(
+          std::vector<DataRecordRidMutation>& rid_mutations,
+          std::vector<int> key_index,
+          std::vector<RecordGroup>* rgroups) {
+  if (rid_mutations.empty()) {
+    return;
+  }
+
+  auto crt_record = rid_mutations[0].record;
+  int crt_start = 0;
+  int num_records = 0;
+  for (int i = 0; i < (int)rid_mutations.size(); i++) {
+    if (RecordBase::CompareRecordsBasedOnIndex(
+            crt_record.get(), rid_mutations[i].record.get(), key_index) == 0) {
+      num_records++;
+    }
+    else {
+      rgroups->push_back(RecordGroup(crt_start, num_records, -1));
+      crt_start = i;
+      num_records = 1;
+      crt_record = rid_mutations[crt_start].record;
+    }
+  }
+  rgroups->push_back(RecordGroup(crt_start, num_records, -1));
+}
+
 }  // namespace Schema

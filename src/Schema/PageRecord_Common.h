@@ -118,6 +118,12 @@ class DataRecordRidMutation {
   static bool Merge(std::vector<DataRecordRidMutation>& v1,
                     std::vector<DataRecordRidMutation>& v2,
                     bool v2_is_deleted_rid=false);
+
+  // Group DataRecordRidMutation list by key index.
+  static void GroupDataRecordRidMutations(
+                    std::vector<DataRecordRidMutation>& rid_mutations,
+                    std::vector<int> key_index,
+                    std::vector<RecordGroup>* rgroups);
 };
 
 
