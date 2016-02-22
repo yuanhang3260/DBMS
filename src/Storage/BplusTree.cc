@@ -343,19 +343,22 @@ RecordPage* BplusTree::AllocateNewPage(PageType page_type) {
   if (header_->num_free_pages() > 0) {
     new_page_id = header_->free_page();
     header_->decrement_num_free_pages(1);
-    header_->set_free_page(page->Meta()->next_page());
+    page = Page(new_page_id);
+    header_->set_free_page(page->Meta()->next_page());  
   }
   else {
     // Append new page at the end of file.
     new_page_id = header_->num_pages();
     header_->increment_num_pages(1);
+    page = new RecordPage(new_page_id, file_);
   }
 
-  page = new RecordPage(new_page_id, file_);
   page->InitInMemoryPage();
 
   page->Meta()->set_page_type(page_type);
-  page_map_[page->id()] = std::shared_ptr<RecordPage>(page);
+  if (page_map_.find(page->id()) == page_map_.end()) {
+    page_map_[page->id()] = std::shared_ptr<RecordPage>(page);
+  }
   header_->increment_num_used_pages(1);
   if (page_type == TREE_LEAVE) {
     header_->increment_num_leaves(1);
@@ -388,6 +391,10 @@ bool BplusTree::RecyclePage(int page_id) {
     header_->decrement_num_leaves(1);
   }
   return true;
+}
+
+bool BplusTree::Empty() const {
+  return header_->num_pages() <= 1;
 }
 
 RecordPage* BplusTree::Page(int page_id) {
@@ -468,7 +475,7 @@ bool BplusTree::InsertTreeNodeRecord(Schema::TreeNodeRecord* tn_record,
   }
   
   // printf("Inserting new TreeNodeRecord:\n");
-  // tn_record->Print();
+  //tn_record->Print();
   if (tn_record->InsertToRecordPage(tn_page) >= 0) {
     // Success, and we're done. Get the child page related with this new
     // TreeNode record and set its parent page id as this tree node.
@@ -536,7 +543,8 @@ bool BplusTree::InsertTreeNodeRecord(Schema::TreeNodeRecord* tn_record,
   }
 
   // Add the middle TreeNodeRecord to parent tree node.
-  if (tn_page->Meta()->parent_page() < 0) {
+  if (tn_page->Meta()->parent_page() < 0 &&
+      tn_page->id() == header_->root_page()) {
     // Current tree node is root, so create new root and we need to add both
     // tree nodes to the root.
     RecordPage* new_root = AllocateNewPage(TREE_NODE);
@@ -662,6 +670,25 @@ bool BplusTree::ConnectLeaves(RecordPage* page1, RecordPage* page2) {
     page2->Meta()->set_prev_page(page1_id);
   }
   return true;
+}
+
+RecordPage* BplusTree::FirstLeave() {
+  if (Empty()) {
+    return nullptr;
+  }
+
+  RecordPage* crt_page = Page(header_->root_page());
+  CheckLogFATAL(crt_page, "Failed to fetch tree root");
+  while (crt_page->Meta()->page_type() == TREE_NODE) {
+    Schema::PageRecordsManager prmanager(crt_page, schema(), key_indexes_,
+                                         file_type_, TREE_NODE);
+    int first_child = prmanager.GetRecord<Schema::TreeNodeRecord>(0)->page_id();
+    CheckLogFATAL(first_child,
+                  "Failed to get first child of tree node %d", crt_page->id());
+    crt_page = Page(first_child);
+  }
+
+  return crt_page;
 }
 
 std::vector<int> BplusTree::IndexesToCompareLeaveRecords() const {
@@ -821,7 +848,7 @@ bool BplusTree::ValidityCheck() {
 
   // Level-traverse the B+ tree.
   page_q.push(root);
-  vc_status_.count_num_pages = 2; // header page + root
+  vc_status_.count_num_pages = 2;  // header page + root
   vc_status_.count_num_used_pages = 2;
   while (!page_q.empty()) {
     RecordPage* crt_page = page_q.front();
@@ -912,6 +939,8 @@ bool BplusTree::VerifyChildRecordsRange(RecordPage* child_page,
     right_bound->Print();
     return false;
   }
+
+  //printf("verifying leave %d\n", child_page->id());
 
   Schema::PageRecordsManager prmanager(child_page, schema(), key_indexes_,
                                        file_type_,
@@ -1728,6 +1757,7 @@ bool BplusTree::ProcessNodeAfterRecordDeletion(
     CheckLogFATAL(page_id > 0,  // new root id must > 0 (page 0 is meta page).
                   "Failed to find new root, current root is %d", page->id());
     header_->set_root_page(page_id);
+    Page(page_id)->Meta()->set_parent_page(-1);
     CheckLogFATAL(RecyclePage(page->id()),
                   "Failed to recycle root %d", page->id());
     return true;
@@ -1825,124 +1855,6 @@ bool BplusTree::Do_DeleteRecordByKey(
   return true;
 }
 
-bool BplusTree::UpdateIndexRecords(
-                std::vector<Schema::DataRecordRidMutation>& rid_mutations) {
-  if (rid_mutations.empty()) {
-    return true;
-  }
-
-  bool is_delete_irecord = !(rid_mutations[0].new_rid.IsValid());
-
-  // Sort DataRecordRidMutation list.
-  Schema::DataRecordRidMutation::Sort(rid_mutations, key_indexes_);
-  // Group DataRecordRidMutation list by key.
-  std::vector<Schema::RecordGroup> rgroups;
-  Schema::DataRecordRidMutation::GroupDataRecordRidMutations(
-                                     rid_mutations, key_indexes_, &rgroups);
-
-  RecordPage* crt_leave = nullptr;
-  std::shared_ptr<Schema::PageRecordsManager> prmanager;
-  int i = 0;
-  for (int rg_index = 0; rg_index <= (int)rgroups.size(); rg_index++) {
-    if (rg_index == (int)rgroups.size()) {
-      if (is_delete_irecord) {
-        DataBase::DeleteResult result;
-        ProcessNodeAfterRecordDeletion(crt_leave, &result);
-      }
-      break;
-    }
-
-    // Get key of this rgroup.
-    auto group = rgroups[rg_index];
-    auto crt_record = rid_mutations[group.start_index].record;
-    Schema::RecordBase key;
-    (reinterpret_cast<const Schema::DataRecord*>(crt_record.get()))
-                                            ->ExtractKey(&key, key_indexes_);
-
-    auto leave = SearchByKey(&key);
-    CheckLogFATAL(leave, "Failed to search key of rgroup.");
-    //int leave_id = leave->id();
-
-    // If we search to a different leave for this rgroup, post-process current
-    // leave after deletion.
-    DataBase::DeleteResult result;
-    if (crt_leave && crt_leave->id() != leave->id()) {
-      result.mutated_leaves.clear();
-      if (is_delete_irecord) {
-        ProcessNodeAfterRecordDeletion(crt_leave, &result);
-      }
-      crt_leave = leave;
-      prmanager.reset();
-    }
-
-    if (!crt_leave) {
-      crt_leave = leave;
-      prmanager.reset();
-    }
-
-    // Load current leave if it's not loaded.
-    if (!prmanager) {
-      // Load new leave.
-      prmanager.reset(new Schema::PageRecordsManager(
-          leave, schema(), key_indexes_,
-          DataBaseFiles::INDEX, DataBaseFiles::TREE_LEAVE)
-      );
-      i = 0;
-    }
-
-    // Begin updating or deleting index records to the leave.
-    int num_rids_updated = 0;
-    while (leave) {
-      for (; i < (int)prmanager->NumRecords(); i++) {
-        int re = prmanager->CompareRecordWithKey(&key, prmanager->Record(i));
-        //printf("scanning index record: re %d, slot %d\n",
-        //       re, prmanager.RecordSlotID(i));
-        //prmanager.Record(i)->Print();
-        if (re < 0) {
-          break;
-        } else if (re > 0) {
-          continue;
-        }
-        Schema::RecordID rid = reinterpret_cast<Schema::IndexRecord*>(
-                                   prmanager->Record(i))->rid();
-        //printf("scanning old rid\n");
-        //rid.Print();
-        for (int rid_m_index = group.start_index;
-             rid_m_index < group.start_index + group.num_records;
-             rid_m_index++) {
-          if (rid == rid_mutations[rid_m_index].old_rid) {
-            // Update the rid for the IndexRecord.
-            prmanager->UpdateRecordID(prmanager->RecordSlotID(i),
-                                      rid_mutations[rid_m_index].new_rid);
-            num_rids_updated++;
-          }
-        }
-      }
-
-      // We might need to continue searching overflow pages.
-      leave = Page(leave->Meta()->overflow_page());
-      if (leave) {
-        prmanager.reset(new Schema::PageRecordsManager(
-            leave, schema(), key_indexes_,
-            DataBaseFiles::INDEX, DataBaseFiles::TREE_LEAVE)
-        );
-        i = 0;
-      }
-    }
-    if (num_rids_updated != group.num_records) {
-      LogERROR("Updated %d number of rids, expect %d",
-               num_rids_updated, group.num_records);
-      key.Print();
-      return false;
-    }
-    // printf("---------- udpate for key ----------: \n");
-    // key.Print();
-    // printf("leave id = %d\n", leave->id());
-  }
-
-  return true;
-}
-
 bool BplusTree::Do_DeleteRecordByRecordID(
          DataBase::DeleteResult& index_del_result,
          DataBase::DeleteResult* result) {
@@ -1992,6 +1904,140 @@ bool BplusTree::Do_DeleteRecordByRecordID(
   return true;
 }
 
+bool BplusTree::UpdateIndexRecords(
+                std::vector<Schema::DataRecordRidMutation>& rid_mutations) {
+  if (rid_mutations.empty()) {
+    return true;
+  }
+
+  bool is_delete_irecord = !(rid_mutations[0].new_rid.IsValid());
+
+  // Sort DataRecordRidMutation list.
+  Schema::DataRecordRidMutation::Sort(rid_mutations, key_indexes_);
+  // Group DataRecordRidMutation list by key.
+  std::vector<Schema::RecordGroup> rgroups;
+  Schema::DataRecordRidMutation::GroupDataRecordRidMutations(
+                                     rid_mutations, key_indexes_, &rgroups);
+
+  RecordPage* crt_leave = nullptr;
+  std::shared_ptr<Schema::PageRecordsManager> prmanager;
+  int i = 0;
+  for (int rg_index = 0; rg_index <= (int)rgroups.size(); rg_index++) {
+    if (rg_index == (int)rgroups.size()) {
+      if (is_delete_irecord) {
+        DataBase::DeleteResult result;
+        ProcessNodeAfterRecordDeletion(crt_leave, &result);
+      }
+      break;
+    }
+
+    // Get key of this rgroup.
+    auto group = rgroups[rg_index];
+    auto crt_record = rid_mutations[group.start_index].record;
+    Schema::RecordBase key;
+    (reinterpret_cast<const Schema::DataRecord*>(crt_record.get()))
+                                            ->ExtractKey(&key, key_indexes_);
+
+    auto leave = SearchByKey(&key);
+    CheckLogFATAL(leave, "Failed to search key of rgroup.");
+    int leave_id = leave->id();
+    //printf("search to leave %d\n", leave_id);
+
+    // If we search to a different leave for this rgroup, post-process current
+    // leave after deletion.
+    DataBase::DeleteResult result;
+    if (crt_leave && crt_leave->id() != leave->id()) {
+      result.mutated_leaves.clear();
+      if (is_delete_irecord) {
+        //printf("process leave %d\n", crt_leave->id());
+        ProcessNodeAfterRecordDeletion(crt_leave, &result);
+      }
+      crt_leave = leave;
+      prmanager.reset();
+    }
+
+    if (!crt_leave) {
+      crt_leave = leave;
+      prmanager.reset();
+    }
+
+    if (!result.mutated_leaves.empty() &&
+        result.mutated_leaves[0] == leave_id) {
+      leave = SearchByKey(&key);
+      crt_leave = leave;
+    }
+
+    // Load current leave if it's not loaded.
+    if (!prmanager) {
+      // Load new leave.
+      prmanager.reset(new Schema::PageRecordsManager(
+          leave, schema(), key_indexes_,
+          DataBaseFiles::INDEX, DataBaseFiles::TREE_LEAVE)
+      );
+      i = 0;
+    }
+
+    // Begin updating or deleting index records to the leave.
+    int num_rids_updated = 0;
+    while (leave) {
+      for (; i < (int)prmanager->NumRecords(); i++) {
+        int re = prmanager->CompareRecordWithKey(&key, prmanager->Record(i));
+        if (re < 0) {
+          break;
+        } else if (re > 0) {
+          continue;
+        }
+        Schema::RecordID rid = reinterpret_cast<Schema::IndexRecord*>(
+                                   prmanager->Record(i))->rid();
+        // printf("scanning old rid\n");
+        // rid.Print();
+        for (int rid_m_index = group.start_index;
+             rid_m_index < group.start_index + group.num_records;
+             rid_m_index++) {
+          if (rid == rid_mutations[rid_m_index].old_rid) {
+            // Update/Delete the rid for the IndexRecord.
+            if (!is_delete_irecord) {
+              prmanager->UpdateRecordID(prmanager->RecordSlotID(i),
+                                        rid_mutations[rid_m_index].new_rid);
+            }
+            else {
+              leave->DeleteRecord(prmanager->RecordSlotID(i));
+            }
+            num_rids_updated++;
+          }
+        }
+      }
+
+      // We might need to continue searching overflow pages.
+      auto processed_leave = leave;
+      leave = Page(leave->Meta()->overflow_page());
+      if (leave) {
+        prmanager.reset(new Schema::PageRecordsManager(
+            leave, schema(), key_indexes_,
+            DataBaseFiles::INDEX, DataBaseFiles::TREE_LEAVE)
+        );
+        i = 0;
+      }
+      if (processed_leave->Meta()->is_overflow_page() &&
+          processed_leave->Meta()->num_records() <= 0) {
+        DeleteOverflowLeave(processed_leave);
+      }
+    }
+    if (num_rids_updated != group.num_records) {
+      LogERROR("Updated %d number of rids, expect %d, on leave %d",
+               num_rids_updated, group.num_records, crt_leave->id());
+      key.Print();
+      return false;
+    }
+    // printf("---------- udpate for key ----------: \n");
+    // key.Print();
+    // printf("leave id = %d\n", leave->id());
+    // printf("current leave = %d\n", crt_leave->id());
+  }
+
+  return true;
+}
+
 int BplusTree::DeleteMatchedRecordsFromLeave(
          RecordPage* leave,
          const Schema::RecordBase* key,
@@ -2001,7 +2047,7 @@ int BplusTree::DeleteMatchedRecordsFromLeave(
     return -1;
   }
 
-  printf("deleting records from leave %d \n", leave->id());
+  //printf("deleting records from leave %d \n", leave->id());
   int count_deleted = 0;
   while (leave) {
     Schema::PageRecordsManager prmanager(leave, schema(), key_indexes_,

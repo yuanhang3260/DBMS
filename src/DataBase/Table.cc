@@ -257,13 +257,21 @@ bool Table::ValidateAllIndexRecords(int num_records) {
     auto tree = Tree(DataBaseFiles::INDEX, key_index);
     CheckLogFATAL(tree, "Can't find B+ tree for index %d", key_index[0]);
 
+    // Empty tree.
+    if (tree->meta()->num_pages() == 1) {
+      CheckLogFATAL(data_tree->meta()->num_pages() == 1,
+                    "Foun empty index tree but data tree is non-empty");
+      continue;
+    }
+
     // An IndexRecord instance to load index records from tree leaves.
     Schema::IndexRecord irecord;
     irecord.InitRecordFields(schema_.get(), key_index,
                                DataBaseFiles::INDEX,
                                DataBaseFiles::TREE_LEAVE);
 
-    auto leave = tree->Page(1);
+    // Traverse all leaves for this index tree.
+    auto leave = tree->FirstLeave();
     std::set<Schema::RecordID> rid_set;
     while (leave) {
       auto slot_directory = leave->Meta()->slot_directory();
@@ -293,7 +301,7 @@ bool Table::ValidateAllIndexRecords(int num_records) {
       }
       leave = tree->Page(leave->Meta()->next_page());
     }
-    if ((int)rid_set.size() != num_records) {
+    if (num_records > 0 && (int)rid_set.size() != num_records) {
       LogERROR("count %d index records, expect %d",
                (int)rid_set.size(), num_records);
       return false;
@@ -313,8 +321,8 @@ bool Table::UpdateIndexRecords(
     if (IsDataFileKey(key_index[0])) {
       continue;
     }
-    // printf("************** Updating Rid for index %d *******************\n",
-    //        key_index[0]);
+    printf("************** Updating Rid for index tree %d *******************\n",
+           key_index[0]);
 
     // Index Tree.
     auto tree = Tree(DataBaseFiles::INDEX, key_index);
@@ -454,33 +462,59 @@ bool Table::InsertRecord(const Schema::RecordBase* record) {
   return true;;
 }
 
-bool Table::DeleteRecord(const DeleteOp* op) {
-  if (!op) {
-    LogERROR("Nullptr DeleteOp");
-    return false;
-  }
-
-  if (op->key_index < 0 || op->key_index >= schema_->fields_size()) {
+bool Table::DeleteRecord(const DeleteOp& op) {
+  if (op.key_index < 0 || op.key_index >= schema_->fields_size()) {
     LogERROR("Invalid key_index %d for DeleteOp, expect in [%d, %d]",
-             op->key_index, 0, schema_->fields_size());
+             op.key_index, 0, schema_->fields_size());
     return false;
   }
 
-  DeleteResult delete_result;
-  if (op->op_cond == EQ) {
-    if (IsDataFileKey(op->key_index)) {
+  DeleteResult data_delete_result;
+  int pre_index = -1;
+  if (op.op_cond == EQ) {
+    if (IsDataFileKey(op.key_index)) {
       auto data_tree = Tree(DataBaseFiles::INDEX_DATA, idata_indexes_);
       if (!data_tree) {
         LogERROR("Can't get DataRecord B+ tree");
         return false;
       }
-      data_tree->Do_DeleteRecordByKey(op->keys, &delete_result);
+      data_tree->Do_DeleteRecordByKey(op.keys, &data_delete_result);
     }
     else {
+      // Delete index records from speficied key index tree.
+      pre_index = op.key_index;
       auto index_tree = Tree(DataBaseFiles::INDEX,
-                             std::vector<int>{op->key_index});
-      index_tree->Do_DeleteRecordByKey(op->keys, &delete_result);
-      // TODO: Sort rids and delete data records from data tree.
+                             std::vector<int>{op.key_index});
+      DeleteResult index_delete_result;
+      index_delete_result.del_mode = DataBase::DeleteResult::DEL_INDEX_PRE;
+      index_tree->Do_DeleteRecordByKey(op.keys, &index_delete_result);
+
+      // Delete data records from data tree.
+      auto data_tree = Tree(DataBaseFiles::INDEX_DATA, idata_indexes_);
+      data_tree->Do_DeleteRecordByRecordID(index_delete_result,
+                                           &data_delete_result);
+
+      CheckLogFATAL((data_delete_result.rid_deleted.size() ==
+                     index_delete_result.rid_deleted.size()),
+                    "data tree deleted un-maching number of records");
+    }
+
+    (void)pre_index;
+    printf("Begin updating index trees\n");
+    // Delete index records from index trees.
+    for (auto field: schema_->fields()) {
+      auto key_index = std::vector<int>{field.index()};
+      //key_index[0] = 0;
+      if (IsDataFileKey(key_index[0])) {
+        continue;
+      }
+      // Index Tree.
+      auto index_tree = Tree(DataBaseFiles::INDEX, key_index);
+      if (pre_index != key_index[0]) {
+        index_tree->UpdateIndexRecords(data_delete_result.rid_deleted);
+      }
+      index_tree->UpdateIndexRecords(data_delete_result.rid_mutations);
+      //break;
     }
   }
 

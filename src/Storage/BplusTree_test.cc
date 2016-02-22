@@ -22,7 +22,7 @@ class BplusTreeTest: public UnitTest {
   Schema::TableSchema* schema = nullptr;
   DataBase::Table* table;
   std::map<int, std::shared_ptr<Schema::DataRecord>> record_resource;
-  const int kNumRecordsSource = 150;
+  const int kNumRecordsSource = 1000;
 
  public:
   void InitSchema() {
@@ -42,7 +42,7 @@ class BplusTreeTest: public UnitTest {
     // Add long int type
     field = schema->add_fields();
     field->set_name("id");
-    field->set_index(2);
+    field->set_index(2);  // primary key
     field->set_type(Schema::TableField::LLONG);
     // Add double type
     field = schema->add_fields();
@@ -132,7 +132,6 @@ class BplusTreeTest: public UnitTest {
     printf("Parsed %d records from file %s\n",
            (int)record_resource.size(), filename.c_str());
   }
-
 
   void setup() override {
     InitSchema();
@@ -661,10 +660,10 @@ class BplusTreeTest: public UnitTest {
     std::vector<std::shared_ptr<Schema::RecordBase>> v1;
     for (int i = 0; i < kNumRecordsSource / 2; i++) {
       v1.push_back(v[i]);
-      // printf("-------------------------------------------------------------\n");
-      // printf("-------------------------------------------------------------\n");
-      // printf("i = %d, record size = %d\n", i, v[i]->size());
-      // v[i]->Print();
+      printf("-------------------------------------------------------------\n");
+      printf("-------------------------------------------------------------\n");
+      printf("i = %d, record size = %d\n", i, v[i]->size());
+      v[i]->Print();
     }
     table->PreLoadData(v1);
     AssertTrue(table->ValidateAllIndexRecords(v1.size()));
@@ -672,10 +671,10 @@ class BplusTreeTest: public UnitTest {
     // Insert another half records.
     int end = kNumRecordsSource;
     for (int i = kNumRecordsSource / 2; i < end; i++) {
-      // printf("-------------------------------------------------------------\n");
-      // printf("-------------------------------------------------------------\n");
-      // printf("i = %d, record size = %d\n", i, v[i]->size());
-      // v[i]->Print();
+      printf("-------------------------------------------------------------\n");
+      printf("-------------------------------------------------------------\n");
+      printf("i = %d, record size = %d\n", i, v[i]->size());
+      v[i]->Print();
       table->InsertRecord(v[i].get());
     }
     AssertTrue(table->ValidateAllIndexRecords(end));
@@ -735,6 +734,44 @@ class BplusTreeTest: public UnitTest {
     printf("mutated %d data records in data tree\n",
            (int)data_del_result.rid_mutations.size());
   }
+
+  void Test_TableDeleteRecord(FileType file_type, std::vector<int> key_index)
+  {
+    Test_UpdateRecordID();
+    printf("********************** Begin Deleting *************************\n");
+
+    BplusTree tree(table, DataBaseFiles::INDEX, key_index);
+    DataBase::DeleteResult delete_result;
+    delete_result.del_mode = DataBase::DeleteResult::DEL_INDEX_PRE;
+
+    // Generate delete operator.
+    DataBase::DeleteOp op;
+    std::vector<int> ages = Utils::RandomListFromRange(0, 8);
+    for (int i = 0; i < (int)ages.size(); i++) {
+      op.key_index = key_index[0];
+      op.keys.push_back(std::make_shared<Schema::RecordBase>());
+      op.keys.back()->AddField(new Schema::IntType(ages[i]));
+    }
+
+    // Do deletion.
+    table->DeleteRecord(op);
+
+    // Validate index tree records consistency with data tree records.
+    AssertTrue(table->ValidateAllIndexRecords(-1));
+
+    // Consistency check of all B+ trees.
+    for (const auto& field: schema->fields()) {
+      auto key_index = std::vector<int>{field.index()};
+      //key_index[0] = 0;
+      file_type = table->IsDataFileKey(key_index[0]) ? INDEX_DATA : INDEX;
+      auto tree = table->Tree(file_type, key_index);
+      tree->SaveToDisk();
+
+      CheckBplusTree(file_type, key_index);
+      //_VerifyAllRecordsInTree(tree, key_index);
+      //break;
+    }
+  }
 };
 
 }  // namespace DataBaseFiles
@@ -774,10 +811,16 @@ int main(int argc, char** argv) {
 
   //test.Test_UpdateRecordID();
 
+  // for (int i = 0; i < 1; i++) {
+  //   LogERROR("i == %d", i);
+  //   // printf("i == %d\n", i);
+  //   test.Test_DeleteIndexRecordPre(file_type, key_index);
+  // }
+
   for (int i = 0; i < 1; i++) {
     //LogERROR("i == %d", i);
     // printf("i == %d\n", i);
-    test.Test_DeleteIndexRecordPre(file_type, key_index);
+    test.Test_TableDeleteRecord(file_type, key_index);
   }
 
   test.teardown();

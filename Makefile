@@ -115,6 +115,7 @@ test/%.out: $(OBJ_DIR)/DataBase/%.o library
 clean:
 	rm -rf libDBMS.a
 	rm -rf out
+	rm -rf output/*
 	rm -rf $(OBJ_DIR)/*.o
 	rm -rf $(OBJ_DIR)/Base/*.o
 	rm -rf $(OBJ_DIR)/Log/*.o

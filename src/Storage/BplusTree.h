@@ -90,6 +90,9 @@ class BplusTree {
   bool SaveToDisk() const;
   bool LoadFromDisk();
 
+  // Tree is empty.
+  bool Empty() const;
+
   // Fetch a page, either from page map or load it from disk.
   RecordPage* Page(int page_id);
 
@@ -153,6 +156,9 @@ class BplusTree {
 
   // Connect two leaves.
   static bool ConnectLeaves(RecordPage* page1, RecordPage* page2);
+
+  // Get the left-most leave id.
+  RecordPage* FirstLeave();
 
   friend class BplusTreeTest;
 
