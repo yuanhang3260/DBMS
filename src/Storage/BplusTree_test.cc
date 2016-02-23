@@ -740,13 +740,9 @@ class BplusTreeTest: public UnitTest {
     Test_UpdateRecordID();
     printf("********************** Begin Deleting *************************\n");
 
-    BplusTree tree(table, DataBaseFiles::INDEX, key_index);
-    DataBase::DeleteResult delete_result;
-    delete_result.del_mode = DataBase::DeleteResult::DEL_INDEX_PRE;
-
     // Generate delete operator.
     DataBase::DeleteOp op;
-    std::vector<int> ages = Utils::RandomListFromRange(0, 8);
+    std::vector<int> ages = Utils::RandomListFromRange(0, 5);
     for (int i = 0; i < (int)ages.size(); i++) {
       op.key_index = key_index[0];
       op.keys.push_back(std::make_shared<Schema::RecordBase>());
@@ -762,14 +758,12 @@ class BplusTreeTest: public UnitTest {
     // Consistency check of all B+ trees.
     for (const auto& field: schema->fields()) {
       auto key_index = std::vector<int>{field.index()};
-      //key_index[0] = 0;
       file_type = table->IsDataFileKey(key_index[0]) ? INDEX_DATA : INDEX;
       auto tree = table->Tree(file_type, key_index);
       tree->SaveToDisk();
 
       CheckBplusTree(file_type, key_index);
       //_VerifyAllRecordsInTree(tree, key_index);
-      //break;
     }
   }
 };

@@ -310,7 +310,7 @@ bool Table::ValidateAllIndexRecords(int num_records) {
   return true;
 }
 
-bool Table::UpdateIndexRecords(
+bool Table::UpdateIndexTrees(
                 std::vector<Schema::DataRecordRidMutation>& rid_mutations) {
   if (rid_mutations.empty()) {
     return true;
@@ -321,7 +321,7 @@ bool Table::UpdateIndexRecords(
     if (IsDataFileKey(key_index[0])) {
       continue;
     }
-    printf("************** Updating Rid for index tree %d *******************\n",
+    printf("************** Updating Rid for index tree %d ******************\n",
            key_index[0]);
 
     // Index Tree.
@@ -336,81 +336,6 @@ bool Table::UpdateIndexRecords(
 
   return true;
 }
-
-// void Table::GroupDataRecordRidMutations(
-//                 std::vector<Schema::DataRecordRidMutation>& rid_mutations,
-//                 std::vector<int> key_index,
-//                 std::vector<Schema::RecordGroup>* rgroups) {
-//   if (rid_mutations.empty()) {
-//     return;
-//   }
-
-//   auto crt_record = rid_mutations[0].record;
-//   int crt_start = 0;
-//   int num_records = 0;
-//   for (int i = 0; i < (int)rid_mutations.size(); i++) {
-//     if (Schema::RecordBase::CompareRecordsBasedOnIndex(
-//             crt_record.get(), rid_mutations[i].record.get(), key_index) == 0) {
-//       num_records++;
-//     }
-//     else {
-//       rgroups->push_back(Schema::RecordGroup(crt_start, num_records, -1));
-//       crt_start = i;
-//       num_records = 1;
-//       crt_record = rid_mutations[crt_start].record;
-//     }
-//   }
-//   rgroups->push_back(Schema::RecordGroup(crt_start, num_records, -1));
-// }
-
-// void Table::GroupRidMutationLeaveGroups(
-//                 std::vector<Schema::DataRecordRidMutation>& rid_mutations,
-//                 std::vector<Schema::RecordGroup>& rgroups,
-//                 DataBaseFiles::BplusTree* tree,
-//                 std::vector<int> key_index,
-//                 std::vector<RidMutationLeaveGroup>* ridmlgroup) {
-//   if (rgroups.empty()) {
-//     return;
-//   }
-
-//   int crt_leave_id = -1;
-//   int crt_start = -1;
-//   int crt_end = -1;
-//   for (int i = 0; i < (int)rgroups.size(); i++) {
-//     auto crt_record = rid_mutations[rgroups[i].start_index].record;
-//     Schema::RecordBase key;
-//     (reinterpret_cast<const Schema::DataRecord*>(crt_record.get()))
-//       ->ExtractKey(&key, key_index);
-
-//     auto leave = tree->SearchByKey(&key);
-//     CheckLogFATAL(leave, "Failed to search key at index %d", key_index[0]);
-//     if (leave->id() == crt_leave_id) {
-//       crt_end = i;
-//     }
-//     else {
-//       // new leave group.
-//       if (i > 0) {
-//         ridmlgroup->emplace_back(crt_start, crt_end, crt_leave_id);
-//       }
-//       crt_start = i;
-//       crt_end = i;
-//       crt_leave_id = leave->id();
-//     }
-//   }
-//   ridmlgroup->emplace_back(crt_start, crt_end, crt_leave_id);
-
-//   // printf("rid_mutations size = %d\n", rid_mutations.size());
-//   // for (const auto& i : rgroups) {
-//   //   printf("%d, %d\n", i.start_index, i.num_records);
-//   // }
-//   // printf("rgroups size = %d\n", rgroups.size());
-//   // for (const auto& i: *ridmlgroup) {
-//   //   printf("(%d, %d), id = %d\n", i.start_rgroup, i.end_rgroup, i.leave_id);
-//   //   for (int ii = i.start_rgroup; ii <= i.end_rgroup; ii++) {
-//   //     printf("  %d\n", rgroups[ii].start_index);
-//   //   }
-//   // }
-// }
 
 bool Table::InsertRecord(const Schema::RecordBase* record) {
   if (record->type() != Schema::DATA_RECORD) {
@@ -431,7 +356,7 @@ bool Table::InsertRecord(const Schema::RecordBase* record) {
   }
 
   // Update changed RecordIDs of existing records in the B+ tree.
-  if (!UpdateIndexRecords(rid_mutations)) {
+  if (!UpdateIndexTrees(rid_mutations)) {
     LogFATAL("Failed to Update IndexRecords");
   }
 
@@ -465,7 +390,7 @@ bool Table::InsertRecord(const Schema::RecordBase* record) {
 bool Table::DeleteRecord(const DeleteOp& op) {
   if (op.key_index < 0 || op.key_index >= schema_->fields_size()) {
     LogERROR("Invalid key_index %d for DeleteOp, expect in [%d, %d]",
-             op.key_index, 0, schema_->fields_size());
+             op.key_index, 0, schema_->fields_size() - 1);
     return false;
   }
 
@@ -475,7 +400,7 @@ bool Table::DeleteRecord(const DeleteOp& op) {
     if (IsDataFileKey(op.key_index)) {
       auto data_tree = Tree(DataBaseFiles::INDEX_DATA, idata_indexes_);
       if (!data_tree) {
-        LogERROR("Can't get DataRecord B+ tree");
+        LogERROR("Can't find DataRecord B+ tree");
         return false;
       }
       data_tree->Do_DeleteRecordByKey(op.keys, &data_delete_result);
@@ -499,12 +424,10 @@ bool Table::DeleteRecord(const DeleteOp& op) {
                     "data tree deleted un-maching number of records");
     }
 
-    (void)pre_index;
+    // Update and delete index records in all index trees.
     printf("Begin updating index trees\n");
-    // Delete index records from index trees.
     for (auto field: schema_->fields()) {
       auto key_index = std::vector<int>{field.index()};
-      //key_index[0] = 0;
       if (IsDataFileKey(key_index[0])) {
         continue;
       }
@@ -514,7 +437,6 @@ bool Table::DeleteRecord(const DeleteOp& op) {
         index_tree->UpdateIndexRecords(data_delete_result.rid_deleted);
       }
       index_tree->UpdateIndexRecords(data_delete_result.rid_mutations);
-      //break;
     }
   }
 

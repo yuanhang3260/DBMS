@@ -2020,7 +2020,7 @@ bool BplusTree::UpdateIndexRecords(
       }
       if (processed_leave->Meta()->is_overflow_page() &&
           processed_leave->Meta()->num_records() <= 0) {
-        DeleteOverflowLeave(processed_leave);
+        DeleteOverflowLeave(processed_leave);  // Don't leak page.
       }
     }
     if (num_rids_updated != group.num_records) {

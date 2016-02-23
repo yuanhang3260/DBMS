@@ -42,7 +42,7 @@ class Table {
 
   bool ValidateAllIndexRecords(int num_records);
 
-  bool UpdateIndexRecords(
+  bool UpdateIndexTrees(
            std::vector<Schema::DataRecordRidMutation>& rid_mutations);
 
   bool InsertRecord(const Schema::RecordBase* record);
@@ -52,12 +52,6 @@ class Table {
  private:
   bool BuildFieldIndexMap();
   bool LoadSchema();
-
-  // Group list of DataRecordRidMutation based a key_index.
-  // void GroupDataRecordRidMutations(
-  //          std::vector<Schema::DataRecordRidMutation>& rid_mutations,
-  //          std::vector<int> key_index,
-  //          std::vector<Schema::RecordGroup>* rgroups);
 
   // Given a sorted list of DataRecordRidMutation groups, we further group them
   // into leave groups - that is, group them based on the index B+ tree leave 
@@ -74,13 +68,6 @@ class Table {
     int end_rgroup;
     int leave_id;
   };
-
-  // void GroupRidMutationLeaveGroups(
-  //          std::vector<Schema::DataRecordRidMutation>& rid_mutations,
-  //          std::vector<Schema::RecordGroup>& rgroups,
-  //          DataBaseFiles::BplusTree* tree,
-  //          std::vector<int> key_index,
-  //          std::vector<RidMutationLeaveGroup>* ridmlgroup);
 
   std::string name_;
   std::unique_ptr<Schema::TableSchema> schema_;
