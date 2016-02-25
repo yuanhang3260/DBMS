@@ -22,7 +22,7 @@ class BplusTreeTest: public UnitTest {
   Schema::TableSchema* schema = nullptr;
   DataBase::Table* table;
   std::map<int, std::shared_ptr<Schema::DataRecord>> record_resource;
-  const int kNumRecordsSource = 1000;
+  const int kNumRecordsSource = 100;
 
  public:
   void InitSchema() {
@@ -84,7 +84,7 @@ class BplusTreeTest: public UnitTest {
         record_resource.at(i)->AddField(new Schema::StringType(buf, str_len));
       }
       // age
-      int rand_int = Utils::RandomNumber(10);
+      int rand_int = Utils::RandomNumber(100);
       record_resource.at(i)->AddField(new Schema::IntType(rand_int));
       // money (we use this field as key for record resource map).
       //int rand_long = Utils::RandomNumber(10);
@@ -742,7 +742,7 @@ class BplusTreeTest: public UnitTest {
 
     // Generate delete operator.
     DataBase::DeleteOp op;
-    std::vector<int> ages = Utils::RandomListFromRange(0, 5);
+    std::vector<int> ages = Utils::RandomListFromRange(0, 0);
     for (int i = 0; i < (int)ages.size(); i++) {
       op.key_index = key_index[0];
       op.keys.push_back(std::make_shared<Schema::RecordBase>());
@@ -750,7 +750,8 @@ class BplusTreeTest: public UnitTest {
     }
 
     // Do deletion.
-    table->DeleteRecord(op);
+    int delete_num = table->DeleteRecord(op);
+    printf("Deleted %d records\n", delete_num);
 
     // Validate index tree records consistency with data tree records.
     AssertTrue(table->ValidateAllIndexRecords(-1));
@@ -766,20 +767,71 @@ class BplusTreeTest: public UnitTest {
       //_VerifyAllRecordsInTree(tree, key_index);
     }
   }
+
+  void Test_TableDeleteInsert()
+  {
+    Test_UpdateRecordID();
+    printf("********************** Begin Deleting *************************\n");
+//    InitRecordResource();  // Create a new set of record resource.
+
+    auto delete_ages = Utils::RandomListFromRange(0, 100);
+    std::sort(delete_ages.begin(), delete_ages.end());
+    int start = 0;
+    while (start < 100) {
+      int group_len = Utils::RandomNumber(5) + 1;
+      group_len = start + group_len >= 100 ? (100 - start) : group_len;
+      group_len = 1;
+      // Generate delete operator, delete ages from index [start, start + len].
+      DataBase::DeleteOp op;
+      LogERROR("start = %d, end = %d", start, start + group_len - 1);
+      for (int i = start; i < start + group_len; i++) {
+        op.key_index = 1;
+        op.keys.push_back(std::make_shared<Schema::RecordBase>());
+        op.keys.back()->AddField(new Schema::IntType(delete_ages[i]));
+      }
+      start += group_len;
+
+
+      // Do deletion.
+      int delete_num = table->DeleteRecord(op);
+      printf("Deleted %d records\n", delete_num);
+
+      // Re-insert some record.
+      int total_insert = delete_num;// * Utils::RandomNumber(20) / 10;
+      for (int insert_num = 0; insert_num < total_insert; insert_num++) {
+        int insert_record_key = Utils::RandomNumber(kNumRecordsSource);
+        table->InsertRecord(record_resource[insert_record_key].get());
+      }
+
+      // Validate index tree records consistency with data tree records.
+      AssertTrue(table->ValidateAllIndexRecords(-1));
+
+      // Consistency check of all B+ trees.
+      for (const auto& field: schema->fields()) {
+        auto key_index = std::vector<int>{field.index()};
+        FileType file_type = table->IsDataFileKey(key_index[0]) ? INDEX_DATA : INDEX;
+        auto tree = table->Tree(file_type, key_index);
+        tree->SaveToDisk();
+
+        CheckBplusTree(file_type, key_index);
+        //_VerifyAllRecordsInTree(tree, key_index);
+      }
+    }
+  }
 };
 
 }  // namespace DataBaseFiles
 
 int main(int argc, char** argv) {
-  DataBaseFiles::FileType file_type = DataBaseFiles::INDEX_DATA;
-  std::vector<int> key_index{2};
-  if (argc >= 2 && std::string(argv[1]) == "INDEX") {
-    file_type = DataBaseFiles::INDEX;
-  }
-  if (argc >= 3) {
-    key_index.clear();
-    key_index.push_back(std::stoi(argv[2]));
-  }
+  // DataBaseFiles::FileType file_type = DataBaseFiles::INDEX_DATA;
+  // std::vector<int> key_index{2};
+  // if (argc >= 2 && std::string(argv[1]) == "INDEX") {
+  //   file_type = DataBaseFiles::INDEX;
+  // }
+  // if (argc >= 3) {
+  //   key_index.clear();
+  //   key_index.push_back(std::stoi(argv[2]));
+  // }
 
   DataBaseFiles::BplusTreeTest test;
   test.setup();
@@ -811,11 +863,13 @@ int main(int argc, char** argv) {
   //   test.Test_DeleteIndexRecordPre(file_type, key_index);
   // }
 
-  for (int i = 0; i < 1; i++) {
-    //LogERROR("i == %d", i);
-    // printf("i == %d\n", i);
-    test.Test_TableDeleteRecord(file_type, key_index);
-  }
+  // for (int i = 0; i < 1; i++) {
+  //   //LogERROR("i == %d", i);
+  //   // printf("i == %d\n", i);
+  //   test.Test_TableDeleteRecord(file_type, key_index);
+  // }
+
+  test.Test_TableDeleteInsert();
 
   test.teardown();
   std::cout << "\033[2;32mAll Passed ^_^\033[0m" << std::endl;

@@ -47,7 +47,7 @@ class Table {
 
   bool InsertRecord(const Schema::RecordBase* record);
 
-  bool DeleteRecord(const DeleteOp& op);
+  int DeleteRecord(const DeleteOp& op);
 
  private:
   bool BuildFieldIndexMap();

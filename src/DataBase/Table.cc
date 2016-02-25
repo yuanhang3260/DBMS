@@ -387,11 +387,11 @@ bool Table::InsertRecord(const Schema::RecordBase* record) {
   return true;;
 }
 
-bool Table::DeleteRecord(const DeleteOp& op) {
+int Table::DeleteRecord(const DeleteOp& op) {
   if (op.key_index < 0 || op.key_index >= schema_->fields_size()) {
     LogERROR("Invalid key_index %d for DeleteOp, expect in [%d, %d]",
              op.key_index, 0, schema_->fields_size() - 1);
-    return false;
+    return -1;
   }
 
   DeleteResult data_delete_result;
@@ -401,7 +401,7 @@ bool Table::DeleteRecord(const DeleteOp& op) {
       auto data_tree = Tree(DataBaseFiles::INDEX_DATA, idata_indexes_);
       if (!data_tree) {
         LogERROR("Can't find DataRecord B+ tree");
-        return false;
+        return -1;
       }
       data_tree->Do_DeleteRecordByKey(op.keys, &data_delete_result);
     }
@@ -424,6 +424,10 @@ bool Table::DeleteRecord(const DeleteOp& op) {
                     "data tree deleted un-maching number of records");
     }
 
+    if (data_delete_result.rid_deleted.empty()) {
+      return 0;
+    }
+
     // Update and delete index records in all index trees.
     printf("Begin updating index trees\n");
     for (auto field: schema_->fields()) {
@@ -440,7 +444,7 @@ bool Table::DeleteRecord(const DeleteOp& op) {
     }
   }
 
-  return true;
+  return data_delete_result.rid_deleted.size();
 }
 
 }  // namespace DATABASE

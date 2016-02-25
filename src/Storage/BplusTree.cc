@@ -918,7 +918,8 @@ bool BplusTree::CheckTreeNodeValid(RecordPage* page) {
     }
     if (!VerifyChildRecordsRange(Page(child_page_id),
                                  tn_record, next_record)) {
-      LogERROR("Verify child page %d range failed", child_page_id);
+      LogERROR("Verify child page %d range failed, tree index is %d",
+               child_page_id, key_indexes_[0]);
       return false;
     }
   }
@@ -1327,8 +1328,9 @@ BplusTree::LookUpTreeNodeInfoForPage(RecordPage* page) {
     }
   }
 
-  CheckLogFATAL(tn_record_found,"Can't find TreeNodeRecord for page %d, type%d",
-                                page->id(), page->Meta()->page_type());
+  CheckLogFATAL(tn_record_found,
+                "Can't find TreeNodeRecord for page %d, type%d, tree %d",
+                page->id(), page->Meta()->page_type(), key_indexes_[0]);
   return result;
 }
 
@@ -1863,6 +1865,10 @@ bool BplusTree::Do_DeleteRecordByRecordID(
     return false;
   }
 
+  if (index_del_result.rid_deleted.empty()) {
+    return true;
+  }
+
   Schema::DataRecordRidMutation::SortByOldRid(index_del_result.rid_deleted);
 
   auto& rid_deleted = index_del_result.rid_deleted;
@@ -2024,8 +2030,9 @@ bool BplusTree::UpdateIndexRecords(
       }
     }
     if (num_rids_updated != group.num_records) {
-      LogERROR("Updated %d number of rids, expect %d, on leave %d",
-               num_rids_updated, group.num_records, crt_leave->id());
+      LogERROR("Updated %d number of rids, expect %d, on leave %d, tree %d",
+               num_rids_updated, group.num_records,
+               crt_leave->id(), key_indexes_[0]);
       key.Print();
       return false;
     }
