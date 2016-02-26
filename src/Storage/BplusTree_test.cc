@@ -137,7 +137,7 @@ class BplusTreeTest: public UnitTest {
     InitSchema();
     CreateSchemaFile(tablename);
     InitRecordResource();
-    InitRecordResourceFromFile("out1");
+    //InitRecordResourceFromFile("out1");
     table = new DataBase::Table(tablename);
   }
 
@@ -780,7 +780,7 @@ class BplusTreeTest: public UnitTest {
     while (start < 100) {
       int group_len = Utils::RandomNumber(5) + 1;
       group_len = start + group_len >= 100 ? (100 - start) : group_len;
-      group_len = 1;
+      //group_len = 1;
       // Generate delete operator, delete ages from index [start, start + len].
       DataBase::DeleteOp op;
       //LogERROR("start = %d, end = %d", start, start + group_len - 1);
@@ -791,33 +791,21 @@ class BplusTreeTest: public UnitTest {
       }
       start += group_len;
 
-      LogERROR("Deleting");
+      //LogERROR("Deleting");
       // Do deletion.
       int delete_num = table->DeleteRecord(op);
-      LogERROR("Deleted %d records", delete_num);
+      //LogERROR("Deleted %d records", delete_num);
 
       // Validate index tree records consistency with data tree records.
       AssertTrue(table->ValidateAllIndexRecords(-1));
 
-      for (const auto& field: schema->fields()) {
-        auto key_index = std::vector<int>{field.index()};
-        FileType file_type =
-            table->IsDataFileKey(key_index[0]) ? INDEX_DATA : INDEX;
-        auto tree = table->Tree(file_type, key_index);
-        tree->SaveToDisk();
-
-        CheckBplusTree(file_type, key_index);
-        //_VerifyAllRecordsInTree(tree, key_index);
-      }
-
-      LogERROR("Inserting\n");
+      //LogERROR("Inserting\n");
       // Re-insert some record.
       int total_insert = delete_num;// * Utils::RandomNumber(20) / 10;
       for (int insert_num = 0; insert_num < total_insert; insert_num++) {
-        //int insert_record_key = Utils::RandomNumber(kNumRecordsSource);
-        printf("insert_num = %d\n", insert_num);
-        record_resource[insert_num]->Print();
-        table->InsertRecord(record_resource[insert_num].get());
+        int insert_record_key = Utils::RandomNumber(kNumRecordsSource);
+        //printf("insert_num = %d\n", insert_num);
+        table->InsertRecord(record_resource[insert_record_key].get());
 
         auto key_index = std::vector<int>{2};
         auto tree = table->Tree(INDEX_DATA, key_index);

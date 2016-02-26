@@ -364,6 +364,7 @@ bool Table::InsertRecord(const Schema::RecordBase* record) {
     LogFATAL("Got invalid rid_mutations list");
   }
 
+  printf("Begin to insert index records.\n");
   // Insert IndexRecord of the new record to index files.
   rid_mutations.clear();
   for (auto field: schema_->fields()) {

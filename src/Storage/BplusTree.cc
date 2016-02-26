@@ -502,7 +502,6 @@ bool BplusTree::InsertTreeNodeRecord(Schema::TreeNodeRecord* tn_record,
   }
   
   // printf("Inserting new TreeNodeRecord:\n");
-  //tn_record->Print();
   if (tn_record->InsertToRecordPage(tn_page) >= 0) {
     // Success, and we're done. Get the child page related with this new
     // TreeNode record and set its parent page id as this tree node.
@@ -1015,9 +1014,9 @@ bool BplusTree::VerifyChildRecordsRange(RecordPage* child_page,
     last_record_key = *prmanager.GetRecord<Schema::RecordBase>(last_index);
   }
   if (last_record_key >= *right_bound) {  // right boundary is open interval
-    LogERROR("last record key of child >= right bound, "
-             "happens on page type %d", child_page->Meta()->page_type());
-    last_record_key.Print();
+    LogERROR("last record key of child >= right bound, on page %d, type %d",
+             child_page->id(), child_page->Meta()->page_type());
+    prmanager.Record(last_index)->Print();
     right_bound->Print();
     return false;
   }
@@ -2179,7 +2178,7 @@ Schema::RecordID BplusTree::InsertAfterOverflowLeave(
   if (rid.IsValid()) {
     return rid;
   }
-
+  debug(30);
   // Special case - The overflowed leave has different tree node key with the
   // records in this leave - which means, the tree record is possibly 'less'
   // than records of the overflow page, and the new leave should reside left to
@@ -2188,14 +2187,18 @@ Schema::RecordID BplusTree::InsertAfterOverflowLeave(
                                        key_indexes_,
                                        file_type_, TREE_LEAVE);
   if (prmanager.CompareRecords(record, prmanager.Record(0)) < 0) {
+    debug(31);
     auto parent = Page(leave->Meta()->parent_page());
+    printf("parent is %d\n", parent->id());
+    PrintNodeRecords(parent);
     // Replace the page_id field of left most TreeNodeRecord of parent page
     // with the new left-most leave.
     RecordPage* new_leave = CreateNewLeaveWithRecord(record);
     new_leave->Meta()->set_parent_page(parent->id());
-    *(parent->Record(search_result->slot) +
-      parent->RecordLength(search_result->slot) - 
-      sizeof(int)) = new_leave->id();
+    *(ParseRecordField<int32>(parent, search_result->slot)) = new_leave->id();
+    // *(parent->Record(search_result->slot) +
+    //   parent->RecordLength(search_result->slot) - 
+    //   sizeof(int)) = new_leave->id();
 
     // Now the previous left-most leave (crt_leave) is the second leave to
     // the left, and it's tree node record in parent has been replaced by
@@ -2212,6 +2215,8 @@ Schema::RecordID BplusTree::InsertAfterOverflowLeave(
     if (prev_leave) {
       ConnectLeaves(prev_leave, new_leave);
     }
+    printf("Done inserting\n");
+    PrintNodeRecords(parent);
     return Schema::RecordID(new_leave->id(), 0);
   }
 
@@ -2468,6 +2473,14 @@ Schema::RecordID BplusTree::Do_InsertRecord(
   CheckLogFATAL(crt_page, "Failed to search for key");
   CheckLogFATAL(crt_page->Meta()->page_type() == TREE_LEAVE,
                 "Key search ending at non-leave node");
+
+  // if (key_indexes_[0] == 2 && crt_page->id() == 246) {
+  //   printf("search to leave %d\n", crt_page->id());
+  //   PrintNodeRecords(crt_page);
+  //   auto lk_result = LookUpTreeNodeInfoForPage(crt_page);
+  //   printf("tree node record is:\n");
+  //   lk_result.record->Print();
+  // }
 
   // If current leave is overflowed, we check if the new record is same with
   // existing ones in it. If yes, we can insert this record to overflow pages.
