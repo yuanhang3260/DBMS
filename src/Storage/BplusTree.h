@@ -249,6 +249,9 @@ class BplusTree {
                                 sizeof(T));
   }
 
+  // Print all records on a page.
+  void PrintNodeRecords(RecordPage* page);
+
   class SearchTreeNodeResult {
    public:
     int slot = -1;

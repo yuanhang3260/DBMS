@@ -321,8 +321,8 @@ bool Table::UpdateIndexTrees(
     if (IsDataFileKey(key_index[0])) {
       continue;
     }
-    printf("************** Updating Rid for index tree %d ******************\n",
-           key_index[0]);
+    // printf("************** Updating Rid for index tree %d ******************\n",
+    //        key_index[0]);
 
     // Index Tree.
     auto tree = Tree(DataBaseFiles::INDEX, key_index);
@@ -412,6 +412,7 @@ int Table::DeleteRecord(const DeleteOp& op) {
                              std::vector<int>{op.key_index});
       DeleteResult index_delete_result;
       index_delete_result.del_mode = DataBase::DeleteResult::DEL_INDEX_PRE;
+
       index_tree->Do_DeleteRecordByKey(op.keys, &index_delete_result);
 
       // Delete data records from data tree.

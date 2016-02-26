@@ -22,7 +22,7 @@ class BplusTreeTest: public UnitTest {
   Schema::TableSchema* schema = nullptr;
   DataBase::Table* table;
   std::map<int, std::shared_ptr<Schema::DataRecord>> record_resource;
-  const int kNumRecordsSource = 100;
+  const int kNumRecordsSource = 700;
 
  public:
   void InitSchema() {
@@ -137,7 +137,7 @@ class BplusTreeTest: public UnitTest {
     InitSchema();
     CreateSchemaFile(tablename);
     InitRecordResource();
-    //InitRecordResourceFromFile("out1");
+    InitRecordResourceFromFile("out1");
     table = new DataBase::Table(tablename);
   }
 
@@ -772,7 +772,7 @@ class BplusTreeTest: public UnitTest {
   {
     Test_UpdateRecordID();
     printf("********************** Begin Deleting *************************\n");
-//    InitRecordResource();  // Create a new set of record resource.
+    //InitRecordResource();  // Create a new set of record resource.
 
     auto delete_ages = Utils::RandomListFromRange(0, 100);
     std::sort(delete_ages.begin(), delete_ages.end());
@@ -783,7 +783,7 @@ class BplusTreeTest: public UnitTest {
       group_len = 1;
       // Generate delete operator, delete ages from index [start, start + len].
       DataBase::DeleteOp op;
-      LogERROR("start = %d, end = %d", start, start + group_len - 1);
+      //LogERROR("start = %d, end = %d", start, start + group_len - 1);
       for (int i = start; i < start + group_len; i++) {
         op.key_index = 1;
         op.keys.push_back(std::make_shared<Schema::RecordBase>());
@@ -791,16 +791,38 @@ class BplusTreeTest: public UnitTest {
       }
       start += group_len;
 
-
+      LogERROR("Deleting");
       // Do deletion.
       int delete_num = table->DeleteRecord(op);
-      printf("Deleted %d records\n", delete_num);
+      LogERROR("Deleted %d records", delete_num);
 
+      // Validate index tree records consistency with data tree records.
+      AssertTrue(table->ValidateAllIndexRecords(-1));
+
+      for (const auto& field: schema->fields()) {
+        auto key_index = std::vector<int>{field.index()};
+        FileType file_type =
+            table->IsDataFileKey(key_index[0]) ? INDEX_DATA : INDEX;
+        auto tree = table->Tree(file_type, key_index);
+        tree->SaveToDisk();
+
+        CheckBplusTree(file_type, key_index);
+        //_VerifyAllRecordsInTree(tree, key_index);
+      }
+
+      LogERROR("Inserting\n");
       // Re-insert some record.
       int total_insert = delete_num;// * Utils::RandomNumber(20) / 10;
       for (int insert_num = 0; insert_num < total_insert; insert_num++) {
-        int insert_record_key = Utils::RandomNumber(kNumRecordsSource);
-        table->InsertRecord(record_resource[insert_record_key].get());
+        //int insert_record_key = Utils::RandomNumber(kNumRecordsSource);
+        printf("insert_num = %d\n", insert_num);
+        record_resource[insert_num]->Print();
+        table->InsertRecord(record_resource[insert_num].get());
+
+        auto key_index = std::vector<int>{2};
+        auto tree = table->Tree(INDEX_DATA, key_index);
+        tree->SaveToDisk();
+        CheckBplusTree(INDEX_DATA, key_index);
       }
 
       // Validate index tree records consistency with data tree records.
@@ -809,7 +831,8 @@ class BplusTreeTest: public UnitTest {
       // Consistency check of all B+ trees.
       for (const auto& field: schema->fields()) {
         auto key_index = std::vector<int>{field.index()};
-        FileType file_type = table->IsDataFileKey(key_index[0]) ? INDEX_DATA : INDEX;
+        FileType file_type =
+            table->IsDataFileKey(key_index[0]) ? INDEX_DATA : INDEX;
         auto tree = table->Tree(file_type, key_index);
         tree->SaveToDisk();
 

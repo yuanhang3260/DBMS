@@ -448,6 +448,33 @@ bool BplusTree::VerifyRecord(const Schema::RecordID& rid,
   return true;
 }
 
+void BplusTree::PrintNodeRecords(RecordPage* page) {
+  printf("Printing records on page %d\n", page->id());
+  printf("page(%d):\n", page->id());
+  Schema::PageRecordsManager prmanager(page, schema(), key_indexes_,
+                                       file_type_, page->Meta()->page_type());
+  for (int i = 0; i < prmanager.NumRecords(); i++) {
+    prmanager.Record(i)->Print();
+  }
+
+  if (page->Meta()->page_type() == TREE_LEAVE) {
+    int of_num = 1;
+    auto of_page = Page(page->Meta()->overflow_page());
+    while (of_page) {
+      CheckLogFATAL(of_page->Meta()->page_type() == TREE_LEAVE,
+                    "invalid overflow leave");
+      printf("overflow %d, page(%d)\n", of_num++, of_page->id());
+      Schema::PageRecordsManager of_prmanager(of_page, schema(), key_indexes_,
+                                              file_type_, TREE_LEAVE);
+      for (int i = 0; i < of_prmanager.NumRecords(); i++) {
+        of_prmanager.Record(i)->Print();
+      }
+      of_page = Page(of_page->Meta()->overflow_page());
+    }
+  }
+  printf("Print page %d done.\n", page->id());
+}
+
 bool BplusTree::CheckoutPage(int page_id, bool write_to_disk) {
   if (page_map_.find(page_id) == page_map_.end()) {
     LogINFO("page %d not in page map, won't checkout");
@@ -916,6 +943,7 @@ bool BplusTree::CheckTreeNodeValid(RecordPage* page) {
     if (i < prmanager.NumRecords() - 1) {
       next_record = prmanager.GetRecord<Schema::TreeNodeRecord>(i + 1);
     }
+
     if (!VerifyChildRecordsRange(Page(child_page_id),
                                  tn_record, next_record)) {
       LogERROR("Verify child page %d range failed, tree index is %d",
@@ -940,8 +968,6 @@ bool BplusTree::VerifyChildRecordsRange(RecordPage* child_page,
     right_bound->Print();
     return false;
   }
-
-  //printf("verifying leave %d\n", child_page->id());
 
   Schema::PageRecordsManager prmanager(child_page, schema(), key_indexes_,
                                        file_type_,
@@ -1675,6 +1701,7 @@ bool BplusTree::DeleteNodeFromTree(RecordPage* page, int slot_id_in_parent) {
     }
     // Min tree node record re-point to second leave if exists.
     if (result.next_child_id > 0) {
+      printf("next child id is moved to first %d\n", result.next_child_id);
       CheckLogFATAL(parent->DeleteRecord(result.next_slot),
                     "Failed to delete tree node record of second leave %d",
                     result.next_child_id);
@@ -1720,6 +1747,14 @@ bool BplusTree::ProcessNodeAfterRecordDeletion(
 
   // Check space occupation less than 50%
   if (page->Occupation() >= 0.5) {
+    return true;
+  }
+
+  // Process overflow page only when it's empty.
+  if (page->Meta()->is_overflow_page()) {
+    if (page->Meta()->num_records() <= 0) {
+      DeleteOverflowLeave(page);
+    }
     return true;
   }
 
@@ -1848,7 +1883,7 @@ bool BplusTree::Do_DeleteRecordByKey(
       leave = SearchByKey(key.get());
     }
     int num = DeleteMatchedRecordsFromLeave(leave, key.get(), result);
-    //printf("deleted %d matching records\n", num);
+    printf("deleted %d matching records\n", num);
     (void)num;
     crt_leave = leave;
   }
@@ -1894,6 +1929,7 @@ bool BplusTree::Do_DeleteRecordByRecordID(
                                           Schema::RecordID());
       page->DeleteRecord(rid_deleted[j].old_rid.slot_id());
     }
+
     ProcessNodeAfterRecordDeletion(page, &crt_result);
 
     index_del_result.MergeDeleteRidsFromMutatedRids(crt_result);
@@ -2079,6 +2115,7 @@ int BplusTree::DeleteMatchedRecordsFromLeave(
                                   Schema::RecordID(index_record->rid()),
                                   Schema::RecordID());
         }
+        //prmanager.Record(index)->Print();
         CheckLogFATAL(leave->DeleteRecord(slot_id),
                       "Failed to delete record from leave %d", leave->id());
         count_deleted++;
@@ -2142,37 +2179,40 @@ Schema::RecordID BplusTree::InsertAfterOverflowLeave(
   if (rid.IsValid()) {
     return rid;
   }
-  // Special case 2 - It is the most left leave, which has different tree
-  // node key with the records in this leave. This new record is possibly
-  // 'less' than records of the overflow page, which means the new leave
-  // should reside left to current leave.
-  if (leave->Meta()->prev_page() < 0) {
-    Schema::PageRecordsManager prmanager(leave, schema(),
-                                         key_indexes_,
-                                         file_type_, TREE_LEAVE);
-    if (prmanager.CompareRecords(record, prmanager.Record(0)) < 0) {
-      auto parent = Page(leave->Meta()->parent_page());
-      // Replace the page_id field of left most TreeNodeRecord of parent page
-      // with the new left-most leave.
-      RecordPage* new_leave = CreateNewLeaveWithRecord(record);
-      new_leave->Meta()->set_parent_page(parent->id());
-      *(parent->Record(search_result->slot) +
-        parent->RecordLength(search_result->slot) - 
-        sizeof(int)) = new_leave->id();
 
-      // Now the previous left-most leave (crt_leave) is the second leave to
-      // the left, and it's tree node record in parent has been replaced by
-      // new leave. We need to re-insert its tree node record.
-      Schema::TreeNodeRecord tn_record;
-      ProduceKeyRecordFromNodeRecord(prmanager.Record(0), &tn_record);
-      tn_record.set_page_id(leave->id());
-      if (!InsertTreeNodeRecord(&tn_record, parent)) {
-        LogERROR("Inserting new leave to B+ tree failed");
-        return Schema::RecordID();
-      }
-      ConnectLeaves(new_leave, leave);
-      return Schema::RecordID(new_leave->id(), 0);
-    }      
+  // Special case - The overflowed leave has different tree node key with the
+  // records in this leave - which means, the tree record is possibly 'less'
+  // than records of the overflow page, and the new leave should reside left to
+  // current leave.
+  Schema::PageRecordsManager prmanager(leave, schema(),
+                                       key_indexes_,
+                                       file_type_, TREE_LEAVE);
+  if (prmanager.CompareRecords(record, prmanager.Record(0)) < 0) {
+    auto parent = Page(leave->Meta()->parent_page());
+    // Replace the page_id field of left most TreeNodeRecord of parent page
+    // with the new left-most leave.
+    RecordPage* new_leave = CreateNewLeaveWithRecord(record);
+    new_leave->Meta()->set_parent_page(parent->id());
+    *(parent->Record(search_result->slot) +
+      parent->RecordLength(search_result->slot) - 
+      sizeof(int)) = new_leave->id();
+
+    // Now the previous left-most leave (crt_leave) is the second leave to
+    // the left, and it's tree node record in parent has been replaced by
+    // new leave. We need to re-insert its tree node record.
+    Schema::TreeNodeRecord tn_record;
+    ProduceKeyRecordFromNodeRecord(prmanager.Record(0), &tn_record);
+    tn_record.set_page_id(leave->id());
+    if (!InsertTreeNodeRecord(&tn_record, parent)) {
+      LogERROR("Inserting new leave to B+ tree failed");
+      return Schema::RecordID();
+    }
+    auto prev_leave = Page(leave->Meta()->prev_page());
+    ConnectLeaves(new_leave, leave);
+    if (prev_leave) {
+      ConnectLeaves(prev_leave, new_leave);
+    }
+    return Schema::RecordID(new_leave->id(), 0);
   }
 
   // Otherwise we check next leave. If next leave has the same parent, and is
@@ -2590,6 +2630,8 @@ Schema::RecordID BplusTree::InsertNewRecordToLeaveWithSplit(
       ConnectLeaves(of_leave, Page(next_leave_id));
     }
   }
+
+  // The new record rid is in stored in leave[0].
   return leaves[0].rid;
 }
 
