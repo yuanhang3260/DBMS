@@ -370,7 +370,7 @@ RecordPage* BplusTree::AllocateNewPage(PageType page_type) {
 bool BplusTree::RecyclePage(int page_id) {
   // Fetch page in case it's been swapped to disk. We need to write one field
   // in the page - next_page, to link to the free page list.
-  printf("Recycling page %d\n", page_id);
+  //printf("Recycling page %d\n", page_id);
   auto page = Page(page_id);
   auto type = page->Meta()->page_type();
   if (!page) {
@@ -1663,7 +1663,7 @@ bool BplusTree::DeleteNodeFromTree(RecordPage* page, int slot_id_in_parent) {
   CheckLogFATAL(slot_id_in_parent >= 0, "Invalid slot id of page %d in parent");
 
   // Parse the TreeNodeRecord in parent and check it matches this page id.
-  int page_id = *(ParseRecordField<int32>(parent, slot_id_in_parent));
+  int page_id = *(ParseRecordField<PageID>(parent, slot_id_in_parent));
   if (page_id != page->id()) {
     LogFATAL("tree node record %d inconsistent with child page id %d",
              page_id, page->id());
@@ -1687,7 +1687,7 @@ bool BplusTree::DeleteNodeFromTree(RecordPage* page, int slot_id_in_parent) {
     auto new_header = Page(page->Meta()->overflow_page());
     new_header->Meta()->set_parent_page(parent->id());
     new_header->Meta()->set_is_overflow_page(0);
-    *(ParseRecordField<int32>(parent, slot_id_in_parent)) = new_header->id();
+    *(ParseRecordField<PageID>(parent, slot_id_in_parent)) = new_header->id();
   }
   else if (page->Meta()->page_type() == TREE_LEAVE && need_lookup_parent &&
            result.prev_child_id < 0 && result.next_child_id >= 0) {
@@ -1704,7 +1704,7 @@ bool BplusTree::DeleteNodeFromTree(RecordPage* page, int slot_id_in_parent) {
       CheckLogFATAL(parent->DeleteRecord(result.next_slot),
                     "Failed to delete tree node record of second leave %d",
                     result.next_child_id);
-      *(ParseRecordField<int32>(parent, slot_id_in_parent)) =
+      *(ParseRecordField<PageID>(parent, slot_id_in_parent)) =
                                                         result.next_child_id;
     }
     else {
@@ -2178,7 +2178,7 @@ Schema::RecordID BplusTree::InsertAfterOverflowLeave(
   if (rid.IsValid()) {
     return rid;
   }
-  debug(30);
+
   // Special case - The overflowed leave has different tree node key with the
   // records in this leave - which means, the tree record is possibly 'less'
   // than records of the overflow page, and the new leave should reside left to
@@ -2187,18 +2187,12 @@ Schema::RecordID BplusTree::InsertAfterOverflowLeave(
                                        key_indexes_,
                                        file_type_, TREE_LEAVE);
   if (prmanager.CompareRecords(record, prmanager.Record(0)) < 0) {
-    debug(31);
     auto parent = Page(leave->Meta()->parent_page());
-    printf("parent is %d\n", parent->id());
-    PrintNodeRecords(parent);
     // Replace the page_id field of left most TreeNodeRecord of parent page
     // with the new left-most leave.
     RecordPage* new_leave = CreateNewLeaveWithRecord(record);
     new_leave->Meta()->set_parent_page(parent->id());
-    *(ParseRecordField<int32>(parent, search_result->slot)) = new_leave->id();
-    // *(parent->Record(search_result->slot) +
-    //   parent->RecordLength(search_result->slot) - 
-    //   sizeof(int)) = new_leave->id();
+    *(ParseRecordField<PageID>(parent, search_result->slot)) = new_leave->id();
 
     // Now the previous left-most leave (crt_leave) is the second leave to
     // the left, and it's tree node record in parent has been replaced by
@@ -2215,8 +2209,6 @@ Schema::RecordID BplusTree::InsertAfterOverflowLeave(
     if (prev_leave) {
       ConnectLeaves(prev_leave, new_leave);
     }
-    printf("Done inserting\n");
-    PrintNodeRecords(parent);
     return Schema::RecordID(new_leave->id(), 0);
   }
 

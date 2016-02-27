@@ -301,7 +301,10 @@ bool Table::ValidateAllIndexRecords(int num_records) {
       }
       leave = tree->Page(leave->Meta()->next_page());
     }
-    if (num_records > 0 && (int)rid_set.size() != num_records) {
+    if (num_records < 0) {
+      num_records = rid_set.size();
+    }
+    if ((int)rid_set.size() != num_records) {
       LogERROR("count %d index records, expect %d",
                (int)rid_set.size(), num_records);
       return false;
@@ -364,7 +367,6 @@ bool Table::InsertRecord(const Schema::RecordBase* record) {
     LogFATAL("Got invalid rid_mutations list");
   }
 
-  printf("Begin to insert index records.\n");
   // Insert IndexRecord of the new record to index files.
   rid_mutations.clear();
   for (auto field: schema_->fields()) {

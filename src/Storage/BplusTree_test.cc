@@ -22,7 +22,7 @@ class BplusTreeTest: public UnitTest {
   Schema::TableSchema* schema = nullptr;
   DataBase::Table* table;
   std::map<int, std::shared_ptr<Schema::DataRecord>> record_resource;
-  const int kNumRecordsSource = 700;
+  const int kNumRecordsSource = 1000;
 
  public:
   void InitSchema() {
@@ -772,7 +772,7 @@ class BplusTreeTest: public UnitTest {
   {
     Test_UpdateRecordID();
     printf("********************** Begin Deleting *************************\n");
-    //InitRecordResource();  // Create a new set of record resource.
+    InitRecordResource();  // Create a new set of record resource.
 
     auto delete_ages = Utils::RandomListFromRange(0, 100);
     std::sort(delete_ages.begin(), delete_ages.end());
@@ -801,16 +801,11 @@ class BplusTreeTest: public UnitTest {
 
       //LogERROR("Inserting\n");
       // Re-insert some record.
-      int total_insert = delete_num;// * Utils::RandomNumber(20) / 10;
+      int total_insert = delete_num * Utils::RandomNumber(20) / 10;
       for (int insert_num = 0; insert_num < total_insert; insert_num++) {
         int insert_record_key = Utils::RandomNumber(kNumRecordsSource);
         //printf("insert_num = %d\n", insert_num);
         table->InsertRecord(record_resource[insert_record_key].get());
-
-        auto key_index = std::vector<int>{2};
-        auto tree = table->Tree(INDEX_DATA, key_index);
-        tree->SaveToDisk();
-        CheckBplusTree(INDEX_DATA, key_index);
       }
 
       // Validate index tree records consistency with data tree records.

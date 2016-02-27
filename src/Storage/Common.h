@@ -11,6 +11,8 @@ const int kPageSize = 256;
 const int kSlotDirectoryEntrySize = 4;
 const char* const kDataDirectory = "data/";
 
+using PageID = int32;
+
 // File Type
 enum FileType {
   UNKNOWN_FILETYPE,
