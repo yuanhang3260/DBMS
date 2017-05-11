@@ -2,8 +2,8 @@
 #include <mutex>
 #include <map>
 
-#include "Compiler/Message.h"
-#include "Compiler/ProtoParser.h"
+#include "Proto/Descriptor.h"
+#include "Proto/DescriptorsBuilder.h"
 #include "Proto/MessageReflection.h"
 #include "Proto/MessageFactory.h"
 
@@ -11,38 +11,38 @@
 
 namespace {
 
-std::shared_ptr<::proto::ProtoParser::Message> TableField_descriptor_;
-std::shared_ptr<::proto::MessageReflection> TableField_reflection_;
-std::shared_ptr<::proto::ProtoParser::Message> TableSchema_descriptor_;
-std::shared_ptr<::proto::MessageReflection> TableSchema_reflection_;
+const ::proto::MessageDescriptor* TableField_descriptor_ = nullptr;
+const ::proto::MessageReflection* TableField_reflection_ = nullptr;
+const ::proto::MessageDescriptor* TableSchema_descriptor_ = nullptr;
+const ::proto::MessageReflection* TableSchema_reflection_ = nullptr;
 
 }  // namepsace
 
-void static_init_default_instances_usr_local_google_home_hangyuan_Desktop_test_DBMS_src_Schema_DBTable() {
-  if (Schema::TableField::default_instance_ == NULL) {
+void static_init_default_instances_home_hy_Desktop_Projects_DBMS_src_Schema_DBTable() {
+  if (Schema::TableField::default_instance_ == nullptr) {
     Schema::TableField::default_instance_ = new Schema::TableField();
     Schema::TableField::default_instance_->InitAsDefaultInstance();
   }
-  if (Schema::TableSchema::default_instance_ == NULL) {
+  if (Schema::TableSchema::default_instance_ == nullptr) {
     Schema::TableSchema::default_instance_ = new Schema::TableSchema();
     Schema::TableSchema::default_instance_->InitAsDefaultInstance();
   }
 }
 
-void static_init_usr_local_google_home_hangyuan_Desktop_test_DBMS_src_Schema_DBTable() {
+void static_init_home_hy_Desktop_Projects_DBMS_src_Schema_DBTable() {
   static bool already_called = false;
   if (already_called) return;
   already_called = true;
 
-  ::proto::ProtoParser::ProtoParser parser(
-      ::proto::ProtoParser::CPP,
-      "/usr/local/google/home/hangyuan/Desktop/test/DBMS/src/Schema/DBTable.proto");
-  CHECK(parser.ParseProto(),
-        "static class initialization for /usr/local/google/home/hangyuan/Desktop/test/DBMS/src/Schema/DBTable.proto failed");
+  ::proto::DescriptorsBuilder descriptors_builder(
+      "/home/hy/Desktop/Projects/DBMS/src/Schema/DBTable.proto");
+  auto file_dscpt = descriptors_builder.BuildDescriptors();
+  CHECK(file_dscpt != nullptr, "static class initialization for "
+        "/home/hy/Desktop/Projects/DBMS/src/Schema/DBTable.proto failed");
+  ::proto::MessageFactory::RegisterParsedProtoFile(file_dscpt);
 
-  static_init_default_instances_usr_local_google_home_hangyuan_Desktop_test_DBMS_src_Schema_DBTable();
+  static_init_default_instances_home_hy_Desktop_Projects_DBMS_src_Schema_DBTable();
 
-  int i = 0;
   // static init for class TableField
   static const int TableField_offsets_[4] = {
     PROTO_MESSAGE_FIELD_OFFSET(Schema::TableField, name_),
@@ -50,17 +50,15 @@ void static_init_usr_local_google_home_hangyuan_Desktop_test_DBMS_src_Schema_DBT
     PROTO_MESSAGE_FIELD_OFFSET(Schema::TableField, type_),
     PROTO_MESSAGE_FIELD_OFFSET(Schema::TableField, size_),
   };
-  i = 0;
-  for (auto& field: parser.mutable_messages_list()[0]->mutable_fields_list()) {
-    field->set_field_offset(TableField_offsets_[i++]);
-  }
-  TableField_descriptor_ = parser.mutable_messages_list()[0];
-  TableField_reflection_.reset(
+  TableField_descriptor_ = file_dscpt->FindMessageTypeByName("Schema.TableField");
+  CHECK(TableField_descriptor_ != nullptr, 
+        "Can't find message descriptor for Schema.TableField");
+  TableField_reflection_ = 
       new ::proto::MessageReflection(
           TableField_descriptor_,
           Schema::TableField::default_instance_,
-          PROTO_MESSAGE_FIELD_OFFSET(Schema::TableField, has_bits_))
-  );
+          TableField_offsets_,
+          PROTO_MESSAGE_FIELD_OFFSET(Schema::TableField, has_bits_));
   ::proto::MessageFactory::RegisterGeneratedMessage(TableField_reflection_);
 
   // static init for class TableSchema
@@ -69,27 +67,25 @@ void static_init_usr_local_google_home_hangyuan_Desktop_test_DBMS_src_Schema_DBT
     PROTO_MESSAGE_FIELD_OFFSET(Schema::TableSchema, fields_),
     PROTO_MESSAGE_FIELD_OFFSET(Schema::TableSchema, primary_key_indexes_),
   };
-  i = 0;
-  for (auto& field: parser.mutable_messages_list()[1]->mutable_fields_list()) {
-    field->set_field_offset(TableSchema_offsets_[i++]);
-  }
-  TableSchema_descriptor_ = parser.mutable_messages_list()[1];
-  TableSchema_reflection_.reset(
+  TableSchema_descriptor_ = file_dscpt->FindMessageTypeByName("Schema.TableSchema");
+  CHECK(TableSchema_descriptor_ != nullptr, 
+        "Can't find message descriptor for Schema.TableSchema");
+  TableSchema_reflection_ = 
       new ::proto::MessageReflection(
           TableSchema_descriptor_,
           Schema::TableSchema::default_instance_,
-          PROTO_MESSAGE_FIELD_OFFSET(Schema::TableSchema, has_bits_))
-  );
+          TableSchema_offsets_,
+          PROTO_MESSAGE_FIELD_OFFSET(Schema::TableSchema, has_bits_));
   ::proto::MessageFactory::RegisterGeneratedMessage(TableSchema_reflection_);
 
 }
 
-// Force static_init_usr_local_google_home_hangyuan_Desktop_test_DBMS_src_Schema_DBTable() to be called at initialization time.
-struct static_init_forcer_usr_local_google_home_hangyuan_Desktop_test_DBMS_src_Schema_DBTable {
-  static_init_forcer_usr_local_google_home_hangyuan_Desktop_test_DBMS_src_Schema_DBTable() {
-    static_init_usr_local_google_home_hangyuan_Desktop_test_DBMS_src_Schema_DBTable();
+// Force static_init_home_hy_Desktop_Projects_DBMS_src_Schema_DBTable() to be called at initialization time.
+struct static_init_forcer_home_hy_Desktop_Projects_DBMS_src_Schema_DBTable {
+  static_init_forcer_home_hy_Desktop_Projects_DBMS_src_Schema_DBTable() {
+    static_init_home_hy_Desktop_Projects_DBMS_src_Schema_DBTable();
   }
-} static_init_forcer_usr_local_google_home_hangyuan_Desktop_test_DBMS_src_Schema_DBTable_obj_;
+} static_init_forcer_home_hy_Desktop_Projects_DBMS_src_Schema_DBTable_obj_;
 
 
 namespace Schema {
@@ -201,8 +197,8 @@ void TableField::Print(int indent_num) const {
   if (has_type()) {
     PrintIndent(indent_num + 1);
     std::string enum_value =
-        (reinterpret_cast<const proto::ProtoParser::EnumType*>(
-            TableField_descriptor_->FindFieldByName("type")->type_class()))
+        (reinterpret_cast<const proto::EnumDescriptor*>(
+            TableField_descriptor_->FindFieldByName("type")->type_descriptor()))
                  ->EnumValueAsString(type_);
     std::cout << "type: " << enum_value << std::endl;
   }
@@ -253,13 +249,21 @@ void TableField::Swap(TableField* other) {
 
 // default_instance()
 const TableField& TableField::default_instance() {
-  if (default_instance_ == NULL) {
-    static_init_default_instances_usr_local_google_home_hangyuan_Desktop_test_DBMS_src_Schema_DBTable();
+  if (default_instance_ == nullptr) {
+    static_init_default_instances_home_hy_Desktop_Projects_DBMS_src_Schema_DBTable();
   }
   return *default_instance_;
 }
 
-TableField* TableField::default_instance_ = NULL;
+TableField* TableField::default_instance_ = nullptr;
+
+const ::proto::MessageDescriptor* TableField::GetDescriptor() const {
+  return TableField_descriptor_;
+}
+
+const ::proto::MessageReflection* TableField::GetReflection() const {
+  return TableField_reflection_;
+}
 
 // destructor
 TableField::~TableField() {
@@ -510,13 +514,21 @@ void TableSchema::Swap(TableSchema* other) {
 
 // default_instance()
 const TableSchema& TableSchema::default_instance() {
-  if (default_instance_ == NULL) {
-    static_init_default_instances_usr_local_google_home_hangyuan_Desktop_test_DBMS_src_Schema_DBTable();
+  if (default_instance_ == nullptr) {
+    static_init_default_instances_home_hy_Desktop_Projects_DBMS_src_Schema_DBTable();
   }
   return *default_instance_;
 }
 
-TableSchema* TableSchema::default_instance_ = NULL;
+TableSchema* TableSchema::default_instance_ = nullptr;
+
+const ::proto::MessageDescriptor* TableSchema::GetDescriptor() const {
+  return TableSchema_descriptor_;
+}
+
+const ::proto::MessageReflection* TableSchema::GetReflection() const {
+  return TableSchema_reflection_;
+}
 
 // destructor
 TableSchema::~TableSchema() {

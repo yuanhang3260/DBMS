@@ -14,7 +14,7 @@ namespace Schema {
 
 // **************************** PageLoadedRecord **************************** //
 bool PageLoadedRecord::GenerateRecordPrototype(
-         const TableSchema* schema,
+         const TableSchema& schema,
          std::vector<int> key_indexes,
          DataBaseFiles::FileType file_type,
          DataBaseFiles::PageType page_type) {

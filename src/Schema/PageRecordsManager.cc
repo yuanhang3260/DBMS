@@ -12,20 +12,17 @@ namespace Schema {
 
 // ************************** PageRecordsManager **************************** //
 PageRecordsManager::PageRecordsManager(DataBaseFiles::RecordPage* page,
-                                       TableSchema* schema,
+                                       const TableSchema& schema,
                                        std::vector<int> key_indexes,
                                        DataBaseFiles::FileType file_type,
                                        DataBaseFiles::PageType page_type) :
     page_(page),
-    schema_(schema),
+    schema_(&schema),
     key_indexes_(key_indexes),
     file_type_(file_type),
     page_type_(page_type) {
   if (!page) {
     LogFATAL("Can't init PageRecordsManager with page nullptr");
-  }
-  if (!schema) {
-    LogFATAL("Can't init PageRecordsManager with schema nullptr");
   }
 
   if (!LoadRecordsFromPage()) {
@@ -66,14 +63,14 @@ bool PageRecordsManager::LoadRecordsFromPage() {
       continue;
     }
     plrecords_.push_back(PageLoadedRecord(slot_id));
-    plrecords_.back().GenerateRecordPrototype(schema_, key_indexes_,
+    plrecords_.back().GenerateRecordPrototype(*schema_, key_indexes_,
                                               file_type_, page_type_);
-    int load_size = plrecords_.back().record()->
+    int load_size = plrecords_.back().mutable_record()->
                         LoadFromMem(page_->Record(slot_id));
     if (load_size != length) {
       LogERROR("Error load slot %d from page %d - expect %d byte, actual %d ",
                page_->id(), slot_id, length, load_size);
-      plrecords_.back().record()->Print();
+      plrecords_.back().record().Print();
       return false;
     }
     total_size_ += load_size;
@@ -127,8 +124,8 @@ bool PageRecordsManager::CheckSort() const {
     const auto& r2 = plrecords_.at(i + 1);
     for (int index: check_indexes) {
       int re = RecordBase::CompareSchemaFields(
-                   (r1.record()->fields())[index].get(),
-                   (r2.record()->fields())[index].get());
+                   r1.record().fields().at(index).get(),
+                   r2.record().fields().at(index).get());
       if (re > 0) {
         return false;
       }
@@ -149,13 +146,13 @@ int PageRecordsManager::AppendRecordAndSplitPage(RecordBase* record) {
   int acc_size = 0;
   int i = 0;
   for (; i < (int)plrecords_.size(); i++) {
-    acc_size += plrecords_.at(i).record()->size();
+    acc_size += plrecords_.at(i).record().size();
     if (acc_size > total_size_ / 2) {
       break;
     }
   }
   if (acc_size - total_size_ / 2 >
-      total_size_ / 2 - acc_size + (int)plrecords_.at(i).record()->size()) {
+      total_size_ / 2 - acc_size + (int)plrecords_.at(i).record().size()) {
     i--;
   }
   return i + 1;
@@ -165,7 +162,7 @@ RecordBase* PageRecordsManager::Record(int index) const {
   if (index >= (int)plrecords_.size()) {
     return nullptr;
   }
-  return plrecords_.at(index).record();
+  return plrecords_.at(index).mutable_record();
 }
 
 std::shared_ptr<RecordBase> PageRecordsManager::Shared_Record(int index) {

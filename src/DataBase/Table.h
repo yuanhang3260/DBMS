@@ -24,7 +24,8 @@ class Table {
 
   DEFINE_ACCESSOR(name, std::string);
   DEFINE_ACCESSOR(idata_indexes, std::vector<int>);
-  DEFINE_ACCESSOR_SMART_PTR(schema, Schema::TableSchema);
+
+  const Schema::TableSchema& schema() const { return schema_; }
 
   std::string BplusTreeFileName(DataBaseFiles::FileType file_type,
                                 std::vector<int> key_indexes);
@@ -70,7 +71,7 @@ class Table {
   };
 
   std::string name_;
-  std::unique_ptr<Schema::TableSchema> schema_;
+  Schema::TableSchema schema_;
 
   // indexes of INDEX_DATA file.
   std::vector<int> idata_indexes_;

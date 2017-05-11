@@ -19,7 +19,7 @@ class BplusTreeTest: public UnitTest {
  private:
   std::string tablename = "testTable";
   std::vector<int> key_indexes;
-  Schema::TableSchema* schema = nullptr;
+  Schema::TableSchema schema;
   DataBase::Table* table;
   std::map<int, std::shared_ptr<Schema::DataRecord>> record_resource;
   const int kNumRecordsSource = 1000;
@@ -27,43 +27,42 @@ class BplusTreeTest: public UnitTest {
  public:
   void InitSchema() {
     // Create a table schema.
-    schema = new Schema::TableSchema();
-    schema->set_name(tablename);
+    schema.set_name(tablename);
     // Add string type
-    Schema::TableField* field = schema->add_fields();
+    Schema::TableField* field = schema.add_fields();
     field->set_name("name");
     field->set_index(0);
     field->set_type(Schema::TableField::STRING);
     // Add int type
-    field = schema->add_fields();
+    field = schema.add_fields();
     field->set_name("age");
     field->set_index(1);
     field->set_type(Schema::TableField::INTEGER);
     // Add long int type
-    field = schema->add_fields();
+    field = schema.add_fields();
     field->set_name("id");
     field->set_index(2);  // primary key
     field->set_type(Schema::TableField::LLONG);
     // Add double type
-    field = schema->add_fields();
+    field = schema.add_fields();
     field->set_name("weight");
     field->set_index(3);
     field->set_type(Schema::TableField::DOUBLE);
     // Add bool type
-    field = schema->add_fields();
+    field = schema.add_fields();
     field->set_name("adult");
     field->set_index(4);
     field->set_type(Schema::TableField::BOOL);
     // Add char array type
-    field = schema->add_fields();
+    field = schema.add_fields();
     field->set_name("signature");
     field->set_index(5);
     field->set_type(Schema::TableField::CHARARR);
     field->set_size(20);
 
-    schema->add_primary_key_indexes(2);
+    schema.add_primary_key_indexes(2);
     // Create key_indexes.
-    for (auto i: schema->primary_key_indexes()) {
+    for (auto i: schema.primary_key_indexes()) {
       key_indexes.push_back(i);
     }
   }
@@ -142,9 +141,6 @@ class BplusTreeTest: public UnitTest {
   }
 
   void teardown() override {
-    if (schema) {
-      delete schema;
-    }
     if (table) {
       delete table;
     }
@@ -152,7 +148,7 @@ class BplusTreeTest: public UnitTest {
 
   bool CreateSchemaFile(std::string tablename) {
     // Serialize the schema message and write to schema file
-    ::proto::SerializedMessage* sdmsg = schema->Serialize();
+    ::proto::SerializedMessage* sdmsg = schema.Serialize();
     const char* obj_data = sdmsg->GetBytes();
 
     std::string schema_filename = kDataDirectory + tablename + ".schema.pb";
@@ -223,7 +219,7 @@ class BplusTreeTest: public UnitTest {
     table->PreLoadData(v);
 
     auto file_type = INDEX;
-    for (const auto& field: schema->fields()) {
+    for (const auto& field: schema.fields()) {
       auto key_index = std::vector<int>{field.index()};
       file_type = table->IsDataFileKey(key_index[0]) ? INDEX_DATA : INDEX;
       auto tree = table->Tree(file_type, key_index);
@@ -681,7 +677,7 @@ class BplusTreeTest: public UnitTest {
 
     // Consistency check of all B+ trees.
     auto file_type = INDEX;
-    for (const auto& field: schema->fields()) {
+    for (const auto& field: schema.fields()) {
       auto key_index = std::vector<int>{field.index()};
       file_type = table->IsDataFileKey(key_index[0]) ? INDEX_DATA : INDEX;
       auto tree = table->Tree(file_type, key_index);
@@ -757,7 +753,7 @@ class BplusTreeTest: public UnitTest {
     AssertTrue(table->ValidateAllIndexRecords(-1));
 
     // Consistency check of all B+ trees.
-    for (const auto& field: schema->fields()) {
+    for (const auto& field: schema.fields()) {
       auto key_index = std::vector<int>{field.index()};
       file_type = table->IsDataFileKey(key_index[0]) ? INDEX_DATA : INDEX;
       auto tree = table->Tree(file_type, key_index);
@@ -775,12 +771,11 @@ class BplusTreeTest: public UnitTest {
     InitRecordResource();  // Create a new set of record resource.
 
     auto delete_ages = Utils::RandomListFromRange(0, 100);
-    std::sort(delete_ages.begin(), delete_ages.end());
+    //std::sort(delete_ages.begin(), delete_ages.end());
     int start = 0;
     while (start < 100) {
       int group_len = Utils::RandomNumber(5) + 1;
       group_len = start + group_len >= 100 ? (100 - start) : group_len;
-      //group_len = 1;
       // Generate delete operator, delete ages from index [start, start + len].
       DataBase::DeleteOp op;
       //LogERROR("start = %d, end = %d", start, start + group_len - 1);
@@ -812,7 +807,7 @@ class BplusTreeTest: public UnitTest {
       AssertTrue(table->ValidateAllIndexRecords(-1));
 
       // Consistency check of all B+ trees.
-      for (const auto& field: schema->fields()) {
+      for (const auto& field: schema.fields()) {
         auto key_index = std::vector<int>{field.index()};
         FileType file_type =
             table->IsDataFileKey(key_index[0]) ? INDEX_DATA : INDEX;

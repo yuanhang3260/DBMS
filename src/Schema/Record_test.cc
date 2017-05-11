@@ -271,7 +271,7 @@ class RecordTest: public UnitTest {
     // Create a record page.
     DataBaseFiles::RecordPage page(1);
     page.InitInMemoryPage();
-    PageRecordsManager prmanager(&page, &schema, key_indexes,
+    PageRecordsManager prmanager(&page, schema, key_indexes,
                                  DataBaseFiles::INDEX_DATA,
                                  DataBaseFiles::TREE_LEAVE);
 
@@ -308,9 +308,9 @@ class RecordTest: public UnitTest {
       for (const auto& plrecord: all_records) {
         // Verify content of records.
         int index = reinterpret_cast<LongIntType*>(
-                        plrecord.record()->fields()[2].get())
+                        plrecord.record().fields()[2].get())
                             ->value();
-        AssertTrue(*(plrecord.record()) ==
+        AssertTrue(plrecord.record() ==
                    *reinterpret_cast<RecordBase*>(
                         record_resource.at(index).get()));
         //plrecord.Print();

@@ -78,7 +78,7 @@ class BplusTree {
   DEFINE_ACCESSOR_ENUM(file_type, FileType);
   BplusTreeHeaderPage* meta() { return header_.get(); }
   RecordPage* root();
-  Schema::TableSchema* schema() const;
+  const Schema::TableSchema& schema() const;
 
   // Load B+ tree from file.
   bool LoadTree();

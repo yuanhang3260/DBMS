@@ -44,24 +44,19 @@ bool Table::LoadSchema() {
   }
   fclose(file);
   // Parse TableSchema proto data.
-  schema_.reset(new Schema::TableSchema());
-  schema_->DeSerialize(buf, size);
+  schema_.DeSerialize(buf, size);
   return true;
 }
 
 bool Table::BuildFieldIndexMap() {
-  if (!schema_) {
-    return false;
-  }
-
   // Build field name --> field index map.
-  for (auto& field: schema_->fields()) {
+  for (auto& field: schema_.fields()) {
     field_index_map_[field.name()] = field.index();
   }
 
   // Determine the indexes of INDEX_DATA file. If primary key is specified in 
   // schema, use primary keys. If not, use index 0.
-  for (auto index: schema_->primary_key_indexes()) {
+  for (auto index: schema_.primary_key_indexes()) {
     idata_indexes_.push_back(index);
   }
   if (idata_indexes_.empty()) {
@@ -137,7 +132,7 @@ bool Table::InitTrees() {
   tree->SaveToDisk();
 
   // Index trees.
-  for (auto field: schema_->fields()) {
+  for (auto field: schema_.fields()) {
     auto key_index = std::vector<int>{field.index()};
     if (IsDataFileKey(key_index[0])) {
       continue;
@@ -174,7 +169,7 @@ bool Table::PreLoadData(
 
   std::vector<Schema::DataRecordWithRid> record_rids;
   for (auto& record: records) {
-    if (!record->CheckFieldsType(schema_.get())) {
+    if (!record->CheckFieldsType(schema_)) {
       return false;
     }
     if (!tree->BulkLoadRecord(record.get())) {
@@ -206,7 +201,7 @@ bool Table::PreLoadData(
   tree->SaveToDisk();
 
   // Generate Index B+ tree files.
-  for (auto field: schema_->fields()) {
+  for (auto field: schema_.fields()) {
     auto key_index = std::vector<int>{field.index()};
     if (IsDataFileKey(key_index[0])) {
       continue;
@@ -243,11 +238,11 @@ bool Table::ValidateAllIndexRecords(int num_records) {
   CheckLogFATAL(data_tree, "Can't find data B+ tree");
 
   Schema::DataRecord drecord;
-  drecord.InitRecordFields(schema_.get(), std::vector<int>{0},
+  drecord.InitRecordFields(schema_, std::vector<int>{0},
                            DataBaseFiles::INDEX_DATA,
                            DataBaseFiles::TREE_LEAVE);
 
-  for (auto field: schema_->fields()) {
+  for (auto field: schema_.fields()) {
     auto key_index = std::vector<int>{field.index()};
     if (IsDataFileKey(key_index[0])) {
       continue;
@@ -266,7 +261,7 @@ bool Table::ValidateAllIndexRecords(int num_records) {
 
     // An IndexRecord instance to load index records from tree leaves.
     Schema::IndexRecord irecord;
-    irecord.InitRecordFields(schema_.get(), key_index,
+    irecord.InitRecordFields(schema_, key_index,
                                DataBaseFiles::INDEX,
                                DataBaseFiles::TREE_LEAVE);
 
@@ -319,7 +314,7 @@ bool Table::UpdateIndexTrees(
     return true;
   }
 
-  for (auto field: schema_->fields()) {
+  for (auto field: schema_.fields()) {
     auto key_index = std::vector<int>{field.index()};
     if (IsDataFileKey(key_index[0])) {
       continue;
@@ -369,7 +364,7 @@ bool Table::InsertRecord(const Schema::RecordBase* record) {
 
   // Insert IndexRecord of the new record to index files.
   rid_mutations.clear();
-  for (auto field: schema_->fields()) {
+  for (auto field: schema_.fields()) {
     auto key_index = std::vector<int>{field.index()};
     if (IsDataFileKey(key_index[0])) {
       continue;
@@ -391,9 +386,9 @@ bool Table::InsertRecord(const Schema::RecordBase* record) {
 }
 
 int Table::DeleteRecord(const DeleteOp& op) {
-  if (op.key_index < 0 || op.key_index >= schema_->fields_size()) {
+  if (op.key_index < 0 || op.key_index >= schema_.fields_size()) {
     LogERROR("Invalid key_index %d for DeleteOp, expect in [%d, %d]",
-             op.key_index, 0, schema_->fields_size() - 1);
+             op.key_index, 0, schema_.fields_size() - 1);
     return -1;
   }
 
@@ -434,7 +429,7 @@ int Table::DeleteRecord(const DeleteOp& op) {
 
     // Update and delete index records in all index trees.
     printf("Begin updating index trees\n");
-    for (auto field: schema_->fields()) {
+    for (auto field: schema_.fields()) {
       auto key_index = std::vector<int>{field.index()};
       if (IsDataFileKey(key_index[0])) {
         continue;

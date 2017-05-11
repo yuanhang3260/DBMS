@@ -5,11 +5,12 @@
 #include <vector>
 
 #include "Proto/Message.h"
+#include "Proto/Descriptor.h"
 #include "Proto/RepeatedFields.h"
 #include "Proto/SerializedMessage.h"
 
-void static_init_usr_local_google_home_hangyuan_Desktop_test_DBMS_src_Schema_DBTable();
-void static_init_default_instances_usr_local_google_home_hangyuan_Desktop_test_DBMS_src_Schema_DBTable();
+void static_init_home_hy_Desktop_Projects_DBMS_src_Schema_DBTable();
+void static_init_default_instances_home_hy_Desktop_Projects_DBMS_src_Schema_DBTable();
 
 namespace Schema {
 
@@ -40,6 +41,8 @@ class TableField: public ::proto::Message {
   ::proto::SerializedMessage* Serialize() const override;
   void DeSerialize(const char* buf, unsigned int size) override;
   static const TableField& default_instance();
+  const ::proto::MessageDescriptor* GetDescriptor() const override;
+  const ::proto::MessageReflection* GetReflection() const override;
   void Print(int indent_num=0) const override;
 
   // --- Field accessors --- //
@@ -85,8 +88,8 @@ class TableField: public ::proto::Message {
   // default instance
   static TableField* default_instance_;
 
-  friend void ::static_init_usr_local_google_home_hangyuan_Desktop_test_DBMS_src_Schema_DBTable();
-  friend void ::static_init_default_instances_usr_local_google_home_hangyuan_Desktop_test_DBMS_src_Schema_DBTable();
+  friend void ::static_init_home_hy_Desktop_Projects_DBMS_src_Schema_DBTable();
+  friend void ::static_init_default_instances_home_hy_Desktop_Projects_DBMS_src_Schema_DBTable();
 };
 
 class TableSchema: public ::proto::Message {
@@ -107,6 +110,8 @@ class TableSchema: public ::proto::Message {
   ::proto::SerializedMessage* Serialize() const override;
   void DeSerialize(const char* buf, unsigned int size) override;
   static const TableSchema& default_instance();
+  const ::proto::MessageDescriptor* GetDescriptor() const override;
+  const ::proto::MessageReflection* GetReflection() const override;
   void Print(int indent_num=0) const override;
 
   // --- Field accessors --- //
@@ -151,8 +156,8 @@ class TableSchema: public ::proto::Message {
   // default instance
   static TableSchema* default_instance_;
 
-  friend void ::static_init_usr_local_google_home_hangyuan_Desktop_test_DBMS_src_Schema_DBTable();
-  friend void ::static_init_default_instances_usr_local_google_home_hangyuan_Desktop_test_DBMS_src_Schema_DBTable();
+  friend void ::static_init_home_hy_Desktop_Projects_DBMS_src_Schema_DBTable();
+  friend void ::static_init_default_instances_home_hy_Desktop_Projects_DBMS_src_Schema_DBTable();
 };
 
 }  // namespace Schema

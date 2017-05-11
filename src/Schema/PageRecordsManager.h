@@ -16,13 +16,13 @@ namespace Schema {
 class PageRecordsManager {
  public:
   PageRecordsManager(DataBaseFiles::RecordPage* page,
-                     TableSchema* schema,
+                     const TableSchema& schema,
                      std::vector<int> key_indexes,
                      DataBaseFiles::FileType file_type,
                      DataBaseFiles::PageType page_type);
 
   // Accessors
-  DEFINE_ACCESSOR(schema, TableSchema*);
+  DEFINE_ACCESSOR(schema, const TableSchema*);
   DEFINE_ACCESSOR(key_indexes, std::vector<int>);
   DEFINE_ACCESSOR(page, DataBaseFiles::RecordPage*);
   DEFINE_ACCESSOR_ENUM(file_type, DataBaseFiles::FileType);
@@ -114,7 +114,7 @@ class PageRecordsManager {
   DataBaseFiles::RecordPage* page_ = nullptr;
 
   std::vector<PageLoadedRecord> plrecords_;
-  TableSchema* schema_ = nullptr;
+  const TableSchema* schema_ = nullptr;
   std::vector<int> key_indexes_;
 
   DataBaseFiles::FileType file_type_ = DataBaseFiles::UNKNOWN_FILETYPE;

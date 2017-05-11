@@ -5,9 +5,10 @@
 #include <algorithm>
 
 #include "Base/Utils.h"
-#include "Utility/Strings.h"
 #include "Base/Log.h"
 #include "Record.h"
+#include "Strings/Split.h"
+#include "Strings/Utils.h"
 
 namespace Schema {
 
@@ -287,7 +288,7 @@ void RecordBase::clear() {
   fields_.clear();
 }
 
-bool RecordBase::InitRecordFields(const TableSchema* schema,
+bool RecordBase::InitRecordFields(const TableSchema& schema,
                                   std::vector<int> key_indexes,
                                   DataBaseFiles::FileType file_type,
                                   DataBaseFiles::PageType page_type) {
@@ -295,14 +296,14 @@ bool RecordBase::InitRecordFields(const TableSchema* schema,
   if (file_type == DataBaseFiles::INDEX_DATA &&
       page_type == DataBaseFiles::TREE_LEAVE) {
     // DataRecord should contain all fields.
-    key_indexes.resize(schema->fields_size());
+    key_indexes.resize(schema.fields_size());
     for (int i = 0; i < (int)key_indexes.size(); i++) {
       key_indexes[i] = i;
     }
   }
   clear();
   for (int index: key_indexes) {
-    auto type = schema->fields(index).type();
+    auto type = schema.fields(index).type();
     if (type == TableField::INTEGER) {
       AddField(new IntType());
     }
@@ -319,19 +320,15 @@ bool RecordBase::InitRecordFields(const TableSchema* schema,
       AddField(new StringType());
     }
     if (type == TableField::CHARARR) {
-      AddField(new CharArrayType(schema->fields(index).size()));
+      AddField(new CharArrayType(schema.fields(index).size()));
     }
   }
   return true;
 }
 
 // Check fields type match a schema.
-bool RecordBase::CheckFieldsType(const TableSchema* schema,
+bool RecordBase::CheckFieldsType(const TableSchema& schema,
                                  std::vector<int> key_indexes) const {
-  if (!schema) {
-    LogERROR("schema is nullptr passed to CheckFieldsType");
-    return false;
-  }
   if (fields_.size() != key_indexes.size()) {
     LogERROR("Index/TreeNode record has mismatchig number of fields - "
              "key has %d indexes, record has %d",
@@ -340,7 +337,7 @@ bool RecordBase::CheckFieldsType(const TableSchema* schema,
   }
   for (int i = 0; i < (int)key_indexes.size(); i++) {
     if (!fields_[i] || !fields_[i]->MatchesSchemaType(
-                                      schema->fields(key_indexes[i]).type())) {
+                                      schema.fields(key_indexes[i]).type())) {
       LogERROR("Index/TreeNode record has mismatchig field type with schema "
                "field %d", key_indexes[i]);
       return false;
@@ -349,20 +346,16 @@ bool RecordBase::CheckFieldsType(const TableSchema* schema,
   return true;
 }
 
-bool RecordBase::CheckFieldsType(const TableSchema* schema) const {
-  if (!schema) {
-    LogERROR("schema is nullptr passed to CheckFieldsType");
-    return false;
-  }
-  if ((int)fields_.size() != schema->fields_size()) {
+bool RecordBase::CheckFieldsType(const TableSchema& schema) const {
+  if ((int)fields_.size() != schema.fields_size()) {
     LogERROR("Data record has mismatchig number of fields with schema - "
              "schema has %d indexes, record has %d",
-             schema->fields_size(), fields_.size());
+             schema.fields_size(), fields_.size());
     return false;
   }
-  for (int i = 0; i < (int)schema->fields_size(); i++) {
+  for (int i = 0; i < (int)schema.fields_size(); i++) {
     if (!fields_[i] || !fields_[i]->MatchesSchemaType(
-                                        schema->fields(i).type())) {
+                                        schema.fields(i).type())) {
       LogERROR("Data record has mismatchig field type with schema field %d", i);
       return false;
     }
@@ -371,19 +364,19 @@ bool RecordBase::CheckFieldsType(const TableSchema* schema) const {
 }
 
 bool RecordBase::ParseFromText(std::string str, int chararray_len_limit) {
-  auto tokens = StringUtils::Split(str, '|');
+  auto tokens = Strings::Split(str, '|');
   for (auto& block: tokens) {
-    block = StringUtils::Strip(block);
+    block = Strings::Strip(block);
     if (block.length() == 0) {
       continue;
     }
-    auto pieces = StringUtils::Split(block, ':');
+    auto pieces = Strings::Split(block, ':');
     if ((int)pieces.size() != 2) {
       continue;
     }
     for (int i = 0; i < (int)pieces.size(); i++) {
-      pieces[i] = StringUtils::Strip(pieces[i]);
-      pieces[i] = StringUtils::Strip(pieces[i], "\"\"");
+      pieces[i] = Strings::Strip(pieces[i]);
+      pieces[i] = Strings::Strip(pieces[i], "\"\"");
     }
     if (pieces[0] == "Int") {
       AddField(new IntType(std::stoi(pieces[1])));

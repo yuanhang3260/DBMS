@@ -299,7 +299,7 @@ RecordPage* BplusTree::root() {
   return nullptr;
 }
 
-Schema::TableSchema* BplusTree::schema() const {
+const Schema::TableSchema& BplusTree::schema() const {
   return table_->schema();
 }
 
@@ -1158,13 +1158,13 @@ std::shared_ptr<Schema::RecordBase> BplusTree::GetRecord(Schema::RecordID rid) {
   Schema::PageLoadedRecord plrecord(slot_id);
   plrecord.GenerateRecordPrototype(schema(), key_indexes_,
                                    file_type_, page->Meta()->page_type());
-  int load_size = plrecord.record()->LoadFromMem(page->Record(slot_id));
+  int load_size = plrecord.mutable_record()->LoadFromMem(page->Record(slot_id));
 
   int expect_len = page->RecordLength(slot_id);
   if (load_size != expect_len) {
     LogERROR("Error load slot %d from page %d - expect %d byte, actual %d ",
              page->id(), slot_id, expect_len, load_size);
-    plrecord.record()->Print();
+    plrecord.mutable_record()->Print();
     return std::shared_ptr<Schema::RecordBase>();
   }
   

@@ -31,7 +31,7 @@ class PageLoadedRecord {
   // Generate internal record type for this PageLoadedRecord. The internal
   // reocrd can be DataRecord, IndexRecord or TreeNodeRecord, depending on
   // the specified file_type and page_type.
-  bool GenerateRecordPrototype(const TableSchema* schema,
+  bool GenerateRecordPrototype(const TableSchema& schema,
                                std::vector<int> key_indexes,
                                DataBaseFiles::FileType file_type,
                                DataBaseFiles::PageType page_type);
