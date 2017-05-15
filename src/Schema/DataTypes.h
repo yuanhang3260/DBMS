@@ -13,37 +13,37 @@
 
 namespace Schema {
 
-class IntType: public SchemaFieldType {
+class IntField: public Field {
  public:
-  IntType() = default;
-  IntType(int value) : value_(value) {}
+  IntField() = default;
+  IntField(int value) : value_(value) {}
 
   DEFINE_ACCESSOR(value, int);
   FieldType type() const override { return INT; }
   int length() const override { return 4; }
 
   // Comparable
-  bool operator<(const IntType& other) const {
+  bool operator<(const IntField& other) const {
     return value_ < other.value();
   }
 
-  bool operator<=(const IntType& other) const {
+  bool operator<=(const IntField& other) const {
     return value_ <= other.value();
   }
 
-  bool operator>(const IntType& other) const {
+  bool operator>(const IntField& other) const {
     return value_ > other.value();
   }
 
-  bool operator>=(const IntType& other) const {
+  bool operator>=(const IntField& other) const {
     return value_ >= other.value();
   }
 
-  bool operator==(const IntType& other) const {
+  bool operator==(const IntField& other) const {
     return value_ == other.value();
   }
 
-  bool operator!=(const IntType& other) const {
+  bool operator!=(const IntField& other) const {
     return value_ != other.value();
   }
 
@@ -73,37 +73,37 @@ class IntType: public SchemaFieldType {
 };
 
 
-class LongIntType: public SchemaFieldType {
+class LongIntField: public Field {
  public:
-  LongIntType() = default;
-  LongIntType(int64 value) : value_(value) {}
+  LongIntField() = default;
+  LongIntField(int64 value) : value_(value) {}
 
   DEFINE_ACCESSOR(value, int64);
   FieldType type() const override { return LONGINT; }
   int length() const override { return 8; }
 
   // Comparable
-  bool operator<(const LongIntType& other) const {
+  bool operator<(const LongIntField& other) const {
     return value_ < other.value();
   }
 
-  bool operator<=(const LongIntType& other) const {
+  bool operator<=(const LongIntField& other) const {
     return value_ <= other.value();
   }
 
-  bool operator>(const LongIntType& other) const {
+  bool operator>(const LongIntField& other) const {
     return value_ > other.value();
   }
 
-  bool operator>=(const LongIntType& other) const {
+  bool operator>=(const LongIntField& other) const {
     return value_ >= other.value();
   }
 
-  bool operator==(const LongIntType& other) const {
+  bool operator==(const LongIntField& other) const {
     return value_ == other.value();
   }
 
-  bool operator!=(const LongIntType& other) const {
+  bool operator!=(const LongIntField& other) const {
     return value_ != other.value();
   }
 
@@ -133,37 +133,37 @@ class LongIntType: public SchemaFieldType {
 };
 
 
-class DoubleType: public SchemaFieldType {
+class DoubleField: public Field {
  public:
-  DoubleType() = default;
-  DoubleType(double value) : value_(value) {}
+  DoubleField() = default;
+  DoubleField(double value) : value_(value) {}
 
   DEFINE_ACCESSOR(value, double);
   FieldType type() const override { return DOUBLE; }
   int length() const override { return 8; }
 
   // Comparable
-  bool operator<(const DoubleType& other) const {
+  bool operator<(const DoubleField& other) const {
     return value_ < other.value();
   }
 
-  bool operator<=(const DoubleType& other) const {
+  bool operator<=(const DoubleField& other) const {
     return value_ <= other.value();
   }
 
-  bool operator>(const DoubleType& other) const {
+  bool operator>(const DoubleField& other) const {
     return value_ > other.value();
   }
 
-  bool operator>=(const DoubleType& other) const {
+  bool operator>=(const DoubleField& other) const {
     return value_ >= other.value();
   }
 
-  bool operator==(const DoubleType& other) const {
+  bool operator==(const DoubleField& other) const {
     return value_ == other.value();
   }
 
-  bool operator!=(const DoubleType& other) const {
+  bool operator!=(const DoubleField& other) const {
     return value_ != other.value();
   }
 
@@ -193,37 +193,37 @@ class DoubleType: public SchemaFieldType {
 };
 
 
-class BoolType: public SchemaFieldType {
+class BoolField: public Field {
  public:
-  BoolType() = default;
-  BoolType(bool value) : value_(value) {}
+  BoolField() = default;
+  BoolField(bool value) : value_(value) {}
 
   DEFINE_ACCESSOR(value, bool);
   FieldType type() const override { return BOOL; }
   int length() const override { return 1; }
 
   // Comparable
-  bool operator<(const BoolType& other) const {
+  bool operator<(const BoolField& other) const {
     return value_ < other.value();
   }
 
-  bool operator<=(const BoolType& other) const {
+  bool operator<=(const BoolField& other) const {
     return value_ <= other.value();
   }
 
-  bool operator>(const BoolType& other) const {
+  bool operator>(const BoolField& other) const {
     return value_ > other.value();
   }
 
-  bool operator>=(const BoolType& other) const {
+  bool operator>=(const BoolField& other) const {
     return value_ >= other.value();
   }
 
-  bool operator==(const BoolType& other) const {
+  bool operator==(const BoolField& other) const {
     return value_ == other.value();
   }
 
-  bool operator!=(const BoolType& other) const {
+  bool operator!=(const BoolField& other) const {
     return value_ != other.value();
   }
 
@@ -253,23 +253,23 @@ class BoolType: public SchemaFieldType {
 };
 
 
-class StringType: public SchemaFieldType {
+class StringField: public Field {
  public:
-  StringType() = default;
-  StringType(std::string str) : value_(str) {}
-  StringType(const char* buf, int size) : value_(buf, size) {}
+  StringField() = default;
+  StringField(const std::string& str) : value_(str) {}
+  StringField(const char* buf, int size) : value_(buf, size) {}
 
   DEFINE_ACCESSOR(value, std::string);
   FieldType type() const override { return STRING; }
   int length() const override { return value_.length() + 1; }
 
   // Comparable
-  bool operator<(const StringType& other) const;
-  bool operator<=(const StringType& other) const;
-  bool operator>(const StringType& other) const;
-  bool operator>=(const StringType& other) const;
-  bool operator==(const StringType& other) const;
-  bool operator!=(const StringType& other) const;
+  bool operator<(const StringField& other) const;
+  bool operator<=(const StringField& other) const;
+  bool operator>(const StringField& other) const;
+  bool operator>=(const StringField& other) const;
+  bool operator==(const StringField& other) const;
+  bool operator!=(const StringField& other) const;
 
   // Dump to memory
   int DumpToMem(byte* buf) const override;
@@ -284,13 +284,13 @@ class StringType: public SchemaFieldType {
 };
 
 
-class CharArrayType: public SchemaFieldType {
+class CharArrayField: public Field {
  public:
-  CharArrayType() = default;
-  CharArrayType(int lenlimit);
-  CharArrayType(std::string str, int lenlimit);
-  CharArrayType(const char* src, int length, int lenlimit);
-  ~CharArrayType();
+  CharArrayField() = default;
+  CharArrayField(int lenlimit);
+  CharArrayField(const std::string& str, int lenlimit);
+  CharArrayField(const char* src, int length, int lenlimit);
+  ~CharArrayField();
 
   bool SetData(const char* src, int length);
 
@@ -301,12 +301,12 @@ class CharArrayType: public SchemaFieldType {
   const char* value() { return value_; }
 
   // Comparable
-  bool operator<(const CharArrayType& other) const;
-  bool operator<=(const CharArrayType& other) const;
-  bool operator>(const CharArrayType& other) const;
-  bool operator>=(const CharArrayType& other) const;
-  bool operator==(const CharArrayType& other) const;
-  bool operator!=(const CharArrayType& other) const;
+  bool operator<(const CharArrayField& other) const;
+  bool operator<=(const CharArrayField& other) const;
+  bool operator>(const CharArrayField& other) const;
+  bool operator>=(const CharArrayField& other) const;
+  bool operator==(const CharArrayField& other) const;
+  bool operator!=(const CharArrayField& other) const;
 
   std::string AsString() const override { return std::string(value_, length_); }
 

@@ -6,16 +6,17 @@
 
 #include "Base/Utils.h"
 #include "Base/Log.h"
-#include "PageRecordsManager.h"
 
-namespace Schema {
+#include "Storage/PageRecordsManager.h"
+
+namespace Storage {
 
 // ************************** PageRecordsManager **************************** //
-PageRecordsManager::PageRecordsManager(DataBaseFiles::RecordPage* page,
-                                       const TableSchema& schema,
+PageRecordsManager::PageRecordsManager(RecordPage* page,
+                                       const Schema::TableSchema& schema,
                                        std::vector<int> key_indexes,
-                                       DataBaseFiles::FileType file_type,
-                                       DataBaseFiles::PageType page_type) :
+                                       FileType file_type,
+                                       PageType page_type) :
     page_(page),
     schema_(&schema),
     key_indexes_(key_indexes),
@@ -31,7 +32,7 @@ PageRecordsManager::PageRecordsManager(DataBaseFiles::RecordPage* page,
 }
 
 void PageRecordsManager::SortRecords(
-         std::vector<std::shared_ptr<Schema::RecordBase>>& records,
+         std::vector<std::shared_ptr<RecordBase>>& records,
          const std::vector<int>& key_indexes) {
   for (int i: key_indexes) {
     if (i >= records[0]->NumFields()) {
@@ -101,8 +102,8 @@ bool PageRecordsManager::InsertRecordToPage(const RecordBase* record) {
 
 std::vector<int> PageRecordsManager::ProduceIndexesToCompare() const {
   std::vector<int> indexes;
-  if (file_type_ == DataBaseFiles::INDEX_DATA &&
-      page_type_ == DataBaseFiles::TREE_LEAVE) {
+  if (file_type_ == INDEX_DATA &&
+      page_type_ == TREE_LEAVE) {
     indexes = key_indexes_;
   }
   else {
@@ -189,8 +190,8 @@ void PageRecordsManager::Print() const {
 
 int PageRecordsManager::CompareRecordWithKey(const RecordBase* key,
                                              const RecordBase* record) const {
-  if (page_type_ == DataBaseFiles::TREE_NODE ||
-      file_type_ == DataBaseFiles::INDEX) {
+  if (page_type_ == TREE_NODE ||
+      file_type_ == INDEX) {
     return RecordBase::CompareRecordsBasedOnIndex(key, record,
                                                   ProduceIndexesToCompare());
   }
@@ -317,7 +318,7 @@ HalfSplitResult HalfSplitRecordGroups(const std::vector<RecordGroup>* rgroups,
 void PageRecordsManager::GroupRecords(std::vector<RecordGroup>* rgroups) {
   // Tree node records are guaranteed different and each group contains exactly
   // one record.
-  if (page_->Meta()->page_type() == DataBaseFiles::TREE_NODE) {
+  if (page_->Meta()->page_type() == TREE_NODE) {
     for (int i = 0; i < (int)plrecords_.size(); i++) {
       rgroups->push_back(RecordGroup(i, 1, Record(i)->size()));
     }
@@ -349,7 +350,7 @@ void PageRecordsManager::GroupRecords(std::vector<RecordGroup>* rgroups) {
 std::vector<PageRecordsManager::SplitLeaveResults>
 PageRecordsManager::InsertRecordAndSplitPage(
     const RecordBase* record,
-    std::vector<Schema::DataRecordRidMutation>& rid_mutations) {
+    std::vector<DataRecordRidMutation>& rid_mutations) {
   // Insert new record to prmanager.
   std::vector<PageRecordsManager::SplitLeaveResults> result;
   if (!InsertNewRecord(record)) {
@@ -384,7 +385,7 @@ PageRecordsManager::InsertRecordAndSplitPage(
     }
 
     int new_record_page = -1;
-    auto page = tree_->AllocateNewPage(DataBaseFiles::TREE_LEAVE);
+    auto page = tree_->AllocateNewPage(TREE_LEAVE);
     // Allocate a new leave and insert right half records to it.
     for (int i = rgroups.at(re1.mid_index).start_index;
          i < (int)plrecords_.size();
@@ -398,7 +399,7 @@ PageRecordsManager::InsertRecordAndSplitPage(
       }
       else {
         page_->DeleteRecord(slot_id);
-        if (file_type_ == DataBaseFiles::INDEX_DATA) {
+        if (file_type_ == INDEX_DATA) {
           rid_mutations.emplace_back(Shared_Record(i),
                                      RecordID(page_->id(), slot_id),
                                      RecordID(page->id(), new_slot_id));
@@ -417,7 +418,7 @@ PageRecordsManager::InsertRecordAndSplitPage(
       }
     }
     if (new_record_page >= 0) {
-      DataBaseFiles::BplusTree::ConnectLeaves(page_, page);
+      BplusTree::ConnectLeaves(page_, page);
       result.emplace_back(page_);
       result[0].record = plrecords_[0].Record();
       result.emplace_back(page);
@@ -437,7 +438,7 @@ PageRecordsManager::InsertRecordAndSplitPage(
         if (slot_id < 0) {
           LogFATAL("Insert new record to first page's overflow page failed");
         }
-        DataBaseFiles::BplusTree::ConnectLeaves(of_page, page);
+        BplusTree::ConnectLeaves(of_page, page);
         result.emplace_back(page_);
         result[0].record = plrecords_[0].Record();
         result.emplace_back(page);
@@ -449,7 +450,7 @@ PageRecordsManager::InsertRecordAndSplitPage(
       else {
         auto group = rgroups.at(gindex);
         bool new_record_in_second_page = false;
-        auto page2 = tree_->AllocateNewPage(DataBaseFiles::TREE_LEAVE);
+        auto page2 = tree_->AllocateNewPage(TREE_LEAVE);
         auto tail_page = page2;
         int i = group.start_index;
         for (; i < group.start_index + group.num_records; i++) {
@@ -470,7 +471,7 @@ PageRecordsManager::InsertRecordAndSplitPage(
           }
           else {
             page_->DeleteRecord(slot_id);
-            if (file_type_ == DataBaseFiles::INDEX_DATA) {
+            if (file_type_ == INDEX_DATA) {
               rid_mutations.emplace_back(Shared_Record(i),
                                          RecordID(page_->id(), slot_id),
                                          RecordID(tail_page->id(),new_slot_id));
@@ -485,8 +486,8 @@ PageRecordsManager::InsertRecordAndSplitPage(
           rid = RecordID(page_->id(), slot_id);
         }
 
-        DataBaseFiles::BplusTree::ConnectLeaves(page_, page2);
-        DataBaseFiles::BplusTree::ConnectLeaves(tail_page, page);
+        BplusTree::ConnectLeaves(page_, page2);
+        BplusTree::ConnectLeaves(tail_page, page);
         result.emplace_back(page_);
         result[0].record = plrecords_[0].Record();
         result.emplace_back(page2);
@@ -506,7 +507,7 @@ PageRecordsManager::InsertRecordAndSplitPage(
     // Page 2 - Try inserting right half to it.
     auto group = rgroups.at(re1.mid_index);
     int index = group.start_index;
-    auto page2 = tree_->AllocateNewPage(DataBaseFiles::TREE_LEAVE);
+    auto page2 = tree_->AllocateNewPage(TREE_LEAVE);
     result.emplace_back(page2);
     result[1].record = plrecords_[index].Record();
 
@@ -529,7 +530,7 @@ PageRecordsManager::InsertRecordAndSplitPage(
       }
       else {
         page_->DeleteRecord(slot_id);
-        if (file_type_ == DataBaseFiles::INDEX_DATA) {
+        if (file_type_ == INDEX_DATA) {
           rid_mutations.emplace_back(Shared_Record(index),
                                      RecordID(page_->id(), slot_id),
                                      RecordID(tail_page->id(), new_slot_id));
@@ -561,7 +562,7 @@ PageRecordsManager::InsertRecordAndSplitPage(
           }
           else {
             page_->DeleteRecord(slot_id);
-            if (file_type_ == DataBaseFiles::INDEX_DATA) {
+            if (file_type_ == INDEX_DATA) {
               rid_mutations.emplace_back(Shared_Record(index),
                                          RecordID(page_->id(), slot_id),
                                          RecordID(page2->id(), new_slot_id));
@@ -572,9 +573,9 @@ PageRecordsManager::InsertRecordAndSplitPage(
     }
     // Page 3, maybe
     int page3_start_index = rgroups[gindex].start_index;
-    DataBaseFiles::RecordPage* page3 = nullptr;
+    RecordPage* page3 = nullptr;
     if (gindex < (int)rgroups.size()) {
-      page3 = tree_->AllocateNewPage(DataBaseFiles::TREE_LEAVE);
+      page3 = tree_->AllocateNewPage(TREE_LEAVE);
       for (; index < (int)plrecords_.size(); index++) {
         int new_slot_id = Record(index)->InsertToRecordPage(page3);
         if (new_slot_id < 0) {
@@ -587,7 +588,7 @@ PageRecordsManager::InsertRecordAndSplitPage(
         }
         else {
           page_->DeleteRecord(slot_id);
-          if (file_type_ == DataBaseFiles::INDEX_DATA) {
+          if (file_type_ == INDEX_DATA) {
             rid_mutations.emplace_back(Shared_Record(index),
                                        RecordID(page_->id(), slot_id),
                                        RecordID(page3->id(), new_slot_id));
@@ -604,9 +605,9 @@ PageRecordsManager::InsertRecordAndSplitPage(
       rid = RecordID(page_->id(), slot_id);
     }
     // Return result
-    DataBaseFiles::BplusTree::ConnectLeaves(page_, page2);
+    BplusTree::ConnectLeaves(page_, page2);
     if (page3) {
-      DataBaseFiles::BplusTree::ConnectLeaves(tail_page, page3);
+      BplusTree::ConnectLeaves(tail_page, page3);
       result.emplace_back(page3);
       result[2].record = plrecords_[page3_start_index].Record();
     }
@@ -617,8 +618,8 @@ PageRecordsManager::InsertRecordAndSplitPage(
 }
 
 bool PageRecordsManager::UpdateRecordID(int slot_id, const RecordID& rid) {
-  if (file_type_ != DataBaseFiles::INDEX ||
-      page_->Meta()->page_type() != DataBaseFiles::TREE_LEAVE) {
+  if (file_type_ != INDEX ||
+      page_->Meta()->page_type() != TREE_LEAVE) {
     LogERROR("Can't update rid on page type other than (index_data, leave)");
     return false;
   }

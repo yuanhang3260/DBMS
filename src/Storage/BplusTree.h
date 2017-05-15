@@ -1,17 +1,17 @@
 #ifndef STORAGE_BPLUS_TREE_
 #define STORAGE_BPLUS_TREE_
 
-#include <memory>
 #include <map>
+#include <memory>
 #include <queue>
 
-#include "Schema/Record.h"
-#include "Schema/DBTable_pb.h"
-#include "Schema/PageRecord_Common.h"
 #include "DataBase/Table.h"
 #include "DataBase/Operation.h"
-#include "PageBase.h"
-#include "RecordPage.h"
+#include "Schema/DBTable_pb.h"
+#include "Storage/Record.h"
+#include "Storage/PageRecord_Common.h"
+#include "Storage/PageBase.h"
+#include "Storage/RecordPage.h"
 
 namespace Schema {
   class PageRecordsManager;
@@ -21,7 +21,7 @@ namespace DataBase {
   class Table;
 }
 
-namespace DataBaseFiles {
+namespace Storage {
 
 class BplusTreeTest;
 
@@ -96,7 +96,7 @@ class BplusTree {
   // Fetch a page, either from page map or load it from disk.
   RecordPage* Page(int page_id);
 
-  byte* Record(Schema::RecordID rid);
+  byte* Record(RecordID rid);
 
   // Produce indexes to compare records. For INDEX-DATA file, they are key
   // indexes; For INDEX file, they are [0, 1, 2 ... (num_keys-1)]
@@ -105,30 +105,30 @@ class BplusTree {
   // BulkLoading data. Input is a list of Record consisting of various fields
   // defined in Schema/DataTypes. These records must have been sorted based
   // on a key which consists of fields from Record speficed from key_indexes.
-  bool BulkLoad(std::vector<std::shared_ptr<Schema::RecordBase>>& records);
-  bool BulkLoadRecord(Schema::RecordBase* record);
+  bool BulkLoad(std::vector<std::shared_ptr<RecordBase>>& records);
+  bool BulkLoadRecord(RecordBase* record);
 
   // Validity check for the B+ tree.
   bool ValidityCheck();
 
   // Fetch record from tree given record ID.
-  std::shared_ptr<Schema::RecordBase> GetRecord(Schema::RecordID rid);
+  std::shared_ptr<RecordBase> GetRecord(RecordID rid);
 
   // Serach records by a key. Returns all records that matches this key.
-  int SearchRecords(const Schema::RecordBase* key,
-                    std::vector<std::shared_ptr<Schema::RecordBase>>* result);
+  int SearchRecords(const RecordBase* key,
+                    std::vector<std::shared_ptr<RecordBase>>* result);
 
   // Search a key and return the leave.
-  RecordPage* SearchByKey(const Schema::RecordBase* key);
+  RecordPage* SearchByKey(const RecordBase* key);
 
   // Insert a data record to the B+ tree.
-  Schema::RecordID Do_InsertRecord(
-           const Schema::RecordBase* record,
-           std::vector<Schema::DataRecordRidMutation>& rid_mutations);
+  RecordID Do_InsertRecord(
+           const RecordBase* record,
+           std::vector<DataRecordRidMutation>& rid_mutations);
 
   // Delete records by key.
   bool Do_DeleteRecordByKey(
-           const std::vector<std::shared_ptr<Schema::RecordBase>>& keys,
+           const std::vector<std::shared_ptr<RecordBase>>& keys,
            DataBase::DeleteResult* result);
 
   // Delete records by Record ID - This is used in deleting data records after
@@ -141,7 +141,7 @@ class BplusTree {
   // Update/Delete index records for an index tree, after data tree has been
   // modified (delete or insert records).
   bool UpdateIndexRecords(
-           std::vector<Schema::DataRecordRidMutation>& rid_mutations);
+           std::vector<DataRecordRidMutation>& rid_mutations);
 
   // Allocate a new page in bulkloading.
   RecordPage* AllocateNewPage(PageType page_type);
@@ -170,24 +170,24 @@ class BplusTree {
   // Load root node from disk.
   bool LoadRootNode();
   // Load table schema from schema file, which is a serialized protocal buffer
-  // raw file. It saves message TableSchema defined in Schema/DBTable.proto.
+  // raw file. It saves message Schema::TableSchema defined in Schema/DBTable.proto.
   bool LoadSchema();
 
   // Verify an empty tree.
   bool VerifyEmptyTree() const;
 
   // Insert a record to a leave node.
-  bool InsertRecordToLeave(const Schema::DataRecord* record);
+  bool InsertRecordToLeave(const DataRecord* record);
   // Add first leave to empty tree.
   bool AddFirstLeaveToTree(RecordPage* leave);
   // Insert a page to a parent node.
-  bool AddLeaveToTree(RecordPage* leave, Schema::TreeNodeRecord* tn_record);
+  bool AddLeaveToTree(RecordPage* leave, TreeNodeRecord* tn_record);
   // Insert a new TreeNodeRecord to tree node page.
-  bool InsertTreeNodeRecord(Schema::TreeNodeRecord* tn_record,
+  bool InsertTreeNodeRecord(TreeNodeRecord* tn_record,
                             RecordPage* tn_page);
 
   bool BlukLoadInsertRecordToLeave(RecordPage* leave,
-                                   Schema::RecordBase* record);
+                                   RecordBase* record);
 
   // Delete a node from the B+ tree.
   bool DeleteNodeFromTree(RecordPage* page, int slot_id_in_parent);
@@ -216,7 +216,7 @@ class BplusTree {
   // by its parent (which is 5), where the range is [1, 5). It can easily
   // happen in bulkloading. We need to move all 5 in leave N to leave N + 1
   // before the first 5 is inserted into leave N + 1.
-  bool CheckBoundaryDuplication(Schema::RecordBase* record);
+  bool CheckBoundaryDuplication(RecordBase* record);
 
   // Save page to disk and de-cache it from page map.
   bool CheckoutPage(int page_id, bool write_to_disk=true);
@@ -227,8 +227,8 @@ class BplusTree {
   bool CheckTreeNodeValid(RecordPage* page);
   // Verify a child node records are within range given from parent node.
   bool VerifyChildRecordsRange(RecordPage* child_page,
-                               Schema::RecordBase* left_bound,
-                               Schema::RecordBase* right_bound);
+                               RecordBase* left_bound,
+                               RecordBase* right_bound);
   // Enqueue children tree nodes, used in level-traversing B+ tree.
   bool EqueueChildNodes(RecordPage* page, std::queue<RecordPage*>* page_q);
 
@@ -239,7 +239,7 @@ class BplusTree {
   bool VerifyOverflowPage(RecordPage* page);
 
   // Verify a record in B+ tree is same as the given record.
-  bool VerifyRecord(const Schema::RecordID& rid, const Schema::RecordBase* r);
+  bool VerifyRecord(const RecordID& rid, const RecordBase* r);
 
   // Parse page_id / RecordID at the end of a record.
   template<class T>
@@ -256,39 +256,39 @@ class BplusTree {
    public:
     int slot = -1;
     int child_id = -1;
-    std::shared_ptr<Schema::RecordBase> record;
+    std::shared_ptr<RecordBase> record;
 
     int next_slot = -1;
     int next_child_id = -1;
-    std::shared_ptr<Schema::RecordBase> next_record;
+    std::shared_ptr<RecordBase> next_record;
     int next_leave_id = -1;
 
     int prev_slot = -1;
     int prev_child_id = -1;
-    std::shared_ptr<Schema::RecordBase> prev_record;
+    std::shared_ptr<RecordBase> prev_record;
     int prev_leave_id = -1;    
   };
 
   // Search for a key in the page and returns next level page this key
   // should reside in.
   SearchTreeNodeResult SearchInTreeNode(RecordPage* page,
-                                        const Schema::RecordBase* key);
+                                        const RecordBase* key);
 
   SearchTreeNodeResult LookUpTreeNodeInfoForPage(RecordPage* page);
 
   // Fetch all matching records from BB+ tree.
   int FetchResultsFromLeave(
           RecordPage* leave,
-          const Schema::RecordBase* key,
-          std::vector<std::shared_ptr<Schema::RecordBase>>* result);
+          const RecordBase* key,
+          std::vector<std::shared_ptr<RecordBase>>* result);
 
   int DeleteMatchedRecordsFromLeave(
          RecordPage* leave,
-         const Schema::RecordBase* key,
+         const RecordBase* key,
          DataBase::DeleteResult* result);
 
-  bool CheckKeyFieldsType(const Schema::RecordBase* key) const;
-  bool CheckRecordFieldsType(const Schema::RecordBase* record) const;
+  bool CheckKeyFieldsType(const RecordBase* key) const;
+  bool CheckRecordFieldsType(const RecordBase* record) const;
 
   // Create a new leave in bulk loading.
   RecordPage* AppendNewLeave();
@@ -296,55 +296,55 @@ class BplusTree {
   RecordPage* AppendNewOverflowLeave();
 
   bool ProduceKeyRecordFromNodeRecord(
-        const Schema::RecordBase* leave_record, Schema::RecordBase* tn_record);
+        const RecordBase* leave_record, RecordBase* tn_record);
 
   // Redistribute records with next leave.
-  Schema::RecordID ReDistributeToNextLeave(
+  RecordID ReDistributeToNextLeave(
            RecordPage* leave,
            SearchTreeNodeResult* search_result,
-           const Schema::RecordBase* record,
-           std::vector<Schema::DataRecordRidMutation>& rid_mutations);
+           const RecordBase* record,
+           std::vector<DataRecordRidMutation>& rid_mutations);
 
   // Incurring overflow page when inserting new record.
-  Schema::RecordID InsertAfterOverflowLeave(
+  RecordID InsertAfterOverflowLeave(
            RecordPage* leave,
            SearchTreeNodeResult* search_result,
-           const Schema::RecordBase* record,
-           std::vector<Schema::DataRecordRidMutation>& rid_mutations);
+           const RecordBase* record,
+           std::vector<DataRecordRidMutation>& rid_mutations);
   // Insert record to next leave.
-  Schema::RecordID InsertNewRecordToNextLeave(RecordPage* leave,
+  RecordID InsertNewRecordToNextLeave(RecordPage* leave,
                                   SearchTreeNodeResult* search_result,
-                                  const Schema::RecordBase* record);
+                                  const RecordBase* record);
 
   // Re-distribute records from next leave.
   bool ReDistributeRecordsWithinTwoPages(
            RecordPage* page1, RecordPage* page2, int page2_slot_id_in_parent,
-           std::vector<Schema::DataRecordRidMutation>* rid_mutations,
+           std::vector<DataRecordRidMutation>* rid_mutations,
            bool force_redistribute=false);
 
   // Merge two nodes.
   bool MergeTwoNodes(RecordPage* page1, RecordPage* page2,
                      int page2_slot_id_in_parent,
-                     std::vector<Schema::DataRecordRidMutation>* rid_mutations);
+                     std::vector<DataRecordRidMutation>* rid_mutations);
 
   // Insert a new record to leave which will split the leave.
-  Schema::RecordID InsertNewRecordToLeaveWithSplit(
+  RecordID InsertNewRecordToLeaveWithSplit(
            RecordPage* leave,
            int next_leave_id,
-           const Schema::RecordBase* record,
-           std::vector<Schema::DataRecordRidMutation>& rid_mutations);
+           const RecordBase* record,
+           std::vector<DataRecordRidMutation>& rid_mutations);
 
   // Go to last overflow page of an overflow chain.
   RecordPage* GotoOverflowChainEnd(RecordPage* leave);
 
   // Insert a new record to the end of a overflow chain of leaves.
-  Schema::RecordID InsertNewRecordToOverFlowChain(
-           RecordPage* leave, const Schema::RecordBase* record);
+  RecordID InsertNewRecordToOverFlowChain(
+           RecordPage* leave, const RecordBase* record);
 
   // Create a new leave with a new record inserted.
   RecordPage* CreateNewLeaveWithRecord(
-      const Schema::RecordBase* record,
-      Schema::TreeNodeRecord* tn_record=nullptr);
+      const RecordBase* record,
+      TreeNodeRecord* tn_record=nullptr);
 
   FILE* file_ = nullptr;
 
@@ -372,8 +372,8 @@ class BplusTree {
    public:
     RecordPage* crt_leave = nullptr;
     RecordPage* prev_leave = nullptr;
-    std::shared_ptr<Schema::RecordBase> last_record;
-    Schema::RecordID rid;
+    std::shared_ptr<RecordBase> last_record;
+    RecordID rid;
   };
 
   BulkLoadingStatus bl_status_;

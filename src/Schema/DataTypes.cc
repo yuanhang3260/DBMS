@@ -4,32 +4,32 @@
 namespace Schema {
 
 // Comparable
-bool StringType::operator<(const StringType& other) const {
+bool StringField::operator<(const StringField& other) const {
   return value_ < other.value_;
 }
 
-bool StringType::operator>(const StringType& other) const {
+bool StringField::operator>(const StringField& other) const {
   return value_ > other.value_;
 }
 
-bool StringType::operator<=(const StringType& other) const {
+bool StringField::operator<=(const StringField& other) const {
   return !(*this > other);
 }
 
-bool StringType::operator>=(const StringType& other) const {
+bool StringField::operator>=(const StringField& other) const {
   return !(*this < other);
 }
 
-bool StringType::operator==(const StringType& other) const {
+bool StringField::operator==(const StringField& other) const {
   return value_ == other.value_;
 }
 
-bool StringType::operator!=(const StringType& other) const {
+bool StringField::operator!=(const StringField& other) const {
   return !(*this == other);
 }
 
 // Dump to memory
-int StringType::DumpToMem(byte* buf) const {
+int StringField::DumpToMem(byte* buf) const {
   if (!buf) {
     return -1;
   }
@@ -39,7 +39,7 @@ int StringType::DumpToMem(byte* buf) const {
 }
 
 // Dump to memory
-int StringType::LoadFromMem(const byte* buf) {
+int StringField::LoadFromMem(const byte* buf) {
   if (!buf) {
     return -1;
   }
@@ -47,32 +47,32 @@ int StringType::LoadFromMem(const byte* buf) {
   return value_.length() + 1;
 }
 
-CharArrayType::CharArrayType(int lenlimit) :
+CharArrayField::CharArrayField(int lenlimit) :
     length_limit_(lenlimit) {
   value_ = new char[length_limit_];
   memset(value_, 0, length_limit_);
 }
 
-CharArrayType::CharArrayType(std::string str, int lenlimit) :
+CharArrayField::CharArrayField(const std::string& str, int lenlimit) :
     length_limit_(lenlimit) {
   if (!SetData(str.c_str(), str.length())) {
     throw std::runtime_error(
-        "[Init CharArrayType Failed] - invalid lenlimit < src length");
+        "[Init CharArrayField Failed] - invalid lenlimit < src length");
   }
 }
 
-CharArrayType::CharArrayType(const char* src, int length, int lenlimit) :
+CharArrayField::CharArrayField(const char* src, int length, int lenlimit) :
     length_(length),
     length_limit_(lenlimit) {
   if (!SetData(src, length)) {
     throw std::runtime_error(
-        "[Init CharArrayType Failed] - invalid lenlimit < src length");
+        "[Init CharArrayField Failed] - invalid lenlimit < src length");
   }
 }
 
-bool CharArrayType::SetData(const char* src, int length) {
+bool CharArrayField::SetData(const char* src, int length) {
   if (length > length_limit_) {
-    LogERROR("Can't SetData() for CharArrayType - length %d > length_limit %d",
+    LogERROR("Can't SetData() for CharArrayField - length %d > length_limit %d",
              length, length_limit_);
     return false;
   }
@@ -86,14 +86,14 @@ bool CharArrayType::SetData(const char* src, int length) {
   return true;
 }
 
-CharArrayType::~CharArrayType() {
+CharArrayField::~CharArrayField() {
   if (value_) {
     delete[] value_;
   }
 }
 
 // Comparable
-bool CharArrayType::operator<(const CharArrayType& other) const {
+bool CharArrayField::operator<(const CharArrayField& other) const {
   int len = Utils::Min(length_, other.length_);
   int re = strncmp(value_, other.value_, len);
   if (re < 0) {
@@ -105,7 +105,7 @@ bool CharArrayType::operator<(const CharArrayType& other) const {
   return length_ < other.length_;
 }
 
-bool CharArrayType::operator>(const CharArrayType& other) const {
+bool CharArrayField::operator>(const CharArrayField& other) const {
   int len = Utils::Min(length_, other.length_);
   int re = strncmp(value_, other.value_, len);
   if (re > 0) {
@@ -117,27 +117,27 @@ bool CharArrayType::operator>(const CharArrayType& other) const {
   return length_ > other.length_;
 }
 
-bool CharArrayType::operator<=(const CharArrayType& other) const {
+bool CharArrayField::operator<=(const CharArrayField& other) const {
   return !(*this > other);
 }
 
-bool CharArrayType::operator>=(const CharArrayType& other) const {
+bool CharArrayField::operator>=(const CharArrayField& other) const {
   return !(*this < other);
 }
 
-bool CharArrayType::operator==(const CharArrayType& other) const {
+bool CharArrayField::operator==(const CharArrayField& other) const {
   if (length_ != other.length_) {
     return false;
   }
   return strncmp(value_, other.value_, length_) == 0;
 }
 
-bool CharArrayType::operator!=(const CharArrayType& other) const {
+bool CharArrayField::operator!=(const CharArrayField& other) const {
   return !(*this == other);
 }
 
 // Dump to memory
-int CharArrayType::DumpToMem(byte* buf) const {
+int CharArrayField::DumpToMem(byte* buf) const {
   if (!buf) {
     return -1;
   }
@@ -146,7 +146,7 @@ int CharArrayType::DumpToMem(byte* buf) const {
 }
 
 // Dump to memory
-int CharArrayType::LoadFromMem(const byte* buf) {
+int CharArrayField::LoadFromMem(const byte* buf) {
   if (!buf) {
     return -1;
   }
@@ -163,7 +163,7 @@ int CharArrayType::LoadFromMem(const byte* buf) {
   return length_limit_;
 }
 
-void CharArrayType::reset() {
+void CharArrayField::reset() {
   if (!value_) {
     return;
   }

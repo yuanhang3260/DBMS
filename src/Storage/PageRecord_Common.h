@@ -1,14 +1,14 @@
-#ifndef SCHEMA_PAGE_RECORD_
-#define SCHEMA_PAGE_RECORD_
+#ifndef STORAGE_PAGE_RECORD_COMMON_
+#define STORAGE_PAGE_RECORD_COMMON_
 
 #include <memory>
 
-#include "Record.h"
-#include "DBTable_pb.h"
+#include "Schema/DBTable_pb.h"
+#include "Storage/Record.h"
 #include "Storage/Common.h"
 #include "Storage/RecordPage.h"
 
-namespace Schema {
+namespace Storage {
 
 // This class wraps a record loaded from page.
 class PageLoadedRecord {
@@ -17,7 +17,7 @@ class PageLoadedRecord {
   PageLoadedRecord(int slot_id) : slot_id_(slot_id) {}
   
   DEFINE_ACCESSOR(slot_id, int);
-  DEFINE_ACCESSOR_SMART_PTR(record, Schema::RecordBase);
+  DEFINE_ACCESSOR_SMART_PTR(record, RecordBase);
 
   std::shared_ptr<RecordBase> Record() { return record_; }
 
@@ -31,10 +31,10 @@ class PageLoadedRecord {
   // Generate internal record type for this PageLoadedRecord. The internal
   // reocrd can be DataRecord, IndexRecord or TreeNodeRecord, depending on
   // the specified file_type and page_type.
-  bool GenerateRecordPrototype(const TableSchema& schema,
+  bool GenerateRecordPrototype(const Schema::TableSchema& schema,
                                std::vector<int> key_indexes,
-                               DataBaseFiles::FileType file_type,
-                               DataBaseFiles::PageType page_type);
+                               FileType file_type,
+                               PageType page_type);
 
   // Comparator
   static bool Comparator(const PageLoadedRecord& r1, const PageLoadedRecord& r2,
@@ -80,7 +80,7 @@ class DataRecordWithRid {
                          const DataRecordWithRid& r2,
                          const std::vector<int>& indexes);
 
-  static void Sort(std::vector<Schema::DataRecordWithRid>& records,
+  static void Sort(std::vector<DataRecordWithRid>& records,
                    const std::vector<int>& key_indexes);
 };
 
@@ -106,10 +106,10 @@ class DataRecordRidMutation {
                          const DataRecordRidMutation& r2,
                          const std::vector<int>& indexes);
 
-  static void Sort(std::vector<Schema::DataRecordRidMutation>& records,
+  static void Sort(std::vector<DataRecordRidMutation>& records,
                    const std::vector<int>& key_indexes);
 
-  static void SortByOldRid(std::vector<Schema::DataRecordRidMutation>& records);
+  static void SortByOldRid(std::vector<DataRecordRidMutation>& records);
 
   static bool ValidityCheck(const std::vector<DataRecordRidMutation>& v);
 
@@ -129,4 +129,4 @@ class DataRecordRidMutation {
 
 }  // namespace Schema
 
-#endif  /* SCHEMA_PAGE_RECORD_ */
+#endif  /* STORAGE_PAGE_RECORD_COMMON_ */

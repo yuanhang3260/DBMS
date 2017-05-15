@@ -4,9 +4,9 @@
 #include "Base/Utils.h"
 #include "Base/Log.h"
 
-#include "PageRecord_Common.h"
+#include "Storage/PageRecord_Common.h"
 
-namespace Schema {
+namespace Storage {
 
 class PageRecordCommonTest: public UnitTest {
  private:
@@ -99,7 +99,7 @@ class PageRecordCommonTest: public UnitTest {
 }  // namespace Schema
 
 int main() {
-  Schema::PageRecordCommonTest test;
+  Storage::PageRecordCommonTest test;
   test.setup();
   test.Test_Merge_RidMutations();
   test.teardown();

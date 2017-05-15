@@ -1,10 +1,11 @@
-#include "UnitTest/UnitTest.h"
 #include "Base/Utils.h"
 #include "Base/Log.h"
-#include "Common.h"
-#include "RecordPage.h"
+#include "UnitTest/UnitTest.h"
 
-namespace DataBaseFiles {
+#include "Storage/Common.h"
+#include "Storage/RecordPage.h"
+
+namespace Storage {
 
 class FakeRecord {
  public:
@@ -221,11 +222,11 @@ class RecordPageTest: public UnitTest {
 
 };
 
-}  // namespace DataBaseFiles
+}  // namespace Storage
 
 int main() {
   for (int i = 0; i < 1; i++) {
-    DataBaseFiles::RecordPageTest test;
+    Storage::RecordPageTest test;
     test.setup();
     test.Test_DeleteRecords();
     test.teardown();

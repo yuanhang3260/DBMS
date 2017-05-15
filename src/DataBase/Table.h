@@ -5,12 +5,12 @@
 #include <map>
 #include <memory>
 
-#include "Schema/Record.h"
 #include "Schema/DBTable_pb.h"
+#include "Storage/Record.h"
 #include "Storage/BplusTree.h"
-#include "Operation.h"
+#include "DataBase/Operation.h"
 
-namespace DataBaseFiles {
+namespace Storage {
   class BplusTree;
 }
 
@@ -27,13 +27,13 @@ class Table {
 
   const Schema::TableSchema& schema() const { return schema_; }
 
-  std::string BplusTreeFileName(DataBaseFiles::FileType file_type,
+  std::string BplusTreeFileName(Storage::FileType file_type,
                                 std::vector<int> key_indexes);
 
   // Bulkload data records and generate all index files.
-  bool PreLoadData(std::vector<std::shared_ptr<Schema::RecordBase>>& records);
+  bool PreLoadData(std::vector<std::shared_ptr<Storage::RecordBase>>& records);
 
-  DataBaseFiles::BplusTree* Tree(DataBaseFiles::FileType,
+  Storage::BplusTree* Tree(Storage::FileType,
                                  std::vector<int> key_indexes);
 
   bool IsDataFileKey(int index) const;
@@ -44,9 +44,9 @@ class Table {
   bool ValidateAllIndexRecords(int num_records);
 
   bool UpdateIndexTrees(
-           std::vector<Schema::DataRecordRidMutation>& rid_mutations);
+           std::vector<Storage::DataRecordRidMutation>& rid_mutations);
 
-  bool InsertRecord(const Schema::RecordBase* record);
+  bool InsertRecord(const Storage::RecordBase* record);
 
   int DeleteRecord(const DeleteOp& op);
 
@@ -79,7 +79,7 @@ class Table {
   std::map<std::string, int> field_index_map_;
   // map: file name --> B+ tree
   using TreeMap =
-          std::map<std::string, std::shared_ptr<DataBaseFiles::BplusTree>>;
+          std::map<std::string, std::shared_ptr<Storage::BplusTree>>;
   TreeMap tree_map_;
 };
 

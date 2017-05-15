@@ -1,15 +1,15 @@
-#ifndef SCHEMA_RECORD_KEY_
-#define SCHEMA_RECORD_KEY_
+#ifndef STORAGE_RECORD_
+#define STORAGE_RECORD_
 
 #include <vector>
 #include <memory>
 
+#include "Schema/DataTypes.h"
+#include "Schema/DBTable_pb.h"
 #include "Storage/Common.h"
 #include "Storage/RecordPage.h"
-#include "DataTypes.h"
-#include "DBTable_pb.h"
 
-namespace Schema {
+namespace Storage {
 
 enum RecordType {
   UNKNOWN_RECORDTYPE,
@@ -76,8 +76,8 @@ class RecordID {
 class RecordBase {
  public:
   RecordBase() = default;
-  std::vector<std::shared_ptr<SchemaFieldType>>& fields() { return fields_; }
-  const std::vector<std::shared_ptr<SchemaFieldType>>& fields() const {
+  std::vector<std::shared_ptr<Schema::Field>>& fields() { return fields_; }
+  const std::vector<std::shared_ptr<Schema::Field>>& fields() const {
     return fields_;
   }
 
@@ -95,7 +95,7 @@ class RecordBase {
   virtual void Print() const;
 
   // Add a new field. This method takes ownership of SchemaFieldType pointer.
-  void AddField(SchemaFieldType* new_field);
+  void AddField(Schema::Field* new_field);
 
   // Reset all fields to minimum.
   virtual void reset();
@@ -103,23 +103,23 @@ class RecordBase {
   virtual void clear();
 
   // Init records fields with schema and key_indexes.
-  bool InitRecordFields(const TableSchema& schema,
+  bool InitRecordFields(const Schema::TableSchema& schema,
                         std::vector<int> key_indexes,
-                        DataBaseFiles::FileType file_type,
-                        DataBaseFiles::PageType page_type);
+                        FileType file_type,
+                        PageType page_type);
 
   // Check all fields type match a schema.
-  bool CheckFieldsType(const TableSchema& schema,
+  bool CheckFieldsType(const Schema::TableSchema& schema,
                        std::vector<int> key_indexes) const;
-  bool CheckFieldsType(const TableSchema& schema) const;
+  bool CheckFieldsType(const Schema::TableSchema& schema) const;
 
   // Parse from text of format as Print() method prints.
   bool ParseFromText(std::string str, int chararray_len_limit);
 
   // Compare 2 Schema fields. We first compare field type and then the value
   // if the field types are same.
-  static int CompareSchemaFields(const SchemaFieldType* field1,
-                                 const SchemaFieldType* field2);
+  static int CompareSchemaFields(const Schema::Field* field1,
+                                 const Schema::Field* field2);
 
   virtual int DumpToMem(byte* buf) const;
   virtual int LoadFromMem(const byte* buf);
@@ -148,12 +148,12 @@ class RecordBase {
                                   const std::vector<int>& indexes);
 
   // Insert the record to a page and returns the record's slot id.
-  int InsertToRecordPage(DataBaseFiles::RecordPage* page) const;
+  int InsertToRecordPage(RecordPage* page) const;
 
  protected:
   void PrintImpl() const;
 
-  std::vector<std::shared_ptr<SchemaFieldType>> fields_;
+  std::vector<std::shared_ptr<Schema::Field>> fields_;
 };
 
 
@@ -226,4 +226,4 @@ class TreeNodeRecord: public RecordBase {
 
 }  // namespace Schema
 
-#endif  /* SCHEMA_RECORD_KEY_ */
+#endif  /* STORAGE_RECORD_ */

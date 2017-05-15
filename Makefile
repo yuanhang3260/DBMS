@@ -16,24 +16,24 @@ HYLIB=../HyLib/libhy.a
 SRC_DIR=src
 OBJ_DIR=lib
 
-OBJ = $(OBJ_DIR)/Storage/Common.o \
-      $(OBJ_DIR)/Storage/RecordPage.o \
-      $(OBJ_DIR)/Storage/BplusTree.o \
+OBJ = $(OBJ_DIR)/DataBase/Table.o \
+      $(OBJ_DIR)/DataBase/Operation.o \
       $(OBJ_DIR)/Schema/SchemaType.o \
       $(OBJ_DIR)/Schema/DataTypes.o \
-      $(OBJ_DIR)/Schema/Record.o \
-      $(OBJ_DIR)/Schema/PageRecord_Common.o \
-      $(OBJ_DIR)/Schema/PageRecordsManager.o \
       $(OBJ_DIR)/Schema/DBTable_pb.o \
-      $(OBJ_DIR)/DataBase/Table.o \
-      $(OBJ_DIR)/DataBase/Operation.o \
+			$(OBJ_DIR)/Storage/Common.o \
+      $(OBJ_DIR)/Storage/RecordPage.o \
+      $(OBJ_DIR)/Storage/BplusTree.o \
+      $(OBJ_DIR)/Storage/Record.o \
+      $(OBJ_DIR)/Storage/PageRecord_Common.o \
+      $(OBJ_DIR)/Storage/PageRecordsManager.o \
 
 
-TESTOBJ = $(OBJ_DIR)/Storage/BplusTree_test.o \
+TESTOBJ = $(OBJ_DIR)/Schema/DataTypes_test.o \
+					$(OBJ_DIR)/Storage/BplusTree_test.o \
           $(OBJ_DIR)/Storage/RecordPage_test.o \
-          $(OBJ_DIR)/Schema/DataTypes_test.o \
-          $(OBJ_DIR)/Schema/Record_test.o \
-					$(OBJ_DIR)/Schema/PageRecord_Common_test.o \
+          $(OBJ_DIR)/Storage/Record_test.o \
+					$(OBJ_DIR)/Storage/PageRecord_Common_test.o \
 					$(OBJ_DIR)/DataBase/Table_test.o \
 					$(OBJ_DIR)/DataBase/Operation_test.o \
 

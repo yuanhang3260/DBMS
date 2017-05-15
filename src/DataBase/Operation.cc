@@ -3,7 +3,8 @@
 
 #include "Base/Log.h"
 #include "Base/Utils.h"
-#include "Operation.h"
+
+#include "DataBase/Operation.h"
 
 namespace DataBase {
 
@@ -39,8 +40,8 @@ bool DeleteResult::MergeFrom(DeleteResult& other) {
 
   // Previously mutated rids may be deleted later in new DeleteResult.
   // Find them and append to deleted_rid list.
-  if (!Schema::DataRecordRidMutation::Merge(rid_mutations, other.rid_deleted,
-                                            true)) {
+  if (!Storage::DataRecordRidMutation::Merge(rid_mutations, other.rid_deleted,
+                                             true)) {
     LogERROR("Failed to merge rid_deleted to rid mutations");
     return false;
   }
@@ -53,7 +54,8 @@ bool DeleteResult::MergeFrom(DeleteResult& other) {
   }
 
   // Merge mutated rids.
-  if (!Schema::DataRecordRidMutation::Merge(rid_mutations,other.rid_mutations)){
+  if (!Storage::DataRecordRidMutation::Merge(
+          rid_mutations,other.rid_mutations)) {
     LogERROR("Failed to merge rid mutations");
     return false;
   }
@@ -106,8 +108,8 @@ bool DeleteResult::ValidityCheck() {
     return true;
   }
 
-  std::set<Schema::RecordID> old_rid_set;
-  std::set<Schema::RecordID> new_rid_set;
+  std::set<Storage::RecordID> old_rid_set;
+  std::set<Storage::RecordID> new_rid_set;
 
   // Checks rid mutations.
   for (const auto& r : rid_mutations) {

@@ -12,7 +12,7 @@
 
 #include "Base/MacroUtils.h"
 
-namespace DataBaseFiles {
+namespace Storage {
 
 enum PageType {
   UNKNOW_PAGETYPE = 0,

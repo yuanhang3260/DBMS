@@ -5,7 +5,7 @@
 
 #include "Base/BaseTypes.h"
 
-namespace DataBaseFiles {
+namespace Storage {
 
 const int kPageSize = 256;
 const int kSlotDirectoryEntrySize = 4;
@@ -23,7 +23,7 @@ enum FileType {
 
 bool ContentEqual (const byte* data1, const byte* data2, int length);
 
-}  // namespace DataBaseFiles
+}  // namespace Storage
 
 
 #endif  /* DATABASEFILES_COMMON_ */

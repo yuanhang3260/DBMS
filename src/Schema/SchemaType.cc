@@ -2,7 +2,7 @@
 
 namespace Schema {
 
-std::string SchemaFieldType::FieldTypeAsString(FieldType type) {
+std::string Field::FieldTypeAsString(FieldType type) {
   if (type == INT) {
     return "Int";
   }
@@ -24,7 +24,7 @@ std::string SchemaFieldType::FieldTypeAsString(FieldType type) {
   return "Unknown";
 }
 
-bool SchemaFieldType::MatchesSchemaType(TableField::Type schema_type) const {
+bool Field::MatchesSchemaType(TableField::Type schema_type) const {
   if (type() == INT && schema_type != TableField::INTEGER) {
     return false;
   }

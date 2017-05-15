@@ -4,8 +4,8 @@
 #include <vector>
 #include <memory>
 
-#include "Schema/Record.h"
-#include "Schema/PageRecord_Common.h"
+#include "Storage/Record.h"
+#include "Storage/PageRecord_Common.h"
 
 namespace DataBase {
 
@@ -20,7 +20,7 @@ enum OpCondition {
 class DeleteOp {
  public:
   int key_index = -1;
-  std::vector<std::shared_ptr<Schema::RecordBase>> keys;
+  std::vector<std::shared_ptr<Storage::RecordBase>> keys;
   OpCondition op_cond = EQ;
 };
 
@@ -34,8 +34,8 @@ class DeleteResult {
 
   DeleteMode del_mode = DEL_DATA;
   std::vector<int> mutated_leaves;
-  std::vector<Schema::DataRecordRidMutation> rid_deleted;
-  std::vector<Schema::DataRecordRidMutation> rid_mutations;
+  std::vector<Storage::DataRecordRidMutation> rid_deleted;
+  std::vector<Storage::DataRecordRidMutation> rid_mutations;
 
   // Merge another delete result into me.
   bool MergeFrom(DeleteResult& other);

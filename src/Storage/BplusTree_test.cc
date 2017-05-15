@@ -3,17 +3,18 @@
 #include <sstream>
 #include <algorithm>
 
-#include "UnitTest/UnitTest.h"
 #include "Base/Utils.h"
 #include "Base/Log.h"
-#include "Schema/Record.h"
-#include "BplusTree.h"
-#include "Schema/DBTable_pb.h"
-#include "Schema/PageRecordsManager.h"
-#include "DataBase/Table.h"
-#include "DataBase/Operation.h"
+#include "UnitTest/UnitTest.h"
 
-namespace DataBaseFiles {
+#include "Schema/DBTable_pb.h"
+#include "Storage/BplusTree.h"
+#include "Storage/PageRecordsManager.h"
+#include "Storage/Record.h"
+#include "DataBase/Operation.h"
+#include "DataBase/Table.h"
+
+namespace Storage {
 
 class BplusTreeTest: public UnitTest {
  private:
@@ -21,7 +22,7 @@ class BplusTreeTest: public UnitTest {
   std::vector<int> key_indexes;
   Schema::TableSchema schema;
   DataBase::Table* table;
-  std::map<int, std::shared_ptr<Schema::DataRecord>> record_resource;
+  std::map<int, std::shared_ptr<DataRecord>> record_resource;
   const int kNumRecordsSource = 1000;
 
  public:
@@ -70,7 +71,7 @@ class BplusTreeTest: public UnitTest {
   void InitRecordResource() {
     record_resource.clear();
     for (int i = 0; i < kNumRecordsSource; i++) {
-      record_resource.emplace(i, std::make_shared<Schema::DataRecord>());
+      record_resource.emplace(i, std::make_shared<DataRecord>());
 
       // Init fields to records.
       // name
@@ -80,26 +81,26 @@ class BplusTreeTest: public UnitTest {
         for (int i = 0; i < str_len; i++) {
           buf[i] = 'a' + Utils::RandomNumber(26);
         }
-        record_resource.at(i)->AddField(new Schema::StringType(buf, str_len));
+        record_resource.at(i)->AddField(new Schema::StringField(buf, str_len));
       }
       // age
       int rand_int = Utils::RandomNumber(100);
-      record_resource.at(i)->AddField(new Schema::IntType(rand_int));
+      record_resource.at(i)->AddField(new Schema::IntField(rand_int));
       // money (we use this field as key for record resource map).
       //int rand_long = Utils::RandomNumber(10);
       if (i < kNumRecordsSource / 2) {
-        record_resource.at(i)->AddField(new Schema::LongIntType(i));
+        record_resource.at(i)->AddField(new Schema::LongIntField(i));
       }
       else {
         //rand_long = Utils::RandomNumber(kNumRecordsSource);
-        record_resource.at(i)->AddField(new Schema::LongIntType(i));
+        record_resource.at(i)->AddField(new Schema::LongIntField(i));
       }
       // weight
       double rand_double = 1.0 * Utils::RandomNumber() / Utils::RandomNumber();
-      record_resource.at(i)->AddField(new Schema::DoubleType(rand_double));
+      record_resource.at(i)->AddField(new Schema::DoubleField(rand_double));
       // adult
       bool rand_bool = Utils::RandomNumber() % 2 == 1 ? true : false;
-      record_resource.at(i)->AddField(new Schema::BoolType(rand_bool));
+      record_resource.at(i)->AddField(new Schema::BoolField(rand_bool));
       // signature
       {
         int len_limit = 20;
@@ -109,7 +110,7 @@ class BplusTreeTest: public UnitTest {
           buf[i] = 'a' + Utils::RandomNumber(26);
         }
         record_resource.at(i)->AddField(
-            new Schema::CharArrayType(buf, str_len, len_limit));
+            new Schema::CharArrayField(buf, str_len, len_limit));
       }
     }
   }
@@ -121,7 +122,7 @@ class BplusTreeTest: public UnitTest {
     int i = 0;
     while (std::getline(infile, line)) {
       std::istringstream iss(line);
-      auto record = std::make_shared<Schema::DataRecord>();
+      auto record = std::make_shared<DataRecord>();
       if (record->ParseFromText(line, 20)) {
         record_resource.emplace(i, record);
         i++;
@@ -212,7 +213,7 @@ class BplusTreeTest: public UnitTest {
   }
 
   void Test_BulkLoading() {
-    std::vector<std::shared_ptr<Schema::RecordBase>> v;
+    std::vector<std::shared_ptr<RecordBase>> v;
     for (auto& entry: record_resource) {
       v.push_back(entry.second);
     }
@@ -232,32 +233,32 @@ class BplusTreeTest: public UnitTest {
   }
 
   void _VerifyAllRecordsInTree(BplusTree* tree, std::vector<int> key_indexes) {
-    std::vector<std::shared_ptr<Schema::RecordBase>> v;
+    std::vector<std::shared_ptr<RecordBase>> v;
     for (auto& entry: record_resource) {
       v.push_back(entry.second);
     }
-    Schema::PageRecordsManager::SortRecords(v, key_indexes);
+    PageRecordsManager::SortRecords(v, key_indexes);
     std::vector<int> start_list;
     start_list.push_back(0);
-    Schema::RecordBase key;
-    ((Schema::DataRecord*)v[0].get())->ExtractKey(&key, key_indexes);
+    RecordBase key;
+    ((DataRecord*)v[0].get())->ExtractKey(&key, key_indexes);
     for (int i = 1; i < (int)v.size(); i++) {
-      if (Schema::RecordBase::CompareRecordWithKey(
+      if (RecordBase::CompareRecordWithKey(
               &key, v[i].get(), key_indexes) == 0) {
         continue;
       }
       key.clear();
-      ((Schema::DataRecord*)v[i].get())->ExtractKey(&key, key_indexes);
+      ((DataRecord*)v[i].get())->ExtractKey(&key, key_indexes);
       start_list.push_back(i);
     }
     printf("%d different keys\n", (int)start_list.size());
     start_list.push_back(kNumRecordsSource);
     
-    std::vector<std::shared_ptr<Schema::RecordBase>> result;
+    std::vector<std::shared_ptr<RecordBase>> result;
     for (int i = 0; i < (int)start_list.size() - 1; i++) {
       key.clear();
       int start = start_list[i];
-      ((Schema::DataRecord*)v[start].get())->ExtractKey(&key, key_indexes);
+      ((DataRecord*)v[start].get())->ExtractKey(&key, key_indexes);
       //key.Print();
 
       result.clear();
@@ -266,12 +267,12 @@ class BplusTreeTest: public UnitTest {
     }
   }
 
-  void _GenerateIndeRecord(Schema::IndexRecord* irecord, char c, int len) {
+  void _GenerateIndeRecord(IndexRecord* irecord, char c, int len) {
     // Reserve 9 bytes for '\0' and rid (8 bytes).
     len -= 9;
     char buf[len];
     memset(buf, c, len);
-    irecord->AddField(new Schema::StringType(buf, len));
+    irecord->AddField(new Schema::StringField(buf, len));
   }
 
   void _AddIndexRecordsToLeave(RecordPage* leave, std::vector<int> rlens,
@@ -279,7 +280,7 @@ class BplusTreeTest: public UnitTest {
     AssertEqual(rlens.size(), contents.size());
     int total_len = 0;
     for (int i = 0; i < (int)rlens.size(); i++) {
-      Schema::IndexRecord irecord;
+      IndexRecord irecord;
       _GenerateIndeRecord(&irecord, contents[i], rlens[i]);
       AssertTrue(irecord.InsertToRecordPage(leave) >= 0,
                  "Failed to add index record to leave");
@@ -294,7 +295,7 @@ class BplusTreeTest: public UnitTest {
     // Create index for field "name".
     std::vector<int> key_index{0};
     BplusTree tree(table, INDEX, key_indexes);
-    std::vector<Schema::DataRecordRidMutation> rid_mutations;
+    std::vector<DataRecordRidMutation> rid_mutations;
 
     {
       // page 1 <--> page2
@@ -303,14 +304,14 @@ class BplusTreeTest: public UnitTest {
       _AddIndexRecordsToLeave(leave, std::vector<int>{30, 10, 40, 50, 50},
                               std::vector<char>{'a', 'b', 'c', 'd', 'e'});
 
-      Schema::PageRecordsManager prmanager(leave, schema, key_index,
+      PageRecordsManager prmanager(leave, schema, key_index,
                                            INDEX, TREE_LEAVE);
       prmanager.set_tree(&tree);
       // for (int i = 0; i < (int)prmanager.NumRecords(); i++) {
       //   prmanager.Record(i)->Print();
       // }
 
-      Schema::IndexRecord irecord;
+      IndexRecord irecord;
       _GenerateIndeRecord(&irecord, 'a', 60);
       AssertTrue(irecord.InsertToRecordPage(leave) < 0);
       auto result = prmanager.InsertRecordAndSplitPage(&irecord, rid_mutations);
@@ -330,11 +331,11 @@ class BplusTreeTest: public UnitTest {
       _AddIndexRecordsToLeave(leave, std::vector<int>{10, 60, 60, 60},
                               std::vector<char>{'a', 'b', 'b', 'b'});
 
-      Schema::PageRecordsManager prmanager(leave, schema, key_index,
+      PageRecordsManager prmanager(leave, schema, key_index,
                                            INDEX, TREE_LEAVE);
       prmanager.set_tree(&tree);
 
-      Schema::IndexRecord irecord;
+      IndexRecord irecord;
       _GenerateIndeRecord(&irecord, 'b', 60);
       AssertTrue(irecord.InsertToRecordPage(leave) < 0);
       
@@ -364,11 +365,11 @@ class BplusTreeTest: public UnitTest {
           leave, std::vector<int>{10, 10, 55, 55, 55, 10},
           std::vector<char>{'a', 'a', 'b', 'b', 'b', 'c'});
 
-      Schema::PageRecordsManager prmanager(leave, schema, key_index,
+      PageRecordsManager prmanager(leave, schema, key_index,
                                            INDEX, TREE_LEAVE);
       prmanager.set_tree(&tree);
 
-      Schema::IndexRecord irecord;
+      IndexRecord irecord;
       _GenerateIndeRecord(&irecord, 'b', 55);
       AssertTrue(irecord.InsertToRecordPage(leave) < 0);
       
@@ -405,11 +406,11 @@ class BplusTreeTest: public UnitTest {
       _AddIndexRecordsToLeave(leave, std::vector<int>{30, 50, 50, 50, 10, 10},
                               std::vector<char>{'a', 'b', 'b', 'b', 'c', 'c'});
 
-      Schema::PageRecordsManager prmanager(leave, schema, key_index,
+      PageRecordsManager prmanager(leave, schema, key_index,
                                            INDEX, TREE_LEAVE);
       prmanager.set_tree(&tree);
 
-      Schema::IndexRecord irecord;
+      IndexRecord irecord;
       _GenerateIndeRecord(&irecord, 'b', 50);
       AssertTrue(irecord.InsertToRecordPage(leave) < 0);
       
@@ -438,11 +439,11 @@ class BplusTreeTest: public UnitTest {
       _AddIndexRecordsToLeave(leave, std::vector<int>{50, 10, 40, 30, 60},
                               std::vector<char>{'a', 'b', 'c', 'd', 'd'});
 
-      Schema::PageRecordsManager prmanager(leave, schema, key_index,
+      PageRecordsManager prmanager(leave, schema, key_index,
                                            INDEX, TREE_LEAVE);
       prmanager.set_tree(&tree);
 
-      Schema::IndexRecord irecord;
+      IndexRecord irecord;
       _GenerateIndeRecord(&irecord, 'a', 40);
       AssertTrue(irecord.InsertToRecordPage(leave) < 0);
 
@@ -463,11 +464,11 @@ class BplusTreeTest: public UnitTest {
       _AddIndexRecordsToLeave(leave, std::vector<int>{50, 10, 40, 30, 60},
                               std::vector<char>{'a', 'b', 'c', 'd', 'd'});
 
-      Schema::PageRecordsManager prmanager(leave, schema, key_index,
+      PageRecordsManager prmanager(leave, schema, key_index,
                                            INDEX, TREE_LEAVE);
       prmanager.set_tree(&tree);
 
-      Schema::IndexRecord irecord;
+      IndexRecord irecord;
       _GenerateIndeRecord(&irecord, 'e', 30);
       AssertTrue(irecord.InsertToRecordPage(leave) < 0);
 
@@ -488,11 +489,11 @@ class BplusTreeTest: public UnitTest {
       _AddIndexRecordsToLeave(leave, std::vector<int>{50, 50, 50, 50, 10},
                               std::vector<char>{'a', 'a', 'a', 'a', 'b'});
 
-      Schema::PageRecordsManager prmanager(leave, schema, key_index,
+      PageRecordsManager prmanager(leave, schema, key_index,
                                            INDEX, TREE_LEAVE);
       prmanager.set_tree(&tree);
 
-      Schema::IndexRecord irecord;
+      IndexRecord irecord;
       _GenerateIndeRecord(&irecord, 'a', 50);
       AssertTrue(irecord.InsertToRecordPage(leave) < 0);
 
@@ -523,11 +524,11 @@ class BplusTreeTest: public UnitTest {
       _AddIndexRecordsToLeave(leave, std::vector<int>{20, 50, 50, 50, 30},
                               std::vector<char>{'a', 'b', 'b', 'b', 'c'});
 
-      Schema::PageRecordsManager prmanager(leave, schema, key_index,
+      PageRecordsManager prmanager(leave, schema, key_index,
                                            INDEX, TREE_LEAVE);
       prmanager.set_tree(&tree);
 
-      Schema::IndexRecord irecord;
+      IndexRecord irecord;
       _GenerateIndeRecord(&irecord, 'b', 50);
       AssertTrue(irecord.InsertToRecordPage(leave) < 0);
 
@@ -557,11 +558,11 @@ class BplusTreeTest: public UnitTest {
       _AddIndexRecordsToLeave(leave, std::vector<int>{10, 55, 55, 55, 20, 10},
                               std::vector<char>{'a', 'b', 'b', 'b', 'c', 'e'});
 
-      Schema::PageRecordsManager prmanager(leave, schema, key_index,
+      PageRecordsManager prmanager(leave, schema, key_index,
                                            INDEX, TREE_LEAVE);
       prmanager.set_tree(&tree);
 
-      Schema::IndexRecord irecord;
+      IndexRecord irecord;
       _GenerateIndeRecord(&irecord, 'b', 55);
       AssertTrue(irecord.InsertToRecordPage(leave) < 0);
 
@@ -595,7 +596,7 @@ class BplusTreeTest: public UnitTest {
       printf("-------------------------------------------------------------\n");
       printf("i = %d, record size = %d\n", i, record_resource[i]->size());
       record_resource[i]->Print();
-      std::vector<Schema::DataRecordRidMutation> rid_mutations;
+      std::vector<DataRecordRidMutation> rid_mutations;
       if (file_type_ == INDEX_DATA) {
         auto rid =tree.Do_InsertRecord(record_resource[i].get(), rid_mutations);
         //rid.Print();
@@ -604,8 +605,8 @@ class BplusTreeTest: public UnitTest {
                    "Verify record failed");
       }
       else {
-        Schema::IndexRecord irecord;
-        ((Schema::DataRecord*)record_resource[i].get())->
+        IndexRecord irecord;
+        ((DataRecord*)record_resource[i].get())->
             ExtractKey(&irecord, key_index);
         auto rid = tree.Do_InsertRecord(&irecord, rid_mutations);
         AssertTrue(rid.IsValid());
@@ -633,8 +634,8 @@ class BplusTreeTest: public UnitTest {
       printf("--------------------- i = %d ---------------------------\n", i);
       DataBase::DeleteOp op;
       op.key_index = key_index[0];
-      op.keys.push_back(std::make_shared<Schema::RecordBase>());
-      op.keys.back()->AddField(new Schema::LongIntType(i));
+      op.keys.push_back(std::make_shared<RecordBase>());
+      op.keys.back()->AddField(new Schema::LongIntField(i));
       op.keys.back()->Print();
 
       DataBase::DeleteResult delete_result;
@@ -646,14 +647,14 @@ class BplusTreeTest: public UnitTest {
   }
 
   void Test_UpdateRecordID() {
-    std::vector<std::shared_ptr<Schema::RecordBase>> v;
+    std::vector<std::shared_ptr<RecordBase>> v;
     for (int i = 0; i < (int)record_resource.size(); i++) {
       v.push_back(record_resource[i]);
     }
-    Schema::PageRecordsManager::SortRecords(v, key_indexes);
+    PageRecordsManager::SortRecords(v, key_indexes);
 
     // Insert first half of records.
-    std::vector<std::shared_ptr<Schema::RecordBase>> v1;
+    std::vector<std::shared_ptr<RecordBase>> v1;
     for (int i = 0; i < kNumRecordsSource / 2; i++) {
       v1.push_back(v[i]);
       printf("-------------------------------------------------------------\n");
@@ -693,7 +694,7 @@ class BplusTreeTest: public UnitTest {
     Test_UpdateRecordID();
     printf("********************** Begin Deleting *************************\n");
 
-    BplusTree tree(table, DataBaseFiles::INDEX, key_index);
+    BplusTree tree(table, INDEX, key_index);
     DataBase::DeleteResult delete_result;
     delete_result.del_mode = DataBase::DeleteResult::DEL_INDEX_PRE;
 
@@ -702,8 +703,8 @@ class BplusTreeTest: public UnitTest {
     std::vector<int> ages = Utils::RandomListFromRange(0,10);
     for (int i = 0; i < (int)ages.size(); i++) {
       op.key_index = key_index[0];
-      op.keys.push_back(std::make_shared<Schema::RecordBase>());
-      op.keys.back()->AddField(new Schema::IntType(ages[i]));
+      op.keys.push_back(std::make_shared<RecordBase>());
+      op.keys.back()->AddField(new Schema::IntField(ages[i]));
     }
 
     // Delete from index tree.
@@ -716,7 +717,7 @@ class BplusTreeTest: public UnitTest {
     }
 
     // Delete from data tree by RecordID.
-    BplusTree data_tree(table, DataBaseFiles::INDEX_DATA, table->DataTreeKey());
+    BplusTree data_tree(table, INDEX_DATA, table->DataTreeKey());
     for (const auto& m: delete_result.rid_deleted) {
       auto data_record = data_tree.GetRecord(m.old_rid);
       AssertTrue(data_record.get());
@@ -741,8 +742,8 @@ class BplusTreeTest: public UnitTest {
     std::vector<int> ages = Utils::RandomListFromRange(0, 0);
     for (int i = 0; i < (int)ages.size(); i++) {
       op.key_index = key_index[0];
-      op.keys.push_back(std::make_shared<Schema::RecordBase>());
-      op.keys.back()->AddField(new Schema::IntType(ages[i]));
+      op.keys.push_back(std::make_shared<RecordBase>());
+      op.keys.back()->AddField(new Schema::IntField(ages[i]));
     }
 
     // Do deletion.
@@ -781,8 +782,8 @@ class BplusTreeTest: public UnitTest {
       //LogERROR("start = %d, end = %d", start, start + group_len - 1);
       for (int i = start; i < start + group_len; i++) {
         op.key_index = 1;
-        op.keys.push_back(std::make_shared<Schema::RecordBase>());
-        op.keys.back()->AddField(new Schema::IntType(delete_ages[i]));
+        op.keys.push_back(std::make_shared<RecordBase>());
+        op.keys.back()->AddField(new Schema::IntField(delete_ages[i]));
       }
       start += group_len;
 
@@ -824,17 +825,17 @@ class BplusTreeTest: public UnitTest {
 }  // namespace DataBaseFiles
 
 int main(int argc, char** argv) {
-  // DataBaseFiles::FileType file_type = DataBaseFiles::INDEX_DATA;
+  // FileType file_type = INDEX_DATA;
   // std::vector<int> key_index{2};
   // if (argc >= 2 && std::string(argv[1]) == "INDEX") {
-  //   file_type = DataBaseFiles::INDEX;
+  //   file_type = INDEX;
   // }
   // if (argc >= 3) {
   //   key_index.clear();
   //   key_index.push_back(std::stoi(argv[2]));
   // }
 
-  DataBaseFiles::BplusTreeTest test;
+  Storage::BplusTreeTest test;
   test.setup();
 
   //test.Test_Header_Page_Consistency_Check();

@@ -1,10 +1,11 @@
 #include <vector>
 
-#include "UnitTest/UnitTest.h"
 #include "Base/Utils.h"
 #include "Base/Log.h"
-#include "Table.h"
-#include "Schema/PageRecord_Common.h"
+#include "UnitTest/UnitTest.h"
+
+#include "DataBase/Table.h"
+#include "Storage/PageRecord_Common.h"
 
 namespace DataBase {
 

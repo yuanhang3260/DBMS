@@ -1,5 +1,5 @@
-#ifndef DATABASEFILES_HEADERPAGE_
-#define DATABASEFILES_HEADERPAGE_
+#ifndef STORAGE_HEADERPAGE_
+#define STORAGE_HEADERPAGE_
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -7,7 +7,7 @@
 #include "Base/MacroUtils.h"
 #include "Common.h"
 
-namespace DataBaseFiles {
+namespace Storage {
 
 class HeaderPage {
  public:
@@ -67,7 +67,7 @@ class FreePage {
 };
 
 
-}  // namespace DataBaseFiles
+}  // namespace Storage
 
 
-#endif  /* DATABASEFILES_HEADERPAGE_ */
+#endif  /* STORAGE_HEADERPAGE_ */

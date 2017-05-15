@@ -1,15 +1,16 @@
 #include <map>
 #include <stdexcept>
 
-#include "UnitTest/UnitTest.h"
 #include "Base/Utils.h"
 #include "Base/Log.h"
-#include "Storage/Common.h"
-#include "Record.h"
-#include "DataTypes.h"
-#include "PageRecordsManager.h"
+#include "UnitTest/UnitTest.h"
 
-namespace Schema {
+#include "Storage/Common.h"
+#include "Storage/Record.h"
+#include "Schema/DataTypes.h"
+#include "Storage/PageRecordsManager.h"
+
+namespace Storage {
 
 class RecordTest: public UnitTest {
  private:
@@ -17,7 +18,7 @@ class RecordTest: public UnitTest {
   std::map<int, std::shared_ptr<IndexRecord>> indexrecord_resource;
   std::map<int, std::shared_ptr<TreeNodeRecord>> treenoderecord_resource;
   const int kNumRecordsSource = 1000;
-  TableSchema schema;
+  Schema::TableSchema schema;
   std::vector<int> key_indexes = std::vector<int>{1, 0};
 
  public:
@@ -81,19 +82,19 @@ class RecordTest: public UnitTest {
         for (int i = 0; i < str_len; i++) {
           buf[i] = 'a' + Utils::RandomNumber(26);
         }
-        record_resource.at(i)->AddField(new StringType(buf, str_len));
+        record_resource.at(i)->AddField(new Schema::StringField(buf, str_len));
       }
       // age
       int rand_int = Utils::RandomNumber(20);
-      record_resource.at(i)->AddField(new IntType(rand_int));
+      record_resource.at(i)->AddField(new Schema::IntField(rand_int));
       // money (we use this field as key for record resource map).
-      record_resource.at(i)->AddField(new LongIntType(i));
+      record_resource.at(i)->AddField(new Schema::LongIntField(i));
       // weight
       double rand_double = 1.0 * Utils::RandomNumber() / Utils::RandomNumber();
-      record_resource.at(i)->AddField(new DoubleType(rand_double));
+      record_resource.at(i)->AddField(new Schema::DoubleField(rand_double));
       // adult
       bool rand_bool = Utils::RandomNumber() % 2 == 1 ? true : false;
-      record_resource.at(i)->AddField(new BoolType(rand_bool));
+      record_resource.at(i)->AddField(new Schema::BoolField(rand_bool));
       // signature
       {
         int len_limit = 20;
@@ -103,7 +104,7 @@ class RecordTest: public UnitTest {
           buf[i] = 'a' + Utils::RandomNumber(26);
         }
         record_resource.at(i)->AddField(
-            new CharArrayType(buf, str_len, len_limit));
+            new Schema::CharArrayField(buf, str_len, len_limit));
       }
     }
   }
@@ -134,53 +135,53 @@ class RecordTest: public UnitTest {
 
   void Test_Record_Operators() {
     DataRecord key1;
-    key1.AddField(new IntType(5));
-    key1.AddField(new LongIntType(1111111111111));
-    key1.AddField(new DoubleType(3.5));
-    key1.AddField(new BoolType(false));
-    key1.AddField(new StringType("abc"));
-    key1.AddField(new CharArrayType("acd", 3, 10));
+    key1.AddField(new Schema::IntField(5));
+    key1.AddField(new Schema::LongIntField(1111111111111));
+    key1.AddField(new Schema::DoubleField(3.5));
+    key1.AddField(new Schema::BoolField(false));
+    key1.AddField(new Schema::StringField("abc"));
+    key1.AddField(new Schema::CharArrayField("acd", 3, 10));
     
     DataRecord key2;
-    key2.AddField(new IntType(5));
-    key2.AddField(new LongIntType(1111111111111));
-    key2.AddField(new DoubleType(3.5));
-    key2.AddField(new BoolType(false));
-    key2.AddField(new StringType("abc"));
-    key2.AddField(new CharArrayType("acd", 3, 10));
+    key2.AddField(new Schema::IntField(5));
+    key2.AddField(new Schema::LongIntField(1111111111111));
+    key2.AddField(new Schema::DoubleField(3.5));
+    key2.AddField(new Schema::BoolField(false));
+    key2.AddField(new Schema::StringField("abc"));
+    key2.AddField(new Schema::CharArrayField("acd", 3, 10));
 
     AssertTrue(key1 == key2);
     auto& fields = key2.fields();
 
     // change int key field.
-    (reinterpret_cast<IntType*>(fields[0].get()))->set_value(10);
+    (reinterpret_cast<Schema::IntField*>(fields[0].get()))->set_value(10);
     AssertTrue(key1 < key2, "int");
-    (reinterpret_cast<IntType*>(fields[0].get()))->set_value(5);
+    (reinterpret_cast<Schema::IntField*>(fields[0].get()))->set_value(5);
 
     // change longint key field.
-    (reinterpret_cast<LongIntType*>(fields[1].get()))->set_value(1111111111112);
+    (reinterpret_cast<Schema::LongIntField*>(fields[1].get()))->set_value(1111111111112);
     AssertTrue(key1 < key2, "long int");
-    (reinterpret_cast<LongIntType*>(fields[1].get()))->set_value(1111111111111);
+    (reinterpret_cast<Schema::LongIntField*>(fields[1].get()))->set_value(1111111111111);
 
     // change double key field.
-    (reinterpret_cast<DoubleType*>(fields[2].get()))->set_value(3.2);
+    (reinterpret_cast<Schema::DoubleField*>(fields[2].get()))->set_value(3.2);
     AssertTrue(key1 > key2, "double");
-    (reinterpret_cast<DoubleType*>(fields[2].get()))->set_value(3.5);
+    (reinterpret_cast<Schema::DoubleField*>(fields[2].get()))->set_value(3.5);
 
     // change bool key field.
-    (reinterpret_cast<BoolType*>(fields[3].get()))->set_value(true);
+    (reinterpret_cast<Schema::BoolField*>(fields[3].get()))->set_value(true);
     AssertTrue(key1 < key2, "bool");
-    (reinterpret_cast<BoolType*>(fields[3].get()))->set_value(false);
+    (reinterpret_cast<Schema::BoolField*>(fields[3].get()))->set_value(false);
 
     // change string key field.
-    (reinterpret_cast<StringType*>(fields[4].get()))->set_value("aabc");
+    (reinterpret_cast<Schema::StringField*>(fields[4].get()))->set_value("aabc");
     AssertTrue(key1 > key2, "string");
-    (reinterpret_cast<StringType*>(fields[4].get()))->set_value("abc");
+    (reinterpret_cast<Schema::StringField*>(fields[4].get()))->set_value("abc");
 
     // change CharArray key field.
-    (reinterpret_cast<CharArrayType*>(fields[5].get()))->SetData("acde", 3);
+    (reinterpret_cast<Schema::CharArrayField*>(fields[5].get()))->SetData("acde", 3);
     AssertTrue(key1 == key2, "CharArray");
-    (reinterpret_cast<CharArrayType*>(fields[5].get()))->SetData("acd", 3);
+    (reinterpret_cast<Schema::CharArrayField*>(fields[5].get()))->SetData("acd", 3);
 
     fields.pop_back();
     AssertTrue(key1 > key2, "length diff");
@@ -188,8 +189,8 @@ class RecordTest: public UnitTest {
     key1.fields().pop_back();
     AssertTrue(key1 == key2, "length same");
 
-    key1.AddField(new IntType(5));
-    key2.AddField(new LongIntType(5));
+    key1.AddField(new Schema::IntField(5));
+    key2.AddField(new Schema::LongIntField(5));
     AssertTrue(key1 < key2, "type diff");
 
     AssertEqual(6, key1.NumFields());
@@ -200,40 +201,40 @@ class RecordTest: public UnitTest {
     std::cout << __FUNCTION__ << std::endl;
     // Dump
     DataRecord key1;
-    key1.AddField(new IntType(5));  // 4
-    key1.AddField(new StringType("abc"));  // 4
-    key1.AddField(new LongIntType(1111111111111));  // 8
-    key1.AddField(new StringType(""));  // 1
-    key1.AddField(new DoubleType(3.5));  // 8
-    key1.AddField(new CharArrayType("wxyz", 4, 4));  // 4
-    key1.AddField(new BoolType(false));  // 1
-    key1.AddField(new CharArrayType("####", 0, 5));  // 5
+    key1.AddField(new Schema::IntField(5));  // 4
+    key1.AddField(new Schema::StringField("abc"));  // 4
+    key1.AddField(new Schema::LongIntField(1111111111111));  // 8
+    key1.AddField(new Schema::StringField(""));  // 1
+    key1.AddField(new Schema::DoubleField(3.5));  // 8
+    key1.AddField(new Schema::CharArrayField("wxyz", 4, 4));  // 4
+    key1.AddField(new Schema::BoolField(false));  // 1
+    key1.AddField(new Schema::CharArrayField("####", 0, 5));  // 5
 
     byte* buf = new byte[128];
     AssertEqual(35, key1.DumpToMem(buf), "Dump size error");
 
     // Load
     DataRecord key2;
-    key2.AddField(new IntType());
-    key2.AddField(new StringType());
-    key2.AddField(new LongIntType());
-    key2.AddField(new StringType());
-    key2.AddField(new DoubleType());
-    key2.AddField(new CharArrayType(4));
-    key2.AddField(new BoolType());
-    key2.AddField(new CharArrayType(5));
+    key2.AddField(new Schema::IntField());
+    key2.AddField(new Schema::StringField());
+    key2.AddField(new Schema::LongIntField());
+    key2.AddField(new Schema::StringField());
+    key2.AddField(new Schema::DoubleField());
+    key2.AddField(new Schema::CharArrayField(4));
+    key2.AddField(new Schema::BoolField());
+    key2.AddField(new Schema::CharArrayField(5));
     AssertEqual(35, key2.LoadFromMem(buf), "Load size error");
     AssertTrue(key1 == key2, "key1 != key2");
 
     DataRecord key3;
-    key3.AddField(new IntType());
-    key3.AddField(new StringType());
-    key3.AddField(new LongIntType());
-    key3.AddField(new StringType());
-    key3.AddField(new DoubleType());
-    key3.AddField(new CharArrayType(11));
-    key3.AddField(new BoolType());
-    key3.AddField(new CharArrayType(7));
+    key3.AddField(new Schema::IntField());
+    key3.AddField(new Schema::StringField());
+    key3.AddField(new Schema::LongIntField());
+    key3.AddField(new Schema::StringField());
+    key3.AddField(new Schema::DoubleField());
+    key3.AddField(new Schema::CharArrayField(11));
+    key3.AddField(new Schema::BoolField());
+    key3.AddField(new Schema::CharArrayField(7));
     AssertTrue(key3 < key1,  "key3 >= key1");
 
     DataRecord key4;
@@ -243,20 +244,20 @@ class RecordTest: public UnitTest {
   }
 
   void Test_SortRecords() {
-    std::vector<std::shared_ptr<Schema::RecordBase>> records;
+    std::vector<std::shared_ptr<RecordBase>> records;
     for (int i = 0; i < 10; i++) {
-      records.push_back(std::make_shared<Schema::IndexRecord>());
-      records[i]->AddField(new Schema::IntType(10 - i / 5));
-      records[i]->AddField(new Schema::LongIntType(1111111111111));
-      records[i]->AddField(new Schema::DoubleType(3.5));
-      records[i]->AddField(new Schema::BoolType(false));
+      records.push_back(std::make_shared<IndexRecord>());
+      records[i]->AddField(new Schema::IntField(10 - i / 5));
+      records[i]->AddField(new Schema::LongIntField(1111111111111));
+      records[i]->AddField(new Schema::DoubleField(3.5));
+      records[i]->AddField(new Schema::BoolField(false));
       if (i % 2 == 0) {
-        records[i]->AddField(new Schema::StringType("axy"));  
+        records[i]->AddField(new Schema::StringField("axy"));  
       }
       else {
-        records[i]->AddField(new Schema::StringType("abc"));
+        records[i]->AddField(new Schema::StringField("abc"));
       }
-      records[i]->AddField(new Schema::CharArrayType("acd", 3, 10));
+      records[i]->AddField(new Schema::CharArrayField("acd", 3, 10));
       records[i]->Print();
     }
 
@@ -269,11 +270,10 @@ class RecordTest: public UnitTest {
 
   void Test_PageRecords() {
     // Create a record page.
-    DataBaseFiles::RecordPage page(1);
+    RecordPage page(1);
     page.InitInMemoryPage();
     PageRecordsManager prmanager(&page, schema, key_indexes,
-                                 DataBaseFiles::INDEX_DATA,
-                                 DataBaseFiles::TREE_LEAVE);
+                                 INDEX_DATA, TREE_LEAVE);
 
     for (int iteration = 0; iteration < 10000; iteration++) {
       // Insert records to it.
@@ -285,7 +285,7 @@ class RecordTest: public UnitTest {
         if (!re) {
           // LogINFO("Inserted %d records", i);
           // LogINFO("Space used %d bytes",
-          //         DataBaseFiles::kPageSize - page.FreeSize());
+          //         kPageSize - page.FreeSize());
           break;
         }
         i++;
@@ -307,7 +307,7 @@ class RecordTest: public UnitTest {
       const auto& all_records = prmanager.plrecords();
       for (const auto& plrecord: all_records) {
         // Verify content of records.
-        int index = reinterpret_cast<LongIntType*>(
+        int index = reinterpret_cast<Schema::LongIntField*>(
                         plrecord.record().fields()[2].get())
                             ->value();
         AssertTrue(plrecord.record() ==
@@ -345,7 +345,7 @@ class RecordTest: public UnitTest {
 }  // namespace Schema
 
 int main() {
-  Schema::RecordTest test;
+  Storage::RecordTest test;
   test.setup();
   // test.Test_Record_Operators();
   // test.Test_Record_LoadDump();

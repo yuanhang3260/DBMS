@@ -8,27 +8,27 @@
 #include "Base/MacroUtils.h"
 #include "Base/Log.h"
 
-#include "PageRecord_Common.h"
+#include "Storage/PageRecord_Common.h"
 
-namespace Schema {
+namespace Storage {
 
 // **************************** PageLoadedRecord **************************** //
 bool PageLoadedRecord::GenerateRecordPrototype(
-         const TableSchema& schema,
+         const Schema::TableSchema& schema,
          std::vector<int> key_indexes,
-         DataBaseFiles::FileType file_type,
-         DataBaseFiles::PageType page_type) {
+         FileType file_type,
+         PageType page_type) {
   // Create record based on file tpye and page type
-  if (file_type == DataBaseFiles::INDEX_DATA &&
-      page_type == DataBaseFiles::TREE_LEAVE) {
+  if (file_type == INDEX_DATA &&
+      page_type == TREE_LEAVE) {
     record_.reset(new DataRecord());
   }
-  else if (file_type == DataBaseFiles::INDEX &&
-           page_type == DataBaseFiles::TREE_LEAVE) {
+  else if (file_type == INDEX &&
+           page_type == TREE_LEAVE) {
     record_.reset(new IndexRecord());
   }
-  else if (page_type == DataBaseFiles::TREE_NODE ||
-           page_type == DataBaseFiles::TREE_ROOT) {
+  else if (page_type == TREE_NODE ||
+           page_type == TREE_ROOT) {
     record_.reset(new TreeNodeRecord());
   }
 
@@ -56,7 +56,7 @@ bool DataRecordWithRid::Comparator(const DataRecordWithRid& r1,
   return RecordBase::RecordComparator(r1.record, r2.record, indexes);
 }
 
-void DataRecordWithRid::Sort(std::vector<Schema::DataRecordWithRid>& records,
+void DataRecordWithRid::Sort(std::vector<DataRecordWithRid>& records,
                              const std::vector<int>& key_indexes) {
   auto comparator = std::bind(Comparator,
                               std::placeholders::_1, std::placeholders::_2,
@@ -73,7 +73,7 @@ bool DataRecordRidMutation::Comparator(const DataRecordRidMutation& r1,
 }
 
 void DataRecordRidMutation::Sort(
-         std::vector<Schema::DataRecordRidMutation>& records,
+         std::vector<DataRecordRidMutation>& records,
          const std::vector<int>& key_indexes) {
   auto comparator = std::bind(Comparator,
                               std::placeholders::_1, std::placeholders::_2,
@@ -82,7 +82,7 @@ void DataRecordRidMutation::Sort(
 }
 
 void DataRecordRidMutation::SortByOldRid(
-         std::vector<Schema::DataRecordRidMutation>& records) {
+         std::vector<DataRecordRidMutation>& records) {
   std::function<bool (const DataRecordRidMutation& r1,
                       const DataRecordRidMutation& r2)> comparator =
       [](const DataRecordRidMutation& r1,

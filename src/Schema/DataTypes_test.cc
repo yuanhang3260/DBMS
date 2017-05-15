@@ -10,15 +10,15 @@ namespace Schema {
 
 class DataTypesTest: public UnitTest {
  public:
-  void Test_IntType() {
+  void Test_IntField() {
     std::cout << __FUNCTION__ << std::endl;
     // int type
     int value = Utils::RandomNumber();
-    IntType int_field(value);
+    IntField int_field(value);
     AssertEqual(value, int_field.value());
 
     int value2 = Utils::RandomNumber();
-    IntType int_field2(value2);
+    IntField int_field2(value2);
     AssertEqual(value2, int_field2.value());    
 
     AssertEqual(value < value2, int_field < int_field2);
@@ -26,9 +26,9 @@ class DataTypesTest: public UnitTest {
     AssertTrue(int_field >= int_field);
     AssertEqual(int_field == int_field2, value == value2);
     AssertEqual(int_field != int_field2, value != value2);
-    std::vector<IntType> v;
+    std::vector<IntField> v;
     for (int i = 0; i < 100; i++) {
-      v.push_back(IntType(Utils::RandomNumber()));
+      v.push_back(IntField(Utils::RandomNumber()));
     }
     std::sort(v.begin(), v.end());
     for (int i = 0; i < 99; i ++) {
@@ -36,15 +36,15 @@ class DataTypesTest: public UnitTest {
     }
   }
 
-  void Test_LongIntType() {
+  void Test_LongIntField() {
     std::cout << __FUNCTION__ << std::endl;
     // int type
     int64 value = Utils::RandomNumber();
-    LongIntType longint_field(value);
+    LongIntField longint_field(value);
     AssertEqual(value, longint_field.value());
 
     int64 value2 = Utils::RandomNumber();
-    LongIntType longint_field2(value2);
+    LongIntField longint_field2(value2);
     AssertEqual(value2, longint_field2.value());    
 
     AssertEqual(value < value2, longint_field < longint_field2);
@@ -52,9 +52,9 @@ class DataTypesTest: public UnitTest {
     AssertTrue(longint_field >= longint_field);
     AssertEqual(longint_field == longint_field2, value == value2);
     AssertEqual(longint_field != longint_field2, value != value2);
-    std::vector<LongIntType> v;
+    std::vector<LongIntField> v;
     for (int i = 0; i < 100; i++) {
-      v.push_back(LongIntType(Utils::RandomNumber()));
+      v.push_back(LongIntField(Utils::RandomNumber()));
     }
     std::sort(v.begin(), v.end());
     for (int i = 0; i < 99; i ++) {
@@ -62,15 +62,15 @@ class DataTypesTest: public UnitTest {
     }
   }
 
-  void Test_DoubleType() {
+  void Test_DoubleField() {
     std::cout << __FUNCTION__ << std::endl;
     // int type
     double value = Utils::RandomNumber() * 1.0 / Utils::RandomNumber();
-    DoubleType double_field(value);
+    DoubleField double_field(value);
     AssertEqual(value, double_field.value());
 
     double value2 = Utils::RandomNumber() * 1.0 / Utils::RandomNumber();
-    DoubleType double_field2(value2);
+    DoubleField double_field2(value2);
     AssertEqual(value2, double_field2.value());    
 
     AssertEqual(value < value2, double_field < double_field2);
@@ -78,10 +78,10 @@ class DataTypesTest: public UnitTest {
     AssertTrue(double_field >= double_field);
     AssertEqual(double_field == double_field2, value == value2);
     AssertEqual(double_field != double_field2, value != value2);
-    std::vector<DoubleType> v;
+    std::vector<DoubleField> v;
     for (int i = 0; i < 100; i++) {
       v.push_back(
-          DoubleType(Utils::RandomNumber() * 1.0 / Utils::RandomNumber()));
+          DoubleField(Utils::RandomNumber() * 1.0 / Utils::RandomNumber()));
     }
     std::sort(v.begin(), v.end());
     for (int i = 0; i < 99; i ++) {
@@ -89,41 +89,41 @@ class DataTypesTest: public UnitTest {
     }
   }
 
-  void Test_StringType() {
+  void Test_StringField() {
     std::cout << __FUNCTION__ << std::endl;
-    AssertTrue(StringType("ab") < StringType("ac"));
-    AssertTrue(StringType("ab") < StringType("abc"));
-    AssertTrue(StringType("") < StringType("ab"));
-    AssertTrue(StringType("abd") < StringType("bb"));
-    AssertTrue(StringType("abd") == StringType("abd"));
+    AssertTrue(StringField("ab") < StringField("ac"));
+    AssertTrue(StringField("ab") < StringField("abc"));
+    AssertTrue(StringField("") < StringField("ab"));
+    AssertTrue(StringField("abd") < StringField("bb"));
+    AssertTrue(StringField("abd") == StringField("abd"));
 
-    AssertTrue(StringType("xy") >= StringType("x"));
-    AssertTrue(StringType("xy") >= StringType("xba"));
-    AssertTrue(StringType("x") >= StringType(""));
-    AssertTrue(StringType("xy") >= StringType("xx"));
-    AssertTrue(StringType("xyz") == StringType("xyz"));    
+    AssertTrue(StringField("xy") >= StringField("x"));
+    AssertTrue(StringField("xy") >= StringField("xba"));
+    AssertTrue(StringField("x") >= StringField(""));
+    AssertTrue(StringField("xy") >= StringField("xx"));
+    AssertTrue(StringField("xyz") == StringField("xyz"));    
   }
 
-  void Test_CharArrayType() {
+  void Test_CharArrayField() {
     std::cout << __FUNCTION__ << std::endl;
-    AssertTrue(CharArrayType("ab", 5) < CharArrayType("ac", 5));
-    AssertTrue(CharArrayType("ab", 5) < CharArrayType("abc", 5));
-    AssertTrue(CharArrayType("", 5) < CharArrayType("ab", 5));
-    AssertTrue(CharArrayType("abd", 5) < CharArrayType("bb", 5));
-    AssertFalse(CharArrayType("ab", 5) < CharArrayType("ab", 5));
-    AssertTrue(CharArrayType("ab", 5) <= CharArrayType("ab", 5));
-    AssertTrue(CharArrayType("abd", 5) == CharArrayType("abd", 5));
+    AssertTrue(CharArrayField("ab", 5) < CharArrayField("ac", 5));
+    AssertTrue(CharArrayField("ab", 5) < CharArrayField("abc", 5));
+    AssertTrue(CharArrayField("", 5) < CharArrayField("ab", 5));
+    AssertTrue(CharArrayField("abd", 5) < CharArrayField("bb", 5));
+    AssertFalse(CharArrayField("ab", 5) < CharArrayField("ab", 5));
+    AssertTrue(CharArrayField("ab", 5) <= CharArrayField("ab", 5));
+    AssertTrue(CharArrayField("abd", 5) == CharArrayField("abd", 5));
 
-    AssertTrue(CharArrayType("xy", 5) >= CharArrayType("x", 5));
-    AssertTrue(CharArrayType("xy", 5) >= CharArrayType("xba", 5));
-    AssertTrue(CharArrayType("x", 5) >= CharArrayType("", 5));
-    AssertTrue(CharArrayType("xy", 5) >= CharArrayType("xx", 5));
-    AssertFalse(CharArrayType("xy", 5) > CharArrayType("xy", 5));
-    AssertTrue(CharArrayType("xy", 5) >= CharArrayType("xy", 5));
-    AssertTrue(CharArrayType("xyz", 5) == CharArrayType("xyz", 5));
+    AssertTrue(CharArrayField("xy", 5) >= CharArrayField("x", 5));
+    AssertTrue(CharArrayField("xy", 5) >= CharArrayField("xba", 5));
+    AssertTrue(CharArrayField("x", 5) >= CharArrayField("", 5));
+    AssertTrue(CharArrayField("xy", 5) >= CharArrayField("xx", 5));
+    AssertFalse(CharArrayField("xy", 5) > CharArrayField("xy", 5));
+    AssertTrue(CharArrayField("xy", 5) >= CharArrayField("xy", 5));
+    AssertTrue(CharArrayField("xyz", 5) == CharArrayField("xyz", 5));
 
     // Test SetData()
-    CharArrayType chararray_field("abc", 5);
+    CharArrayField chararray_field("abc", 5);
     AssertFalse(chararray_field.SetData("abcdefg", 6));
     AssertTrue(strncmp(chararray_field.value(), "abc", 3) == 0);
   }
@@ -134,11 +134,11 @@ class DataTypesTest: public UnitTest {
 int main() {
   Schema::DataTypesTest test;
   test.setup();
-  test.Test_IntType();
-  test.Test_LongIntType();
-  test.Test_DoubleType();
-  test.Test_StringType();
-  test.Test_CharArrayType();
+  test.Test_IntField();
+  test.Test_LongIntField();
+  test.Test_DoubleField();
+  test.Test_StringField();
+  test.Test_CharArrayField();
   test.teardown();
 
   std::cout << "\033[2;32mPassed ^_^\033[0m" << std::endl;

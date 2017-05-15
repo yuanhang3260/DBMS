@@ -19,9 +19,9 @@ enum FieldType {
   UNKWON,
 };
 
-class SchemaFieldType {
+class Field {
  public:
-  SchemaFieldType() = default;
+  Field() = default;
 
   virtual FieldType type() const = 0;
   virtual int length() const = 0;

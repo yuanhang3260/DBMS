@@ -4,7 +4,7 @@
 #include "Common.h"
 #include "RecordPage.h"
 
-namespace DataBaseFiles {
+namespace Storage {
 
 // ************************** RecordPageMeta ******************************** //
 void SlotDirectoryEntry::SaveToMem(byte* buf) const {
