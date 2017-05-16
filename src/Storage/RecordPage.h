@@ -1,14 +1,14 @@
-#ifndef DATABASEFILES_RECORDSLOT_
-#define DATABASEFILES_RECORDSLOT_
+#ifndef STORAGE_RECORDSPAGE_
+#define STORAGE_RECORDSPAGE_
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <unistd.h>
 #include <string.h>
-#include <vector>
-#include <set>
+#include <unistd.h>
 #include <memory>
+#include <set>
 #include <string>
+#include <vector>
 
 #include "Base/MacroUtils.h"
 
@@ -44,8 +44,6 @@ class SlotDirectoryEntry {
 
 
 // Record page meta data.
-// | num_slots | num_records | free_start  | slot 0 | slot 1 | slot 2 | ... |
-// |  4 bytes  |   4 bytes   |  4 bytes    |          num_slots * 8         |
 class RecordPageMeta {
  public:
   // Constructors
@@ -68,25 +66,26 @@ class RecordPageMeta {
   DEFINE_ACCESSOR_ENUM(page_type, PageType);
 
   // Get slot directory.
-  std::vector<SlotDirectoryEntry>& slot_directory();
+  const std::vector<SlotDirectoryEntry>& slot_directory() const;
+  std::vector<SlotDirectoryEntry>* mutable_slot_directory();
 
-  // Page meta data dump and load.
+  // Total size of meta data.
   int size() const;
   // Reset all fields.
   void reset();
   // Save meta data to page.
-  bool SaveMetaToPage(byte* ppage) const;
+  bool SaveMetaToMem(byte* ppage) const;
   // Load meta data from page.
-  bool LoadMetaFromPage(const byte* ppage);
+  bool LoadMetaFromMem(const byte* ppage);
 
   // Get a unused slot id avaible.
-  int AllocateSlotAvailable();
+  int16 AllocateSlotAvailable();
   // Release a slot.
-  bool ReleaseSlot(int slotid);
+  bool ReleaseSlot(int16 slotid);
   // Number of empty slots available.
   int NumEmptySlots() const { return empty_slots_.size(); }
   // Add an empty slot entry.
-  bool AddEmptySlot(int slot_id);
+  bool AddEmptySlot(int16 slot_id);
 
  private:
   int16 num_slots_ = 0;
@@ -103,7 +102,7 @@ class RecordPageMeta {
 
   // A set of empty slots id. It is created when loading a page. New record
   // insert operation will first check this list to find a slot available.
-  std::set<int> empty_slots_;
+  std::set<int16> empty_slots_;
 };
 
 
@@ -142,21 +141,21 @@ class RecordPage {
   //static bool PreCheckCanFitInEmptyPage(int num_records, int total_size);
 
   // Return the data pointer to a record.
-  byte* Record(int slot_id) const;
+  byte* Record(int16 slot_id) const;
 
   // Record length.
-  int RecordLength(int slot_id) const;
+  int RecordLength(int16 slot_id) const;
 
   // Insert a record. This function only reserved space in page but no actual
   // record data will be copied yet.
-  int InsertRecord(int length);
+  int16 InsertRecord(int length);
   // Insert a record with data.
-  int InsertRecord(const byte* content, int length);
+  int16 InsertRecord(const byte* content, int length);
 
   // Delete a record
-  bool DeleteRecord(int slotid);
+  bool DeleteRecord(int16 slot_id);
   // Delete a number of records.
-  bool DeleteRecords(int from, int end);
+  bool DeleteRecords(int16 from, int16 end);
 
   // Clear this page.
   void Clear();
@@ -169,7 +168,7 @@ class RecordPage {
   std::unique_ptr<byte> data_;
 };
 
-}  // namespace DataBaseFiles
+}  // namespace Storage
 
 
-#endif  /* DATABASEFILES_RECORDSLOT_ */
+#endif  /* STORAGE_RECORDSPAGE_ */

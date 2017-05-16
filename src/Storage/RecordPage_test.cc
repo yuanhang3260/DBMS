@@ -95,7 +95,7 @@ class RecordPageTest: public UnitTest {
   }
 
   void VerifyPageRecords() {
-    for (auto& slot: page_->Meta()->slot_directory()) {
+    for (const auto& slot : page_->Meta()->slot_directory()) {
       int offset = slot.offset();
       int length = slot.length();
       if (offset < 0) {
@@ -138,23 +138,29 @@ class RecordPageTest: public UnitTest {
       int16 number_records = page_->Meta()->num_records();
       // Generate a random list of slot id to delete.
       double delete_percent = (Utils::RandomNumber(10) + 1) / 10.0;
-      auto& slot_directory = page_->Meta()->slot_directory();
+      const auto& slot_directory = page_->Meta()->slot_directory();
       int delete_num = slot_directory.size() * delete_percent;
       std::vector<int> slots_to_delete =
           Utils::RandomListFromRange(0, slot_directory.size() - 1, delete_num);
       //AssertFalse(slots_to_delete.empty(), "delete list empty");
 
       // delete records.
-      for (int slot_id: slots_to_delete) {
+      for (int16 slot_id : slots_to_delete) {
         // delete the record.
-        if(slot_directory[slot_id].offset() >= 0) {
-          free_size += slot_directory[slot_id].length();
+        if (slot_id >= (int)slot_directory.size()) {
+          AssertFalse(page_->DeleteRecord(slot_id),
+                      "Delete out of range slot id should fail");
+          continue;
+        }
+
+        if(slot_directory.at(slot_id).offset() >= 0) {
+          free_size += slot_directory.at(slot_id).length();
           // if deleted last slot, we save another 4 bytes from releasing the
           // slot direcotry entry.
           if (slot_id == (int)slot_directory.size() - 1) {
             free_size += 4;
             for (int i = slot_directory.size() - 2;
-                 i >= 0 && slot_directory[i].offset() < 0;
+                 i >= 0 && slot_directory.at(i).offset() < 0;
                  i--) {
               free_size += 4;
               empty_slots--;

@@ -21,11 +21,15 @@ void SlotDirectoryEntry::LoadFromMem(const byte* buf) {
 
 
 // ************************** RecordPageMeta ******************************** //
-std::vector<SlotDirectoryEntry>& RecordPageMeta::slot_directory() {
+const std::vector<SlotDirectoryEntry>& RecordPageMeta::slot_directory() const {
   return slot_directory_;
 }
 
-int RecordPageMeta::AllocateSlotAvailable() {
+std::vector<SlotDirectoryEntry>* RecordPageMeta::mutable_slot_directory() {
+  return &slot_directory_;
+}
+
+int16 RecordPageMeta::AllocateSlotAvailable() {
   if (empty_slots_.size() == 0) {
     // We might even have no enough space to allocate a new slot directory enty.
     if (free_start_ + kSlotDirectoryEntrySize + size() > kPageSize) {
@@ -36,49 +40,53 @@ int RecordPageMeta::AllocateSlotAvailable() {
     return slot_directory_.size() - 1;
   }
   else {
-    int re = *(empty_slots_.begin());
-    if (slot_directory_[re].offset() >= 0) {
-      LogERROR("Error empty slot - should not have offset > 0\n");
-    }
+    int16 re = *(empty_slots_.begin());
+    SANITY_CHECK(slot_directory_.at(re).offset() < 0,
+                 "Error empty slot - should not have offset > 0\n");
     empty_slots_.erase(empty_slots_.begin());
     return re;
   }
 }
 
-bool RecordPageMeta::ReleaseSlot(int slot_id) {
-  if (slot_directory_[slot_id].offset() >= 0) {
-    slot_directory_[slot_id].set_offset(-1);
-    num_records_--;
-    // Decrement space_used.
-    space_used_ -= slot_directory_[slot_id].length();
-
-    // Remove the slot entry if at the end of slot directory.
-    if (slot_id == (int)slot_directory_.size() - 1) {
-      slot_directory_.pop_back();
-      num_slots_--;
-      // And removing all trailing empty slot entries. We make sure the last
-      // slot entry is always a valid one.
-      while (!slot_directory_.empty() && slot_directory_.back().offset() < 0) {
-        int id = slot_directory_.size() - 1;
-        slot_directory_.pop_back();
-        // Remove it from empty slot set.
-        auto it = empty_slots_.find(id);
-        if (it != empty_slots_.end()) {
-          empty_slots_.erase(it);
-          num_slots_--;
-        }
-      }
-    }
-    else {
-      empty_slots_.insert(slot_id);
-    }
-    return true;
+bool RecordPageMeta::ReleaseSlot(int16 slot_id) {
+  if (slot_id >= (int)slot_directory_.size()) {
+    return false;
   }
-  return false;
+
+  if (slot_directory_.at(slot_id).offset() < 0) {
+    return false;
+  }
+
+  slot_directory_[slot_id].set_offset(-1);
+  num_records_--;
+  // Decrement space_used.
+  space_used_ -= slot_directory_[slot_id].length();
+
+  // Remove the slot entry if at the end of slot directory.
+  if (slot_id == (int)slot_directory_.size() - 1) {
+    slot_directory_.pop_back();
+    num_slots_--;
+    // And removing all trailing empty slot entries. We make sure the last
+    // slot entry is always a valid one.
+    while (!slot_directory_.empty() && slot_directory_.back().offset() < 0) {
+      int16 id = slot_directory_.size() - 1;
+      slot_directory_.pop_back();
+      // Remove it from empty slot set.
+      auto it = empty_slots_.find(id);
+      SANITY_CHECK(it != empty_slots_.end(),
+                   "empty slot %d not in empty_slots set.", id);
+      empty_slots_.erase(it);
+      num_slots_--;
+    }
+  }
+  else {
+    empty_slots_.insert(slot_id);
+  }
+  return true;
 }
 
 
-bool RecordPageMeta::AddEmptySlot(int slot_id) {
+bool RecordPageMeta::AddEmptySlot(int16 slot_id) {
   if (slot_directory_[slot_id].offset() >= 0) {
     LogERROR("[Can't add to empty slot list] - slot[%d] has offset %d >= 0",
              slot_id, slot_directory_[slot_id].offset());
@@ -109,23 +117,20 @@ void RecordPageMeta::reset() {
 
 // Meta data is stored at the end of each page. The layout is reverse order of
 // as shown in RecordPage.h
-bool RecordPageMeta::SaveMetaToPage(byte* ppage) const {
+bool RecordPageMeta::SaveMetaToMem(byte* ppage) const {
   if (!ppage) {
     LogERROR("Can't save meta to page nullptr");
     return false;
   }
 
-  if (num_slots_ != (int)slot_directory_.size()) {
-    LogERROR("[Save page meta data error] - num_slots inconsistency (%d, %d)",
-             num_slots_, slot_directory_.size());
-    return false;
-  }
-  if (num_records_ + (int)empty_slots_.size() != num_slots_) {
-    LogERROR("[Save page meta data error] - "
-             "records %d + empty_slots %d != num_slots %d",
-             num_records_, (int)empty_slots_.size(), num_slots_);
-    return false;
-  }
+  SANITY_CHECK(num_slots_ == (int)slot_directory_.size(),
+               "[Save page meta error] - num_slots inconsistency (%d, %d)",
+               num_slots_, slot_directory_.size());
+
+  SANITY_CHECK(num_records_ + (int)empty_slots_.size() == num_slots_,
+               "[Save page meta error] - "
+               "records %d + empty_slots %d != num_slots %d",
+               num_records_, (int)empty_slots_.size(), num_slots_);
 
   int offset = kPageSize - sizeof(num_slots_);
   memcpy(ppage + offset, &num_slots_, sizeof(num_slots_));
@@ -172,24 +177,21 @@ bool RecordPageMeta::SaveMetaToPage(byte* ppage) const {
     }
   }
 
-  if (num_records_ != count_valid_records) {
-    LogERROR("[Save page meta data error] - num_records inconsistency (%d, %d)",
-             num_records_, count_valid_records);
-    return false;
-  }
-  if (space_used_ != count_space_used) {
-    LogERROR("[Save page meta data error] - space_used inconsistency (%d, %d)",
-             space_used_, count_space_used);
-    return false;
-  }
-  if (kPageSize - offset != size()) {
-    LogERROR("[Save page meta data error] - meta data length inconsistency");
-    return false;
-  }
+  SANITY_CHECK(num_records_ == count_valid_records,
+               "[Save page meta error] - num_records inconsistency (%d, %d)",
+               num_records_, count_valid_records);
+
+  SANITY_CHECK(space_used_ == count_space_used,
+               "[Save page meta error] - space_used inconsistency (%d, %d)",
+              space_used_, count_space_used);
+
+  SANITY_CHECK(kPageSize - offset == size(),
+               "[Save page meta error] - meta data length inconsistency");
+
   return true;
 }
 
-bool RecordPageMeta::LoadMetaFromPage(const byte* ppage) {
+bool RecordPageMeta::LoadMetaFromMem(const byte* ppage) {
   if (!ppage) {
     LogERROR("Can't load meta from page nullptr");
     return false;
@@ -202,11 +204,9 @@ bool RecordPageMeta::LoadMetaFromPage(const byte* ppage) {
   offset -= sizeof(num_records_);
   memcpy(&num_records_, ppage + offset, sizeof(num_records_));
 
-  if (num_records_ > num_slots_) {
-    LogERROR("[Load page meta data error] - num_records_ >  num_slots_ (%d, %d)",
-             num_records_, num_slots_);
-    return false;
-  }
+  SANITY_CHECK(num_records_ <= num_slots_,
+               "[Load page meta error] - num_records %d >  num_slots %d",
+               num_records_, num_slots_);
 
   offset -= sizeof(free_start_);
   memcpy(&free_start_, ppage + offset, sizeof(free_start_));
@@ -252,31 +252,25 @@ bool RecordPageMeta::LoadMetaFromPage(const byte* ppage) {
   }
 
   // Consistency checks for loaded page meta.
-  if (num_slots_ != (int)slot_directory_.size()) {
-    LogERROR("[Load page meta data error] - num_slots inconsistency (%d, %d)",
-             num_slots_, slot_directory_.size());
-    return false;
-  }
-  if (num_records_ + (int)empty_slots_.size() != num_slots_) {
-    LogERROR("[Load page meta data error] - "
-             "records %d + empty_slots %d != num_slots %d",
-             num_records_, (int)empty_slots_.size(), num_slots_);
-    return false;
-  }
-  if (num_records_ != count_valid_records) {
-    LogERROR("[Load page meta data error] - num_records inconsistency (%d, %d)",
-             num_records_, count_valid_records);
-    return false;
-  }
-  if (space_used_ != count_space_used) {
-    LogERROR("[Load page meta data error] - space_used inconsistency (%d, %d)",
-             space_used_, count_space_used);
-    return false;
-  }
-  if (kPageSize - offset != size()) {
-    LogERROR("[Load page meta data error] - meta data length inconsistency");
-    return false;
-  }
+  SANITY_CHECK(num_slots_ == (int)slot_directory_.size(),
+               "[Load page meta error] - num_slots inconsistency (%d, %d)",
+               num_slots_, slot_directory_.size());
+
+  SANITY_CHECK(num_records_ + (int)empty_slots_.size() == num_slots_,
+               "[Load page meta error] - "
+               "records %d + empty_slots %d != num_slots %d",
+               num_records_, (int)empty_slots_.size(), num_slots_);
+
+  SANITY_CHECK(num_records_ == count_valid_records,
+               "[Load page meta error] - num_records inconsistency (%d, %d)",
+               num_records_, count_valid_records);
+
+  SANITY_CHECK(space_used_ == count_space_used,
+               "[Load page meta error] - space_used inconsistency (%d, %d)",
+               space_used_, count_space_used);
+
+  SANITY_CHECK(kPageSize - offset == size(),
+               "[Load page meta error] - meta data length inconsistency");
 
   return true;
 }
@@ -314,7 +308,7 @@ bool RecordPage::DumpPageData() {
     LogERROR("[Dump Page Error] - No meta available");
     return false;
   }
-  if (!page_meta_->SaveMetaToPage(data_.get())) {
+  if (!page_meta_->SaveMetaToMem(data_.get())) {
     return false;
   }
 
@@ -352,7 +346,7 @@ bool RecordPage::LoadPageData() {
   if (!page_meta_) {
     page_meta_.reset(new RecordPageMeta());
   }
-  if (!page_meta_->LoadMetaFromPage(data_.get())) {
+  if (!page_meta_->LoadMetaFromMem(data_.get())) {
     return false;
   }
   valid_ = true;
@@ -362,7 +356,7 @@ bool RecordPage::LoadPageData() {
 bool RecordPage::ReorganizeRecords() {
   byte* new_page = new byte[kPageSize];
   int offset = 0;
-  for (auto& slot: page_meta_->slot_directory()) {
+  for (auto& slot : *page_meta_->mutable_slot_directory()) {
     if (slot.offset() >= 0) {
       memcpy(new_page + offset, data_.get() + slot.offset(), slot.length());
       slot.set_offset(offset);
@@ -372,48 +366,49 @@ bool RecordPage::ReorganizeRecords() {
   data_.reset(new_page);
 
   page_meta_->set_free_start(offset);
+
   // (TODO: need this?) : save meta to the new page.
-  //bool success = page_meta_->SaveMetaToPage(new_page);
+  //bool success = page_meta_->SaveMetaToMem(new_page);
   return true;
 }
 
 bool RecordPage::PreCheckCanInsert(int num_records, int total_size) {
   int num_slots_deficit = num_records - page_meta_->NumEmptySlots();
-  int num_new_slots_needed = num_slots_deficit > 0 ? num_slots_deficit : 0;
+  int num_new_slots_needed = std::max(num_slots_deficit, 0);
   return num_new_slots_needed * kSlotDirectoryEntrySize + page_meta_->size() +
          total_size + page_meta_->space_used() <= kPageSize;
 }
 
-byte* RecordPage::Record(int slot_id) const {
-  auto& slot_directory = page_meta_->slot_directory();
+byte* RecordPage::Record(int16 slot_id) const {
+  const auto& slot_directory = page_meta_->slot_directory();
   if (slot_id < 0 || slot_id > (int)slot_directory.size()) {
     LogERROR("Can't get Record from page - slot_id %d out of range [0 - %d]",
              slot_id, slot_directory.size());
     return nullptr;
   }
-  if (slot_directory[slot_id].offset() < 0) {
+  if (slot_directory.at(slot_id).offset() < 0) {
     LogERROR("Empty slot_id %d, won't load record", slot_id);
     return nullptr;
   }
-  return data_.get() + slot_directory[slot_id].offset();
+  return data_.get() + slot_directory.at(slot_id).offset();
 }
 
-int RecordPage::RecordLength(int slot_id) const {
-  auto& slot_directory = page_meta_->slot_directory();
+int RecordPage::RecordLength(int16 slot_id) const {
+  const auto& slot_directory = page_meta_->slot_directory();
   if (slot_id < 0 || slot_id > (int)slot_directory.size()) {
     LogERROR("Can't get Record from page - slot_id %d out of range [0 - %d]",
              slot_id, slot_directory.size());
     return -1;
   }
-  if (slot_directory[slot_id].offset() < 0) {
+  if (slot_directory.at(slot_id).offset() < 0) {
     LogERROR("Empty slot_id %d, won't load record", slot_id);
     return -1;
   }
-  return slot_directory[slot_id].length();
+  return slot_directory.at(slot_id).length();
 }
 
-int RecordPage::InsertRecord(const byte* content, int length) {
-  int slot_id = InsertRecord(length);
+int16 RecordPage::InsertRecord(const byte* content, int length) {
+  int16 slot_id = InsertRecord(length);
   if (slot_id >= 0) {
     // Write the record content to page.
     memcpy(Record(slot_id), content, length);
@@ -422,13 +417,13 @@ int RecordPage::InsertRecord(const byte* content, int length) {
   return -1;
 }
 
-int RecordPage::InsertRecord(int length) {
+int16 RecordPage::InsertRecord(int length) {
   if (!PreCheckCanInsert(1, length)) {
     return -1;
   }
 
   // Allocate a slot id for the new record.
-  int slot_id = page_meta_->AllocateSlotAvailable();
+  int16 slot_id = page_meta_->AllocateSlotAvailable();
   bool reorganized = false;
   // No space for appending new slot id. Re-organize records and try again.
   if (slot_id < 0) {
@@ -440,7 +435,7 @@ int RecordPage::InsertRecord(int length) {
     }
   }
 
-  std::vector<SlotDirectoryEntry>& slot_dir = page_meta_->slot_directory();
+  auto slot_directory = page_meta_->mutable_slot_directory();
 
   if (FreeSize() < length) {
     // Re-organize records and re-try inserting new record.
@@ -449,8 +444,8 @@ int RecordPage::InsertRecord(int length) {
     }
     if (FreeSize() < length) {
       // Rollback the newly allocated slot entry.
-      if (slot_dir.back().offset() < 0) {
-        slot_dir.pop_back();
+      if (slot_directory->back().offset() < 0) {
+        slot_directory->pop_back();
         page_meta_->decrement_num_slots(1);
       }
       else {
@@ -460,21 +455,21 @@ int RecordPage::InsertRecord(int length) {
     }
   }
 
-  slot_dir[slot_id].set_offset(page_meta_->free_start());
-  slot_dir[slot_id].set_length(length);
+  (*slot_directory)[slot_id].set_offset(page_meta_->free_start());
+  (*slot_directory)[slot_id].set_length(length);
   page_meta_->increment_free_start(length);
   page_meta_->increment_num_records(1);
   page_meta_->increment_space_used(length);
 
   // (TODO: need this?) Re-write meta data to page.
-  if (!page_meta_->SaveMetaToPage(data_.get())) {
+  if (!page_meta_->SaveMetaToMem(data_.get())) {
     return -1;
   }
 
   return slot_id;
 }
 
-bool RecordPage::DeleteRecord(int slot_id) {
+bool RecordPage::DeleteRecord(int16 slot_id) {
   if (slot_id < 0) {
     return false;
   }
@@ -483,15 +478,15 @@ bool RecordPage::DeleteRecord(int slot_id) {
   }
 
   // (TODO: need this?) Re-write meta data to page.
-  if (!page_meta_->SaveMetaToPage(data_.get())) {
+  if (!page_meta_->SaveMetaToMem(data_.get())) {
     return false;
   }
 
   return true;
 }
 
-bool RecordPage::DeleteRecords(int from, int end) {
-  for (int slot_id = from; slot_id <= end; slot_id++) {
+bool RecordPage::DeleteRecords(int16 from, int16 end) {
+  for (int16 slot_id = from; slot_id <= end; slot_id++) {
     if (slot_id < 0 || slot_id >= (int)page_meta_->slot_directory().size()) {
       LogERROR("Slot id %d out of range [0, %d], won't delete",
                slot_id, (int)page_meta_->slot_directory().size() - 1);
@@ -502,7 +497,7 @@ bool RecordPage::DeleteRecords(int from, int end) {
     }
   }
   // (TODO: need this?) Re-write meta data to page.
-  if (!page_meta_->SaveMetaToPage(data_.get())) {
+  if (!page_meta_->SaveMetaToMem(data_.get())) {
     return false;
   }
   return true;
@@ -513,4 +508,4 @@ void RecordPage::Clear() {
   page_meta_->reset();
 }
 
-}  // namespace DataBaseFiles
+}  // namespace Storage
