@@ -237,14 +237,14 @@ class BplusTreeTest: public UnitTest {
     for (auto& entry: record_resource) {
       v.push_back(entry.second);
     }
-    PageRecordsManager::SortRecords(v, key_indexes);
+    PageRecordsManager::SortRecords(&v, key_indexes);
     std::vector<int> start_list;
     start_list.push_back(0);
     RecordBase key;
     ((DataRecord*)v[0].get())->ExtractKey(&key, key_indexes);
     for (int i = 1; i < (int)v.size(); i++) {
       if (RecordBase::CompareRecordWithKey(
-              &key, v[i].get(), key_indexes) == 0) {
+              key, *v[i], key_indexes) == 0) {
         continue;
       }
       key.clear();
@@ -263,7 +263,7 @@ class BplusTreeTest: public UnitTest {
 
       result.clear();
       AssertEqual(start_list[i + 1] - start_list[i],
-                  tree->SearchRecords(&key, &result), "Search result differs");
+                  tree->SearchRecords(key, &result), "Search result differs");
     }
   }
 
@@ -314,7 +314,7 @@ class BplusTreeTest: public UnitTest {
       IndexRecord irecord;
       _GenerateIndeRecord(&irecord, 'a', 60);
       AssertTrue(irecord.InsertToRecordPage(leave) < 0);
-      auto result = prmanager.InsertRecordAndSplitPage(&irecord, rid_mutations);
+      auto result = prmanager.InsertRecordAndSplitPage(irecord, rid_mutations);
       AssertEqual(2, (int)result.size());
       result[0].record->Print();
       AssertEqual(3, (int)result[0].page->Meta()->num_records());
@@ -339,7 +339,7 @@ class BplusTreeTest: public UnitTest {
       _GenerateIndeRecord(&irecord, 'b', 60);
       AssertTrue(irecord.InsertToRecordPage(leave) < 0);
       
-      auto result = prmanager.InsertRecordAndSplitPage(&irecord, rid_mutations);
+      auto result = prmanager.InsertRecordAndSplitPage(irecord, rid_mutations);
       AssertEqual(2, (int)result.size());
       result[0].record->Print();
       AssertEqual(1, (int)result[0].page->Meta()->num_records());
@@ -373,7 +373,7 @@ class BplusTreeTest: public UnitTest {
       _GenerateIndeRecord(&irecord, 'b', 55);
       AssertTrue(irecord.InsertToRecordPage(leave) < 0);
       
-      auto result = prmanager.InsertRecordAndSplitPage(&irecord, rid_mutations);
+      auto result = prmanager.InsertRecordAndSplitPage(irecord, rid_mutations);
       AssertEqual(3, (int)result.size());
       result[0].record->Print();
       AssertEqual(2, (int)result[0].page->Meta()->num_records());
@@ -414,7 +414,7 @@ class BplusTreeTest: public UnitTest {
       _GenerateIndeRecord(&irecord, 'b', 50);
       AssertTrue(irecord.InsertToRecordPage(leave) < 0);
       
-      auto result = prmanager.InsertRecordAndSplitPage(&irecord, rid_mutations);
+      auto result = prmanager.InsertRecordAndSplitPage(irecord, rid_mutations);
       AssertEqual(3, (int)result.size());
       result[0].record->Print();
       AssertEqual(1, (int)result[0].page->Meta()->num_records());
@@ -447,7 +447,7 @@ class BplusTreeTest: public UnitTest {
       _GenerateIndeRecord(&irecord, 'a', 40);
       AssertTrue(irecord.InsertToRecordPage(leave) < 0);
 
-      auto result = prmanager.InsertRecordAndSplitPage(&irecord, rid_mutations);
+      auto result = prmanager.InsertRecordAndSplitPage(irecord, rid_mutations);
       AssertEqual(2, (int)result.size());
       result[0].record->Print();
       AssertEqual(3, (int)result[0].page->Meta()->num_records());
@@ -472,7 +472,7 @@ class BplusTreeTest: public UnitTest {
       _GenerateIndeRecord(&irecord, 'e', 30);
       AssertTrue(irecord.InsertToRecordPage(leave) < 0);
 
-      auto result = prmanager.InsertRecordAndSplitPage(&irecord, rid_mutations);
+      auto result = prmanager.InsertRecordAndSplitPage(irecord, rid_mutations);
       AssertEqual(2, (int)result.size());
       result[0].record->Print();
       AssertEqual(3, (int)result[0].page->Meta()->num_records());
@@ -497,7 +497,7 @@ class BplusTreeTest: public UnitTest {
       _GenerateIndeRecord(&irecord, 'a', 50);
       AssertTrue(irecord.InsertToRecordPage(leave) < 0);
 
-      auto result = prmanager.InsertRecordAndSplitPage(&irecord, rid_mutations);
+      auto result = prmanager.InsertRecordAndSplitPage(irecord, rid_mutations);
       AssertEqual(2, (int)result.size());
       result[0].record->Print();
       AssertEqual(4, (int)result[0].page->Meta()->num_records());
@@ -532,7 +532,7 @@ class BplusTreeTest: public UnitTest {
       _GenerateIndeRecord(&irecord, 'b', 50);
       AssertTrue(irecord.InsertToRecordPage(leave) < 0);
 
-      auto result = prmanager.InsertRecordAndSplitPage(&irecord, rid_mutations);
+      auto result = prmanager.InsertRecordAndSplitPage(irecord, rid_mutations);
       AssertEqual(3, (int)result.size());
       result[0].record->Print();
       AssertEqual(1, (int)result[0].page->Meta()->num_records());
@@ -566,7 +566,7 @@ class BplusTreeTest: public UnitTest {
       _GenerateIndeRecord(&irecord, 'b', 55);
       AssertTrue(irecord.InsertToRecordPage(leave) < 0);
 
-      auto result = prmanager.InsertRecordAndSplitPage(&irecord, rid_mutations);
+      auto result = prmanager.InsertRecordAndSplitPage(irecord, rid_mutations);
       AssertEqual(3, (int)result.size());
       result[0].record->Print();
       AssertEqual(1, (int)result[0].page->Meta()->num_records());
@@ -651,7 +651,7 @@ class BplusTreeTest: public UnitTest {
     for (int i = 0; i < (int)record_resource.size(); i++) {
       v.push_back(record_resource[i]);
     }
-    PageRecordsManager::SortRecords(v, key_indexes);
+    PageRecordsManager::SortRecords(&v, key_indexes);
 
     // Insert first half of records.
     std::vector<std::shared_ptr<RecordBase>> v1;

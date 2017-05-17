@@ -30,7 +30,7 @@ class RecordID {
   int DumpToMem(byte* buf) const;
   int LoadFromMem(const byte* buf);
 
-  int size() const { return sizeof(page_id_) + sizeof(slot_id_); }
+  uint32 size() const { return sizeof(page_id_) + sizeof(slot_id_); }
 
   void Print() const;
 
@@ -84,7 +84,7 @@ class RecordBase {
   virtual ~RecordBase() { /*printf("deleting RecordBase\n");*/ }
 
   // Total size it takes as raw data.
-  virtual int size() const;
+  virtual uint32 size() const;
 
   // Number of fields this key contains.
   int NumFields() const { return fields_.size(); }
@@ -135,16 +135,16 @@ class RecordBase {
   bool operator==(const RecordBase& other) const;
   bool operator!=(const RecordBase& other) const;
 
-  static int CompareRecordsBasedOnIndex(const RecordBase* r1,
-                                        const RecordBase* r2,
+  static int CompareRecordsBasedOnIndex(const RecordBase& r1,
+                                        const RecordBase& r2,
                                         const std::vector<int>& indexes);
 
-  static bool RecordComparator(const std::shared_ptr<RecordBase> r1,
-                               const std::shared_ptr<RecordBase> r2,
+  static bool RecordComparator(const RecordBase& r1,
+                               const RecordBase& r2,
                                const std::vector<int>& indexes);
 
-  static int CompareRecordWithKey(const RecordBase* key,
-                                  const RecordBase* record,
+  static int CompareRecordWithKey(const RecordBase& key,
+                                  const RecordBase& record,
                                   const std::vector<int>& indexes);
 
   // Insert the record to a page and returns the record's slot id.
@@ -183,7 +183,7 @@ class IndexRecord: public RecordBase {
 
   DEFINE_ACCESSOR(rid, RecordID);
 
-  int size() const override;
+  uint32 size() const override;
   virtual RecordType type() const { return INDEX_RECORD; }
 
   int DumpToMem(byte* buf) const override;
@@ -207,7 +207,7 @@ class TreeNodeRecord: public RecordBase {
 
   DEFINE_ACCESSOR(page_id, int);
 
-  int size() const override;
+  uint32 size() const override;
   virtual RecordType type() const { return TREENODE_RECORD; }
 
   int DumpToMem(byte* buf) const override;

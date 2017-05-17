@@ -160,7 +160,7 @@ bool Table::PreLoadData(
   tree_map_.clear();
 
   // Sort the record based on idata_indexes_ (preferably primary key).
-  Storage::PageRecordsManager::SortRecords(records, idata_indexes_);
+  Storage::PageRecordsManager::SortRecords(&records, idata_indexes_);
 
   // BulkLoad DataRecord.
   auto filename = BplusTreeFileName(Storage::INDEX_DATA, idata_indexes_);
@@ -207,7 +207,7 @@ bool Table::PreLoadData(
     if (IsDataFileKey(key_index[0])) {
       continue;
     }
-    Storage::DataRecordWithRid::Sort(record_rids, key_index);
+    Storage::DataRecordWithRid::Sort(&record_rids, key_index);
     // printf("sort by index %d\n", key_index[0]);
     // for (auto r: record_rids) {
     //   r.record->Print();
@@ -263,8 +263,8 @@ bool Table::ValidateAllIndexRecords(int num_records) {
     // An IndexRecord instance to load index records from tree leaves.
     Storage::IndexRecord irecord;
     irecord.InitRecordFields(schema_, key_index,
-                               Storage::INDEX,
-                               Storage::TREE_LEAVE);
+                             Storage::INDEX,
+                             Storage::TREE_LEAVE);
 
     // Traverse all leaves for this index tree.
     auto leave = tree->FirstLeave();
@@ -285,8 +285,8 @@ bool Table::ValidateAllIndexRecords(int num_records) {
         // Load the DataRecord pointed by this rid.
         CheckLogFATAL(drecord.LoadFromMem(data_tree->Record(rid)) >= 0,
                       "Load data record failed");
-        if (Storage::RecordBase::CompareRecordWithKey(&irecord, &drecord,
-                                                     key_index) != 0) {
+        if (Storage::RecordBase::CompareRecordWithKey(irecord, drecord,
+                                                      key_index) != 0) {
           LogERROR("Compare index %d record failed with original data record",
                    key_index[0]);
           drecord.Print();

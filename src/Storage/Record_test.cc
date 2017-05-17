@@ -261,7 +261,7 @@ class RecordTest: public UnitTest {
       records[i]->Print();
     }
 
-    PageRecordsManager::SortRecords(records, std::vector<int>{4, 0});
+    PageRecordsManager::SortRecords(&records, std::vector<int>{4, 0});
     std::cout << "After sorting:" << std::endl;
     for (int i = 0; i < 10; i++) {
       records[i]->Print();

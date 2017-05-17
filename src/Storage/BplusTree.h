@@ -115,7 +115,7 @@ class BplusTree {
   std::shared_ptr<RecordBase> GetRecord(RecordID rid);
 
   // Serach records by a key. Returns all records that matches this key.
-  int SearchRecords(const RecordBase* key,
+  int SearchRecords(const RecordBase& key,
                     std::vector<std::shared_ptr<RecordBase>>* result);
 
   // Search a key and return the leave.
@@ -279,7 +279,7 @@ class BplusTree {
   // Fetch all matching records from BB+ tree.
   int FetchResultsFromLeave(
           RecordPage* leave,
-          const RecordBase* key,
+          const RecordBase& key,
           std::vector<std::shared_ptr<RecordBase>>* result);
 
   int DeleteMatchedRecordsFromLeave(

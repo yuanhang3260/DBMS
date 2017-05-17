@@ -4,8 +4,9 @@
 #include <stdexcept>
 #include <algorithm>
 
-#include "Base/Utils.h"
+#include "Base/MacroUtils.h"
 #include "Base/Log.h"
+#include "Base/Utils.h"
 
 #include "Storage/PageRecordsManager.h"
 
@@ -32,19 +33,28 @@ PageRecordsManager::PageRecordsManager(RecordPage* page,
 }
 
 void PageRecordsManager::SortRecords(
-         std::vector<std::shared_ptr<RecordBase>>& records,
+         std::vector<std::shared_ptr<RecordBase>>* records,
          const std::vector<int>& key_indexes) {
-  for (int i: key_indexes) {
-    if (i >= records[0]->NumFields()) {
+  for (int i : key_indexes) {
+    if (i >= records->at(0)->NumFields()) {
       LogERROR("key index = %d, records only has %d fields",
-               i, records[0]->NumFields());
+               i, records->at(0)->NumFields());
       throw std::out_of_range("key index out of range");
     }
   }
-  auto comparator = std::bind(RecordBase::RecordComparator,
+
+  auto comparator = [&key_indexes] (std::shared_ptr<RecordBase> r1,
+                                    std::shared_ptr<RecordBase> r2) {
+    return RecordBase::RecordComparator(*r1, *r2, key_indexes);
+  };
+  std::stable_sort(records->begin(), records->end(), comparator);
+}
+
+void PageRecordsManager::SortByIndexes(const std::vector<int>& key_indexes) {
+  auto comparator = std::bind(PageLoadedRecord::Comparator,
                               std::placeholders::_1, std::placeholders::_2,
                               key_indexes);
-  std::stable_sort(records.begin(), records.end(), comparator);
+  std::stable_sort(plrecords_.begin(), plrecords_.end(), comparator);
 }
 
 bool PageRecordsManager::LoadRecordsFromPage() {
@@ -57,7 +67,7 @@ bool PageRecordsManager::LoadRecordsFromPage() {
   plrecords_.clear();
 
   const auto& slot_directory = page_->Meta()->slot_directory();
-  for (int slot_id = 0; slot_id < (int)slot_directory.size(); slot_id++) {
+  for (uint32 slot_id = 0; slot_id < slot_directory.size(); slot_id++) {
     int offset = slot_directory.at(slot_id).offset();
     int length = slot_directory.at(slot_id).length();
     if (offset < 0) {
@@ -82,10 +92,7 @@ bool PageRecordsManager::LoadRecordsFromPage() {
   }
 
   // Sort records
-  auto comparator = std::bind(PageLoadedRecord::Comparator,
-                              std::placeholders::_1, std::placeholders::_2,
-                              ProduceIndexesToCompare());
-  std::stable_sort(plrecords_.begin(), plrecords_.end(), comparator);
+  SortByIndexes(ProduceIndexesToCompare());
 
   return true;
 }
@@ -107,7 +114,7 @@ std::vector<int> PageRecordsManager::ProduceIndexesToCompare() const {
     indexes = key_indexes_;
   }
   else {
-    for (int i = 0; i < (int)key_indexes_.size(); i++) {
+    for (uint32 i = 0; i < key_indexes_.size(); i++) {
       indexes.push_back(i);
     }
   }
@@ -120,7 +127,7 @@ bool PageRecordsManager::CheckSort() const {
   }
 
   std::vector<int> check_indexes = ProduceIndexesToCompare();
-  for (int i = 0; i < (int)plrecords_.size() - 1; i++) {
+  for (uint32 i = 0; i < plrecords_.size() - 1; i++) {
     const auto& r1 = plrecords_.at(i);
     const auto& r2 = plrecords_.at(i + 1);
     for (int index: check_indexes) {
@@ -138,43 +145,48 @@ bool PageRecordsManager::CheckSort() const {
   return true;
 }
 
-int PageRecordsManager::AppendRecordAndSplitPage(RecordBase* record) {
+int PageRecordsManager::AppendRecordAndSplitPage(const RecordBase& record) {
   if (!InsertNewRecord(record)) {
     LogERROR("Can't insert new record to PageRecordsManager");
     return -1;
   }
 
-  int acc_size = 0;
-  int i = 0;
-  for (; i < (int)plrecords_.size(); i++) {
+  uint32 acc_size = 0;
+  uint32 i = 0;
+  for (; i < plrecords_.size(); i++) {
     acc_size += plrecords_.at(i).record().size();
     if (acc_size > total_size_ / 2) {
       break;
     }
   }
   if (acc_size - total_size_ / 2 >
-      total_size_ / 2 - acc_size + (int)plrecords_.at(i).record().size()) {
+      total_size_ / 2 - acc_size + plrecords_.at(i).record().size()) {
     i--;
   }
   return i + 1;
 }
 
-RecordBase* PageRecordsManager::Record(int index) const {
-  if (index >= (int)plrecords_.size()) {
+const RecordBase& PageRecordsManager::record(uint32 index) const {
+  SANITY_CHECK(index < plrecords_.size(), "index out of range");
+  return plrecords_.at(index).record();
+}
+
+RecordBase* PageRecordsManager::Record(uint32 index) {
+  if (index >= plrecords_.size()) {
     return nullptr;
   }
   return plrecords_.at(index).mutable_record();
 }
 
-std::shared_ptr<RecordBase> PageRecordsManager::Shared_Record(int index) {
-  if (index >= (int)plrecords_.size()) {
+std::shared_ptr<RecordBase> PageRecordsManager::Shared_Record(uint32 index) {
+  if (index >= plrecords_.size()) {
     return std::shared_ptr<RecordBase>();
   }
-  return plrecords_.at(index).Record();
+  return plrecords_.at(index).Shared_Record();
 }
 
-int PageRecordsManager::RecordSlotID(int index) const {
-  if (index >= (int)plrecords_.size()) {
+int PageRecordsManager::RecordSlotID(uint32 index) const {
+  if (index >= plrecords_.size()) {
     return -1;
   }
   return plrecords_.at(index).slot_id();
@@ -182,14 +194,14 @@ int PageRecordsManager::RecordSlotID(int index) const {
 
 void PageRecordsManager::Print() const {
   printf("Printing page %d\n", page_->id());
-  for (auto record: plrecords_) {
+  for (const auto& record: plrecords_) {
     record.Print();
   }
   printf("Ending page %d\n", page_->id());
 }
 
-int PageRecordsManager::CompareRecordWithKey(const RecordBase* key,
-                                             const RecordBase* record) const {
+int PageRecordsManager::CompareRecordWithKey(const RecordBase& key,
+                                             const RecordBase& record) const {
   if (page_type_ == TREE_NODE ||
       file_type_ == INDEX) {
     return RecordBase::CompareRecordsBasedOnIndex(key, record,
@@ -201,18 +213,13 @@ int PageRecordsManager::CompareRecordWithKey(const RecordBase* key,
   }
 }
 
-int PageRecordsManager::CompareRecords(const RecordBase* r1,
-                                       const RecordBase* r2) const {
+int PageRecordsManager::CompareRecords(const RecordBase& r1,
+                                       const RecordBase& r2) const {
   return RecordBase::CompareRecordsBasedOnIndex(
                          r1, r2, ProduceIndexesToCompare());
 }
 
-int PageRecordsManager::SearchForKey(const RecordBase* key) const {
-  if (!key) {
-    LogERROR("key to search for is nullptr");
-    return -1;
-  }
-
+int PageRecordsManager::SearchForKey(const RecordBase& key) const {
   if (plrecords_.empty()) {
     LogERROR("Empty page, won't search");
     return -1;
@@ -220,28 +227,28 @@ int PageRecordsManager::SearchForKey(const RecordBase* key) const {
 
   int index = 0;
   for (; index < (int)plrecords_.size(); index++) {
-    if (CompareRecordWithKey(key, Record(index)) < 0) {
+    if (CompareRecordWithKey(key, record(index)) < 0) {
       break;
     }
   }
   index--;
   if (index < 0) {
     LogERROR("Search for key less than all record keys of this page");
-    key->Print();
-    Record(0)->Print();
+    key.Print();
+    record(0).Print();
     LogFATAL("SearchForKey fatal error");
   }
 
   return index;
 }
 
-bool PageRecordsManager::InsertNewRecord(const RecordBase* record) {
+bool PageRecordsManager::InsertNewRecord(const RecordBase& record) {
   if (plrecords_.empty()) {
     LogERROR("Won't add the record - This PageRecordsManager has not loaded "
              "any PageLoadedRecord");
     return false;
   }
-  if (record->NumFields() != plrecords_[0].NumFields()) {
+  if (record.NumFields() != plrecords_[0].NumFields()) {
     LogERROR("Can't insert a new reocrd to PageRecordsManager - record "
              "has mismatching number of fields with that of this page");
     return false;
@@ -251,13 +258,10 @@ bool PageRecordsManager::InsertNewRecord(const RecordBase* record) {
   // the record and pass it to PageLoadedRecord so that it won't take ownership
   // of the original one.
   PageLoadedRecord new_plrecord;
-  new_plrecord.set_record(record->Duplicate());
+  new_plrecord.set_record(record.Duplicate());
   plrecords_.insert(plrecords_.end(), new_plrecord);
-  auto comparator = std::bind(PageLoadedRecord::Comparator,
-                              std::placeholders::_1, std::placeholders::_2,
-                              ProduceIndexesToCompare());
-  std::stable_sort(plrecords_.begin(), plrecords_.end(), comparator);
-  total_size_ += record->size();
+  SortByIndexes(ProduceIndexesToCompare());
+  total_size_ += record.size();
 
   return true;
 }
@@ -268,18 +272,18 @@ class HalfSplitResult {
  public:
   HalfSplitResult() = default;
 
-  int mid_index = -1;
-  int left_records = 0;
-  int left_size = 0;
-  int right_records = 0;
-  int right_size = 0;
+  uint32 mid_index = -1;
+  uint32 left_records = 0;
+  uint32 left_size = 0;
+  uint32 right_records = 0;
+  uint32 right_size = 0;
   bool left_larger = false;
 };
 
 HalfSplitResult HalfSplitRecordGroups(const std::vector<RecordGroup>* rgroups,
-                                      int start, int end) {
+                                      uint32 start, uint32 end) {
   HalfSplitResult result;
-  for (int i = start; i <= end; i++) {
+  for (uint32 i = start; i <= end; i++) {
     result.right_records += rgroups->at(i).num_records;
     // printf("group %d: ", i);
     // printf("start_index = %d, ", rgroups->at(i).start_index);
@@ -288,14 +292,16 @@ HalfSplitResult HalfSplitRecordGroups(const std::vector<RecordGroup>* rgroups,
     result.right_size += rgroups->at(i).size;
   }
 
-  int min_abs = INT_MAX;
-  int index = start;
+  uint32 min_abs = INT_MAX;
+  uint32 index = start;
   for (; index <= end; index++) {
     result.left_records += rgroups->at(index).num_records;
     result.left_size += rgroups->at(index).size;
     result.right_records -= rgroups->at(index).num_records;
     result.right_size -= rgroups->at(index).size;
-    int abs_value = std::abs(result.left_size - result.right_size);
+    uint32 abs_value = result.left_size > result.right_size ?
+                            result.left_size - result.right_size :
+                            result.right_size - result.left_size;
     if (abs_value < min_abs) {
       min_abs = abs_value;
     }
@@ -319,19 +325,19 @@ void PageRecordsManager::GroupRecords(std::vector<RecordGroup>* rgroups) {
   // Tree node records are guaranteed different and each group contains exactly
   // one record.
   if (page_->Meta()->page_type() == TREE_NODE) {
-    for (int i = 0; i < (int)plrecords_.size(); i++) {
+    for (uint32 i = 0; i < plrecords_.size(); i++) {
       rgroups->push_back(RecordGroup(i, 1, Record(i)->size()));
     }
     return;
   }
 
-  RecordBase* crt_record = Record(0);
+  const RecordBase* crt_record = &record(0);
   int crt_start = 0;
   int num_records = 0;
   int size = 0;
   auto cmp_indexes = ProduceIndexesToCompare();
-  for (int i = 0; i < (int)plrecords_.size(); i++) {
-    if (RecordBase::CompareRecordsBasedOnIndex(crt_record, Record(i),
+  for (uint32 i = 0; i < plrecords_.size(); i++) {
+    if (RecordBase::CompareRecordsBasedOnIndex(*crt_record, record(i),
                                                cmp_indexes) == 0) {
       num_records++;
       size += Record(i)->size();
@@ -341,7 +347,7 @@ void PageRecordsManager::GroupRecords(std::vector<RecordGroup>* rgroups) {
       crt_start = i;
       num_records = 1;
       size = Record(i)->size();
-      crt_record = Record(crt_start);
+      crt_record = &record(crt_start);
     }
   }
   rgroups->push_back(RecordGroup(crt_start, num_records, size));
@@ -349,11 +355,11 @@ void PageRecordsManager::GroupRecords(std::vector<RecordGroup>* rgroups) {
 
 std::vector<PageRecordsManager::SplitLeaveResults>
 PageRecordsManager::InsertRecordAndSplitPage(
-    const RecordBase* record,
+    const RecordBase& new_record,
     std::vector<DataRecordRidMutation>& rid_mutations) {
   // Insert new record to prmanager.
   std::vector<PageRecordsManager::SplitLeaveResults> result;
-  if (!InsertNewRecord(record)) {
+  if (!InsertNewRecord(new_record)) {
     LogERROR("Can't insert new record to PageRecordsManager");
     return result;
   }
@@ -372,14 +378,14 @@ PageRecordsManager::InsertRecordAndSplitPage(
   if (re1.left_larger) {
     // Corner case - all records are same. We need to add new record to
     // overflow page.
-    if (re1.mid_index >= (int)rgroups.size()) {
+    if (re1.mid_index >= rgroups.size()) {
       auto of_page = tree_->AppendOverflowPageTo(page_);
-      int slot_id = record->InsertToRecordPage(of_page);
+      int slot_id = new_record.InsertToRecordPage(of_page);
       if (slot_id < 0) {
         LogFATAL("Insert new record to first page's overflow page failed");
       }
       result.emplace_back(page_);
-      result[0].record = plrecords_[0].Record();
+      result[0].record = plrecords_[0].Shared_Record();
       result[0].rid = RecordID(of_page->id(), slot_id);
       return result;
     }
@@ -387,8 +393,8 @@ PageRecordsManager::InsertRecordAndSplitPage(
     int new_record_page = -1;
     auto page = tree_->AllocateNewPage(TREE_LEAVE);
     // Allocate a new leave and insert right half records to it.
-    for (int i = rgroups.at(re1.mid_index).start_index;
-         i < (int)plrecords_.size();
+    for (uint32 i = rgroups.at(re1.mid_index).start_index;
+         i < plrecords_.size();
          i++) {
       int new_slot_id = Record(i)->InsertToRecordPage(page);
       CheckLogFATAL(new_slot_id >= 0, "Insert right half to new leave failed.");
@@ -411,7 +417,7 @@ PageRecordsManager::InsertRecordAndSplitPage(
     // Otherwise we try inserting the new record to original leave and if
     // success we are also done.
     if (new_record_page < 0) {
-      int slot_id = record->InsertToRecordPage(page_);
+      int slot_id = new_record.InsertToRecordPage(page_);
       if (slot_id >= 0) {
         rid = RecordID(page_->id(), slot_id);
         new_record_page = 0;
@@ -420,10 +426,10 @@ PageRecordsManager::InsertRecordAndSplitPage(
     if (new_record_page >= 0) {
       BplusTree::ConnectLeaves(page_, page);
       result.emplace_back(page_);
-      result[0].record = plrecords_[0].Record();
+      result[0].record = plrecords_[0].Shared_Record();
       result.emplace_back(page);
       result[1].record =
-          plrecords_[rgroups.at(re1.mid_index).start_index].Record();
+          plrecords_[rgroups.at(re1.mid_index).start_index].Shared_Record();
       result[0].rid = rid;  // RecordID of the new record.
       return result;
     }
@@ -434,16 +440,16 @@ PageRecordsManager::InsertRecordAndSplitPage(
         // This is special case. The first records group becomes so large that
         // original leave can't hold them all.
         auto of_page = tree_->AppendOverflowPageTo(page_);
-        int slot_id = record->InsertToRecordPage(of_page);
+        int slot_id = new_record.InsertToRecordPage(of_page);
         if (slot_id < 0) {
           LogFATAL("Insert new record to first page's overflow page failed");
         }
         BplusTree::ConnectLeaves(of_page, page);
         result.emplace_back(page_);
-        result[0].record = plrecords_[0].Record();
+        result[0].record = plrecords_[0].Shared_Record();
         result.emplace_back(page);
         result[1].record =
-          plrecords_[rgroups.at(re1.mid_index).start_index].Record();
+          plrecords_[rgroups.at(re1.mid_index).start_index].Shared_Record();
         result[0].rid = RecordID(of_page->id(), slot_id);
         return result;
       }
@@ -452,14 +458,14 @@ PageRecordsManager::InsertRecordAndSplitPage(
         bool new_record_in_second_page = false;
         auto page2 = tree_->AllocateNewPage(TREE_LEAVE);
         auto tail_page = page2;
-        int i = group.start_index;
+        uint32 i = group.start_index;
         for (; i < group.start_index + group.num_records; i++) {
           // We insert the middle group of records to middle page (page 2).
           int new_slot_id = Record(i)->InsertToRecordPage(tail_page);
           if (new_slot_id < 0) {
             // Append overflow page to middle page.
             tail_page = tree_->AppendOverflowPageTo(tail_page);
-            new_slot_id = record->InsertToRecordPage(tail_page);
+            new_slot_id = new_record.InsertToRecordPage(tail_page);
             if (new_slot_id < 0) {
               LogFATAL("Insert new record to mid page's overflow page failed");
             }
@@ -479,7 +485,7 @@ PageRecordsManager::InsertRecordAndSplitPage(
           }
         }
         if (!new_record_in_second_page) {
-          int slot_id = record->InsertToRecordPage(page_);
+          int slot_id = new_record.InsertToRecordPage(page_);
           if (slot_id < 0) {
             LogFATAL("Failed to insert new record to first page");
           }
@@ -489,11 +495,11 @@ PageRecordsManager::InsertRecordAndSplitPage(
         BplusTree::ConnectLeaves(page_, page2);
         BplusTree::ConnectLeaves(tail_page, page);
         result.emplace_back(page_);
-        result[0].record = plrecords_[0].Record();
+        result[0].record = plrecords_[0].Shared_Record();
         result.emplace_back(page2);
-        result[1].record = plrecords_[group.start_index].Record();
+        result[1].record = plrecords_[group.start_index].Shared_Record();
         result.emplace_back(page);
-        result[2].record = plrecords_[i].Record();
+        result[2].record = plrecords_[i].Shared_Record();
         result[0].rid = rid;
         return result;
       }
@@ -502,23 +508,23 @@ PageRecordsManager::InsertRecordAndSplitPage(
   else {  // Right half is larger.
     // Page 1
     result.emplace_back(page_);
-    result[0].record = plrecords_[0].Record();
+    result[0].record = plrecords_[0].Shared_Record();
 
     // Page 2 - Try inserting right half to it.
     auto group = rgroups.at(re1.mid_index);
-    int index = group.start_index;
+    uint32 index = group.start_index;
     auto page2 = tree_->AllocateNewPage(TREE_LEAVE);
     result.emplace_back(page2);
-    result[1].record = plrecords_[index].Record();
+    result[1].record = plrecords_[index].Shared_Record();
 
     bool new_record_inserted = false;
     auto tail_page = page2;
     for (; index < group.start_index + group.num_records; index++) {
-      int new_slot_id = Record(index)->InsertToRecordPage(tail_page);
+      int new_slot_id = record(index).InsertToRecordPage(tail_page);
       if (new_slot_id < 0) {
         // Append overflow page to middle page.
         tail_page = tree_->AppendOverflowPageTo(tail_page);
-        new_slot_id = Record(index)->InsertToRecordPage(tail_page);
+        new_slot_id = record(index).InsertToRecordPage(tail_page);
         if (new_slot_id < 0) {
           LogFATAL("Insert record to mid page's overflow page failed");
         }
@@ -538,11 +544,11 @@ PageRecordsManager::InsertRecordAndSplitPage(
       }
     }
 
-    int gindex = re1.mid_index + 1;
+    uint32 gindex = re1.mid_index + 1;
     index = rgroups[gindex].start_index;
     if (page2->Meta()->overflow_page() < 0) {
       // Page 2 is not overflowed. Continue inserting records to it.
-      for (; gindex < (int)rgroups.size(); gindex++) {
+      for (; gindex < rgroups.size(); gindex++) {
         if (!page2->PreCheckCanInsert(rgroups[gindex].num_records,
                                       rgroups[gindex].size)) {
           break;
@@ -551,7 +557,7 @@ PageRecordsManager::InsertRecordAndSplitPage(
         for (index = rgroups[gindex].start_index;
              index < rgroups[gindex].start_index + rgroups[gindex].num_records;
              index++) {
-          int new_slot_id = Record(index)->InsertToRecordPage(page2);
+          int new_slot_id = record(index).InsertToRecordPage(page2);
           if (new_slot_id < 0) {
             LogFATAL("Failed to insert record to page2");
           }
@@ -572,12 +578,12 @@ PageRecordsManager::InsertRecordAndSplitPage(
       }
     }
     // Page 3, maybe
-    int page3_start_index = rgroups[gindex].start_index;
+    uint32 page3_start_index = rgroups[gindex].start_index;
     RecordPage* page3 = nullptr;
-    if (gindex < (int)rgroups.size()) {
+    if (gindex < rgroups.size()) {
       page3 = tree_->AllocateNewPage(TREE_LEAVE);
-      for (; index < (int)plrecords_.size(); index++) {
-        int new_slot_id = Record(index)->InsertToRecordPage(page3);
+      for (; index < plrecords_.size(); index++) {
+        int new_slot_id = record(index).InsertToRecordPage(page3);
         if (new_slot_id < 0) {
           LogFATAL("Failed to insert record to 3rd page");
         }
@@ -598,7 +604,7 @@ PageRecordsManager::InsertRecordAndSplitPage(
     }
 
     if (!new_record_inserted) {
-      int slot_id = record->InsertToRecordPage(page_);
+      int slot_id = new_record.InsertToRecordPage(page_);
       if (slot_id < 0) {
         LogFATAL("Failed to insert new record to first page");
       }
@@ -609,7 +615,7 @@ PageRecordsManager::InsertRecordAndSplitPage(
     if (page3) {
       BplusTree::ConnectLeaves(tail_page, page3);
       result.emplace_back(page3);
-      result[2].record = plrecords_[page3_start_index].Record();
+      result[2].record = plrecords_[page3_start_index].Shared_Record();
     }
   }
 

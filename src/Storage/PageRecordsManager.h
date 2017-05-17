@@ -32,9 +32,12 @@ class PageRecordsManager {
 
   int NumRecords() const { return plrecords_.size(); }
   std::vector<PageLoadedRecord>& plrecords() { return plrecords_; }
-  RecordBase* Record(int index) const;
-  std::shared_ptr<RecordBase> Shared_Record(int index);
-  int RecordSlotID(int index) const;
+
+  const RecordBase& record(uint32 index) const;
+  RecordBase* Record(uint32 index);
+  std::shared_ptr<RecordBase> Shared_Record(uint32 index);
+
+  int RecordSlotID(uint32 index) const;
 
   template<class T>
   T* GetRecord(int index) {
@@ -53,8 +56,10 @@ class PageRecordsManager {
 
   // Sort a list of records based on indexes that specified key.
   static void SortRecords(
-      std::vector<std::shared_ptr<RecordBase>>& records,
+      std::vector<std::shared_ptr<RecordBase>>* records,
       const std::vector<int>& key_indexes);
+
+  void SortByIndexes(const std::vector<int>& key_indexes);
 
   // Load all records from a page and sort it based on key.
   bool LoadRecordsFromPage();
@@ -75,18 +80,18 @@ class PageRecordsManager {
   // in splitting this page. It won't take owner ship of the record passed.
   // It returns the middle point that splits all recors equally in respect of
   // space they take.
-  int AppendRecordAndSplitPage(RecordBase* record);
+  int AppendRecordAndSplitPage(const RecordBase& record);
 
   // Search for a key, returns the left boundary index this key should reside
   // in a B+ tree node.
-  int SearchForKey(const RecordBase* record) const;
+  int SearchForKey(const RecordBase& record) const;
 
   // Compare key with a record. It performs comparison based on the file type
   // and page type.
-  int CompareRecordWithKey(const RecordBase* key,
-                           const RecordBase* record) const;
+  int CompareRecordWithKey(const RecordBase& key,
+                           const RecordBase& record) const;
 
-  int CompareRecords(const RecordBase* r1, const RecordBase* r2) const;
+  int CompareRecords(const RecordBase& r1, const RecordBase& r2) const;
 
   // Update rid of an IndexRecord.
   bool UpdateRecordID(int slot_id, const RecordID& rid);
@@ -102,13 +107,13 @@ class PageRecordsManager {
 
   // Insert a new data record to the plrecords list.
   std::vector<SplitLeaveResults> InsertRecordAndSplitPage(
-      const RecordBase* record,
+      const RecordBase& record,
       std::vector<DataRecordRidMutation>& rid_mutations);
 
   friend class BplusTree;
 
  private:
-  bool InsertNewRecord(const RecordBase* record);
+  bool InsertNewRecord(const RecordBase& record);
   void GroupRecords(std::vector<RecordGroup>* rgroups);
 
   RecordPage* page_ = nullptr;
@@ -120,7 +125,7 @@ class PageRecordsManager {
   FileType file_type_ = UNKNOWN_FILETYPE;
   PageType page_type_ = UNKNOW_PAGETYPE;
 
-  int total_size_ = 0;
+  uint32 total_size_ = 0;
 
   BplusTree* tree_ = nullptr;
 };

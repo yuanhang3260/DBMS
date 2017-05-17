@@ -17,9 +17,9 @@ class PageLoadedRecord {
   PageLoadedRecord(int slot_id) : slot_id_(slot_id) {}
   
   DEFINE_ACCESSOR(slot_id, int);
-  DEFINE_ACCESSOR_SMART_PTR(record, RecordBase);
 
-  std::shared_ptr<RecordBase> Record() { return record_; }
+  DEFINE_ACCESSOR_SMART_PTR(record, RecordBase);
+  std::shared_ptr<RecordBase> Shared_Record() { return record_; }
 
   int NumFields() const {
     if (!record_) {
@@ -37,7 +37,8 @@ class PageLoadedRecord {
                                PageType page_type);
 
   // Comparator
-  static bool Comparator(const PageLoadedRecord& r1, const PageLoadedRecord& r2,
+  static bool Comparator(const PageLoadedRecord& r1,
+                         const PageLoadedRecord& r2,
                          const std::vector<int>& indexes);
 
   void Print() const {
@@ -59,8 +60,8 @@ class RecordGroup {
       num_records(num_records_),
       size(size_) {
   }
-  int start_index;
-  int num_records;
+  uint32 start_index;
+  uint32 num_records;
   int size;
 };
 
@@ -80,7 +81,7 @@ class DataRecordWithRid {
                          const DataRecordWithRid& r2,
                          const std::vector<int>& indexes);
 
-  static void Sort(std::vector<DataRecordWithRid>& records,
+  static void Sort(std::vector<DataRecordWithRid>* records,
                    const std::vector<int>& key_indexes);
 };
 

@@ -37,8 +37,8 @@ void RecordID::Print() const {
 }
 
 // ****************************** RecordBase ******************************** //
-int RecordBase::size() const {
-  int size = 0;
+uint32 RecordBase::size() const {
+  uint32 size = 0;
   for (const auto& field: fields_) {
     size += field->length();
   }
@@ -125,13 +125,13 @@ bool RecordBase::operator==(const RecordBase& other) const {
   return true;
 }
 
-int RecordBase::CompareRecordsBasedOnIndex(const RecordBase* r1,
-                                           const RecordBase* r2,
+int RecordBase::CompareRecordsBasedOnIndex(const RecordBase& r1,
+                                           const RecordBase& r2,
                                            const std::vector<int>& indexes) {
   for (int i = 0; i < (int)indexes.size(); i++) {
     int re = RecordBase::CompareSchemaFields(
-                 r1->fields_.at(indexes[i]).get(),
-                 r2->fields_.at(indexes[i]).get()
+                 r1.fields_.at(indexes[i]).get(),
+                 r2.fields_.at(indexes[i]).get()
              );
     if (re < 0) {
       return -1;
@@ -143,19 +143,19 @@ int RecordBase::CompareRecordsBasedOnIndex(const RecordBase* r1,
   return 0;
 }
 
-bool RecordBase::RecordComparator(const std::shared_ptr<RecordBase> r1,
-                                  const std::shared_ptr<RecordBase> r2,
+bool RecordBase::RecordComparator(const RecordBase& r1,
+                                  const RecordBase& r2,
                                   const std::vector<int>& indexes) {
-  return CompareRecordsBasedOnIndex(r1.get(), r2.get(), indexes) < 0;
+  return CompareRecordsBasedOnIndex(r1, r2, indexes) < 0;
 }
 
-int RecordBase::CompareRecordWithKey(const RecordBase* key,
-                                     const RecordBase* record,
+int RecordBase::CompareRecordWithKey(const RecordBase& key,
+                                     const RecordBase& record,
                                      const std::vector<int>& indexes) {
   for (int i = 0; i < (int)indexes.size(); i++) {
     int re = RecordBase::CompareSchemaFields(
-                 key->fields_.at(i).get(),
-                 record->fields_.at(indexes[i]).get()
+                 key.fields_.at(i).get(),
+                 record.fields_.at(indexes[i]).get()
              );
     if (re < 0) {
       return -1;
@@ -227,7 +227,7 @@ int RecordBase::DumpToMem(byte* buf) const {
     return -1;
   }
 
-  int offset = 0;
+  uint32 offset = 0;
   for (const auto& field: fields_) {
     offset += field->DumpToMem(buf + offset);
   }
@@ -243,7 +243,7 @@ int RecordBase::LoadFromMem(const byte* buf) {
     return -1;
   }
 
-  int offset = 0;
+  uint32 offset = 0;
   for (const auto& field: fields_) {
     offset += field->LoadFromMem(buf + offset);
   }
@@ -429,7 +429,7 @@ int IndexRecord::DumpToMem(byte* buf) const {
   if (!buf) {
     return -1;
   }
-  int offset = RecordBase::DumpToMem(buf);
+  uint32 offset = RecordBase::DumpToMem(buf);
   offset += rid_.DumpToMem(buf + offset);
   if (offset != size()) {
     LogFATAL("IndexRecord DumpToMem error - expect %d bytes, actual %d",
@@ -442,7 +442,7 @@ int IndexRecord::LoadFromMem(const byte* buf) {
   if (!buf) {
     return -1;
   }
-  int offset = RecordBase::LoadFromMem(buf);
+  uint32 offset = RecordBase::LoadFromMem(buf);
   offset += rid_.LoadFromMem(buf + offset);
   if (offset != size()) {
     LogFATAL("IndexRecord LoadFromMem error - expect %d bytes, actual %d",
@@ -456,7 +456,7 @@ void IndexRecord::Print() const {
   rid_.Print(); 
 }
 
-int IndexRecord::size() const {
+uint32 IndexRecord::size() const {
   return RecordBase::size() + rid_.size();
 }
 
@@ -478,7 +478,7 @@ int TreeNodeRecord::DumpToMem(byte* buf) const {
   if (!buf) {
     return -1;
   }
-  int offset = RecordBase::DumpToMem(buf);
+  uint32 offset = RecordBase::DumpToMem(buf);
   memcpy(buf + offset, &page_id_, sizeof(page_id_));
   offset += sizeof(page_id_);
   if (offset != size()) {
@@ -492,7 +492,7 @@ int TreeNodeRecord::LoadFromMem(const byte* buf) {
   if (!buf) {
     return -1;
   }
-  int offset = RecordBase::LoadFromMem(buf);
+  uint32 offset = RecordBase::LoadFromMem(buf);
   memcpy(&page_id_, buf + offset, sizeof(page_id_));
   offset += sizeof(page_id_);
   if (offset != size()) {
@@ -507,7 +507,7 @@ void TreeNodeRecord::Print() const {
   std::cout << "page_id = " << page_id_ << std::endl; 
 }
 
-int TreeNodeRecord::size() const {
+uint32 TreeNodeRecord::size() const {
   return RecordBase::size() + sizeof(page_id_);
 }
 

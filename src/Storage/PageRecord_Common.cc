@@ -45,7 +45,7 @@ bool PageLoadedRecord::Comparator(const PageLoadedRecord& r1,
                                   const PageLoadedRecord& r2,
                                   const std::vector<int>& indexes) {
   // TODO: Compare Rid for Index B+ tree?
-  return RecordBase::RecordComparator(r1.record_, r2.record_, indexes);
+  return RecordBase::RecordComparator(*r1.record_, *r2.record_, indexes);
 }
 
 
@@ -53,15 +53,16 @@ bool PageLoadedRecord::Comparator(const PageLoadedRecord& r1,
 bool DataRecordWithRid::Comparator(const DataRecordWithRid& r1,
                                    const DataRecordWithRid& r2,
                                    const std::vector<int>& indexes) {
-  return RecordBase::RecordComparator(r1.record, r2.record, indexes);
+  return RecordBase::RecordComparator(*r1.record, *r2.record, indexes);
 }
 
-void DataRecordWithRid::Sort(std::vector<DataRecordWithRid>& records,
+void DataRecordWithRid::Sort(std::vector<DataRecordWithRid>* records,
                              const std::vector<int>& key_indexes) {
-  auto comparator = std::bind(Comparator,
-                              std::placeholders::_1, std::placeholders::_2,
-                              key_indexes);
-  std::stable_sort(records.begin(), records.end(), comparator);
+  auto comparator = [&key_indexes] (const DataRecordWithRid& r1,
+                                    const DataRecordWithRid& r2) {
+    return Comparator(r1, r2, key_indexes);
+  };
+  std::stable_sort(records->begin(), records->end(), comparator);
 }
 
 
@@ -69,15 +70,16 @@ void DataRecordWithRid::Sort(std::vector<DataRecordWithRid>& records,
 bool DataRecordRidMutation::Comparator(const DataRecordRidMutation& r1,
                                        const DataRecordRidMutation& r2,
                                        const std::vector<int>& indexes) {
-  return RecordBase::RecordComparator(r1.record, r2.record, indexes);
+  return RecordBase::RecordComparator(*r1.record, *r2.record, indexes);
 }
 
 void DataRecordRidMutation::Sort(
          std::vector<DataRecordRidMutation>& records,
          const std::vector<int>& key_indexes) {
-  auto comparator = std::bind(Comparator,
-                              std::placeholders::_1, std::placeholders::_2,
-                              key_indexes);
+  auto comparator = [&key_indexes] (const DataRecordRidMutation& r1,
+                                    const DataRecordRidMutation& r2) {
+    return Comparator(r1, r2, key_indexes);
+  };
   std::stable_sort(records.begin(), records.end(), comparator);
 }
 
@@ -193,11 +195,11 @@ void DataRecordRidMutation::GroupDataRecordRidMutations(
   }
 
   auto crt_record = rid_mutations[0].record;
-  int crt_start = 0;
-  int num_records = 0;
-  for (int i = 0; i < (int)rid_mutations.size(); i++) {
+  uint32 crt_start = 0;
+  uint32 num_records = 0;
+  for (uint32 i = 0; i < rid_mutations.size(); i++) {
     if (RecordBase::CompareRecordsBasedOnIndex(
-            crt_record.get(), rid_mutations[i].record.get(), key_index) == 0) {
+            *crt_record, *(rid_mutations[i].record), key_index) == 0) {
       num_records++;
     }
     else {
