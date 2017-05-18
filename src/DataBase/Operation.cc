@@ -55,7 +55,7 @@ bool DeleteResult::MergeFrom(DeleteResult& other) {
 
   // Merge mutated rids.
   if (!Storage::DataRecordRidMutation::Merge(
-          rid_mutations,other.rid_mutations)) {
+          rid_mutations, other.rid_mutations)) {
     LogERROR("Failed to merge rid mutations");
     return false;
   }
@@ -68,7 +68,7 @@ bool DeleteResult::MergeFrom(DeleteResult& other) {
   return true;
 }
 
-bool DeleteResult::MergeDeleteRidsFromMutatedRids(DeleteResult& other) {
+bool DeleteResult::UpdateDeleteRidsFromMutatedRids(DeleteResult& other) {
   if (other.rid_mutations.empty()) {
     return true;
   }

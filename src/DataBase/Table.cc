@@ -411,7 +411,6 @@ int Table::DeleteRecord(const DeleteOp& op) {
                              std::vector<int>{op.key_index});
       DeleteResult index_delete_result;
       index_delete_result.del_mode = DataBase::DeleteResult::DEL_INDEX_PRE;
-
       index_tree->Do_DeleteRecordByKey(op.keys, &index_delete_result);
 
       // Delete data records from data tree.

@@ -41,7 +41,7 @@ class DeleteResult {
   bool MergeFrom(DeleteResult& other);
   // Used when deleting data records from deleted_rid list given an index
   // tree's delete result.
-  bool MergeDeleteRidsFromMutatedRids(DeleteResult& other);
+  bool UpdateDeleteRidsFromMutatedRids(DeleteResult& other);
 
   // Validity check - It checks no duplicated old_rids from rid_mutations and
   // rid_deleted, and no duplicated new_rids from rid_mutations (rid_deleted 

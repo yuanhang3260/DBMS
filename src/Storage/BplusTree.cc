@@ -454,7 +454,7 @@ void BplusTree::PrintNodeRecords(RecordPage* page) {
   printf("page(%d):\n", page->id());
   PageRecordsManager prmanager(page, schema(), key_indexes_,
                                file_type_, page->Meta()->page_type());
-  for (int i = 0; i < prmanager.NumRecords(); i++) {
+  for (uint32 i = 0; i < prmanager.NumRecords(); i++) {
     prmanager.Record(i)->Print();
   }
 
@@ -467,7 +467,7 @@ void BplusTree::PrintNodeRecords(RecordPage* page) {
       printf("overflow %d, page(%d)\n", of_num++, of_page->id());
       PageRecordsManager of_prmanager(of_page, schema(), key_indexes_,
                                       file_type_, TREE_LEAVE);
-      for (int i = 0; i < of_prmanager.NumRecords(); i++) {
+      for (uint32 i = 0; i < of_prmanager.NumRecords(); i++) {
         of_prmanager.Record(i)->Print();
       }
       of_page = Page(of_page->Meta()->overflow_page());
@@ -932,7 +932,7 @@ bool BplusTree::CheckTreeNodeValid(RecordPage* page) {
   PageRecordsManager prmanager(page, schema(), key_indexes_,
                                file_type_, TREE_NODE);
   
-  for (int i = 0; i < prmanager.NumRecords(); i++) {
+  for (uint32 i = 0; i < prmanager.NumRecords(); i++) {
     auto tn_record = prmanager.GetRecord<Storage::TreeNodeRecord>(i);
     int child_page_id = tn_record->page_id();
 
@@ -1034,7 +1034,7 @@ bool BplusTree::EqueueChildNodes(RecordPage* page,
   bool children_are_leave = false;
   vc_status_.count_num_pages += prmanager.NumRecords();
   vc_status_.count_num_used_pages += prmanager.NumRecords();
-  for (int i = 0; i < prmanager.NumRecords(); i++) {
+  for (uint32 i = 0; i < prmanager.NumRecords(); i++) {
     auto tn_record = prmanager.GetRecord<Storage::TreeNodeRecord>(i);
     RecordPage* child_page = Page(tn_record->page_id());
     if (!child_page) {
@@ -1101,7 +1101,7 @@ bool BplusTree::VerifyOverflowPage(RecordPage* page) {
                                file_type_, TREE_LEAVE);
 
   const auto& record = prmanager.record(0);
-  for (int i = 1; i < prmanager.NumRecords(); i++) {
+  for (uint32 i = 1; i < prmanager.NumRecords(); i++) {
     if (prmanager.CompareRecords(record, prmanager.record(i)) != 0) {
       LogERROR("Records in overflow page inconsistent!");
       return false;
@@ -1222,7 +1222,7 @@ int BplusTree::FetchResultsFromLeave(
                                  file_type_, leave->Meta()->page_type());
     // Fetch all matching records in this leave.
     bool last_is_match = false;
-    for (int index = 0; index < prmanager.NumRecords(); index++) {
+    for (uint32 index = 0; index < prmanager.NumRecords(); index++) {
       if (prmanager.CompareRecordWithKey(key, prmanager.record(index)) == 0) {
         result->push_back(prmanager.plrecords().at(index).Shared_Record());
         last_is_match = true;
@@ -1259,10 +1259,9 @@ BplusTree::SearchInTreeNode(RecordPage* page, const RecordBase* key) {
   PageRecordsManager prmanager(page, schema(), key_indexes_,
                                file_type_, page->Meta()->page_type());
 
-  int index = prmanager.SearchForKey(*key);
-  if (index < 0) {
-    LogFATAL("Search for key in page %d failed - key is:", page->id());
-  }
+  uint32 index = prmanager.SearchForKey(*key);
+  SANITY_CHECK(index >= 0,
+               "Search for key in page %d failed - key is:", page->id());
 
   result.slot = prmanager.RecordSlotID(index);
   result.record = prmanager.plrecords().at(index).Shared_Record();
@@ -1324,7 +1323,7 @@ BplusTree::LookUpTreeNodeInfoForPage(RecordPage* page) {
   PageRecordsManager prmanager(parent, schema(), key_indexes_,
                                file_type_, TREE_NODE);
   bool tn_record_found = false;
-  for (int i = 0; i < (int)prmanager.NumRecords(); i++) {
+  for (uint32 i = 0; i < prmanager.NumRecords(); i++) {
     auto tn_record = prmanager.GetRecord<Storage::TreeNodeRecord>(i);
     int child_page_id = tn_record->page_id();
     if (child_page_id == page->id()) {
@@ -1599,7 +1598,7 @@ bool BplusTree::MergeTwoNodes(
   PageRecordsManager prmanager(page2, schema(), key_indexes_,
                                file_type_, page2->Meta()->page_type());
 
-  for (int i = 0; i < prmanager.NumRecords(); i++) {
+  for (uint32 i = 0; i < prmanager.NumRecords(); i++) {
     int slot_id = prmanager.RecordSlotID(i);
     if (page2->Meta()->page_type() == TREE_NODE) {
       auto tn_record = prmanager.GetRecord<Storage::TreeNodeRecord>(i);
@@ -1779,10 +1778,10 @@ bool BplusTree::ProcessNodeAfterRecordDeletion(
     int page_id = -1;
     PageRecordsManager prmanager(page, schema(), key_indexes_,
                                  file_type_, page->Meta()->page_type());
-    for (int i = 0 ; i < (int)prmanager.NumRecords(); i++) {
-      if (prmanager.RecordSlotID(i) < 0) {
-        continue;
-      }
+    for (uint32 i = 0 ; i < prmanager.NumRecords(); i++) {
+      // if (prmanager.RecordSlotID(i) < 0) {
+      //   continue;
+      // }
       page_id = (prmanager.GetRecord<Storage::TreeNodeRecord>(i))->page_id();
       printf("page_id = %d\n", page_id);
     }
@@ -1899,7 +1898,7 @@ bool BplusTree::Do_DeleteRecordByRecordID(
     return true;
   }
 
-  DataRecordRidMutation::SortByOldRid(index_del_result.rid_deleted);
+  DataRecordRidMutation::SortByOldRid(&index_del_result.rid_deleted);
 
   auto& rid_deleted = index_del_result.rid_deleted;
   int group_start = 0, group_end = 0;
@@ -1927,7 +1926,7 @@ bool BplusTree::Do_DeleteRecordByRecordID(
 
     ProcessNodeAfterRecordDeletion(page, &crt_result);
 
-    index_del_result.MergeDeleteRidsFromMutatedRids(crt_result);
+    index_del_result.UpdateDeleteRidsFromMutatedRids(crt_result);
     result->MergeFrom(crt_result);
 
     // printf("#### after merging rids\n");
@@ -1950,7 +1949,7 @@ bool BplusTree::UpdateIndexRecords(
   bool is_delete_irecord = !(rid_mutations[0].new_rid.IsValid());
 
   // Sort DataRecordRidMutation list.
-  DataRecordRidMutation::Sort(rid_mutations, key_indexes_);
+  DataRecordRidMutation::Sort(&rid_mutations, key_indexes_);
   // Group DataRecordRidMutation list by key.
   std::vector<RecordGroup> rgroups;
   DataRecordRidMutation::GroupDataRecordRidMutations(
@@ -2092,7 +2091,7 @@ int BplusTree::DeleteMatchedRecordsFromLeave(
                                  file_type_, TREE_LEAVE);
     // Fetch all matching records in this leave.
     bool last_is_match = false;
-    for (int index = 0; index < prmanager.NumRecords(); index++) {
+    for (uint32 index = 0; index < prmanager.NumRecords(); index++) {
       if (prmanager.CompareRecordWithKey(*key, prmanager.record(index)) == 0) {
         int slot_id = prmanager.RecordSlotID(index);
         if (result->del_mode == DataBase::DeleteResult::DEL_DATA) {

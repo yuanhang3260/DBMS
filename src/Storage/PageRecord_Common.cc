@@ -74,24 +74,22 @@ bool DataRecordRidMutation::Comparator(const DataRecordRidMutation& r1,
 }
 
 void DataRecordRidMutation::Sort(
-         std::vector<DataRecordRidMutation>& records,
+         std::vector<DataRecordRidMutation>* records,
          const std::vector<int>& key_indexes) {
   auto comparator = [&key_indexes] (const DataRecordRidMutation& r1,
                                     const DataRecordRidMutation& r2) {
     return Comparator(r1, r2, key_indexes);
   };
-  std::stable_sort(records.begin(), records.end(), comparator);
+  std::stable_sort(records->begin(), records->end(), comparator);
 }
 
 void DataRecordRidMutation::SortByOldRid(
-         std::vector<DataRecordRidMutation>& records) {
-  std::function<bool (const DataRecordRidMutation& r1,
-                      const DataRecordRidMutation& r2)> comparator =
-      [](const DataRecordRidMutation& r1,
-         const DataRecordRidMutation& r2) {
-        return r1.old_rid < r2.old_rid;
-      };
-  std::stable_sort(records.begin(), records.end(), comparator);
+         std::vector<DataRecordRidMutation>* records) {
+  auto comparator = [] (const DataRecordRidMutation& r1,
+                        const DataRecordRidMutation& r2) {
+                      return r1.old_rid < r2.old_rid;
+                    };
+  std::stable_sort(records->begin(), records->end(), comparator);
 }
 
 void DataRecordRidMutation::Print() const {
@@ -112,6 +110,7 @@ bool DataRecordRidMutation::ValidityCheck(
     return true;
   }
 
+  // Check no duplication between <old_rid, new_rid> pairs.
   std::set<RecordID> old_rid_set;
   std::set<RecordID> new_rid_set;
   for (const auto& r : v) {
@@ -138,11 +137,11 @@ bool DataRecordRidMutation::Merge(std::vector<DataRecordRidMutation>& v1,
     return false;
   }
 
-  std::map<int, int> rid_m_cascade_map;
-  std::vector<int> insert_list;
-  for (int i = 0; i < (int)v2.size(); i++) {
+  std::map<uint32, uint32> rid_m_cascade_map;
+  std::vector<uint32> insert_list;
+  for (uint32 i = 0; i < v2.size(); i++) {
     bool cascade = false;
-    for (int j = 0; j < (int)v1.size(); j++) {
+    for (uint32 j = 0; j < v1.size(); j++) {
       if (rid_m_cascade_map.find(j) == rid_m_cascade_map.end() &&
           v1[j].new_rid == v2[i].old_rid) {
         rid_m_cascade_map.emplace(j, i);
@@ -197,19 +196,22 @@ void DataRecordRidMutation::GroupDataRecordRidMutations(
   auto crt_record = rid_mutations[0].record;
   uint32 crt_start = 0;
   uint32 num_records = 0;
+  uint32 group_size = 0;
   for (uint32 i = 0; i < rid_mutations.size(); i++) {
     if (RecordBase::CompareRecordsBasedOnIndex(
             *crt_record, *(rid_mutations[i].record), key_index) == 0) {
       num_records++;
+      group_size += rid_mutations[i].record->size();
     }
     else {
-      rgroups->push_back(RecordGroup(crt_start, num_records, -1));
+      rgroups->push_back(RecordGroup(crt_start, num_records, group_size));
       crt_start = i;
       num_records = 1;
+      group_size = rid_mutations[crt_start].record->size();
       crt_record = rid_mutations[crt_start].record;
     }
   }
-  rgroups->push_back(RecordGroup(crt_start, num_records, -1));
+  rgroups->push_back(RecordGroup(crt_start, num_records, group_size));
 }
 
 }  // namespace Schema

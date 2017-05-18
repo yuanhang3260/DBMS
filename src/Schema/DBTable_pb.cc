@@ -18,7 +18,7 @@ const ::proto::MessageReflection* TableSchema_reflection_ = nullptr;
 
 }  // namepsace
 
-void static_init_default_instances_home_hy_Desktop_Projects_DBMS_src_Schema_DBTable() {
+void static_init_default_instances_usr_local_google_home_hangyuan_Desktop_test_DBMS_src_Schema_DBTable() {
   if (Schema::TableField::default_instance_ == nullptr) {
     Schema::TableField::default_instance_ = new Schema::TableField();
     Schema::TableField::default_instance_->InitAsDefaultInstance();
@@ -29,19 +29,19 @@ void static_init_default_instances_home_hy_Desktop_Projects_DBMS_src_Schema_DBTa
   }
 }
 
-void static_init_home_hy_Desktop_Projects_DBMS_src_Schema_DBTable() {
+void static_init_usr_local_google_home_hangyuan_Desktop_test_DBMS_src_Schema_DBTable() {
   static bool already_called = false;
   if (already_called) return;
   already_called = true;
 
   ::proto::DescriptorsBuilder descriptors_builder(
-      "/home/hy/Desktop/Projects/DBMS/src/Schema/DBTable.proto");
+      "/usr/local/google/home/hangyuan/Desktop/test/DBMS/src/Schema/DBTable.proto");
   auto file_dscpt = descriptors_builder.BuildDescriptors();
   CHECK(file_dscpt != nullptr, "static class initialization for "
-        "/home/hy/Desktop/Projects/DBMS/src/Schema/DBTable.proto failed");
+        "/usr/local/google/home/hangyuan/Desktop/test/DBMS/src/Schema/DBTable.proto failed");
   ::proto::MessageFactory::RegisterParsedProtoFile(file_dscpt);
 
-  static_init_default_instances_home_hy_Desktop_Projects_DBMS_src_Schema_DBTable();
+  static_init_default_instances_usr_local_google_home_hangyuan_Desktop_test_DBMS_src_Schema_DBTable();
 
   // static init for class TableField
   static const int TableField_offsets_[4] = {
@@ -80,12 +80,12 @@ void static_init_home_hy_Desktop_Projects_DBMS_src_Schema_DBTable() {
 
 }
 
-// Force static_init_home_hy_Desktop_Projects_DBMS_src_Schema_DBTable() to be called at initialization time.
-struct static_init_forcer_home_hy_Desktop_Projects_DBMS_src_Schema_DBTable {
-  static_init_forcer_home_hy_Desktop_Projects_DBMS_src_Schema_DBTable() {
-    static_init_home_hy_Desktop_Projects_DBMS_src_Schema_DBTable();
+// Force static_init_usr_local_google_home_hangyuan_Desktop_test_DBMS_src_Schema_DBTable() to be called at initialization time.
+struct static_init_forcer_usr_local_google_home_hangyuan_Desktop_test_DBMS_src_Schema_DBTable {
+  static_init_forcer_usr_local_google_home_hangyuan_Desktop_test_DBMS_src_Schema_DBTable() {
+    static_init_usr_local_google_home_hangyuan_Desktop_test_DBMS_src_Schema_DBTable();
   }
-} static_init_forcer_home_hy_Desktop_Projects_DBMS_src_Schema_DBTable_obj_;
+} static_init_forcer_usr_local_google_home_hangyuan_Desktop_test_DBMS_src_Schema_DBTable_obj_;
 
 
 namespace Schema {
@@ -250,7 +250,7 @@ void TableField::Swap(TableField* other) {
 // default_instance()
 const TableField& TableField::default_instance() {
   if (default_instance_ == nullptr) {
-    static_init_default_instances_home_hy_Desktop_Projects_DBMS_src_Schema_DBTable();
+    static_init_default_instances_usr_local_google_home_hangyuan_Desktop_test_DBMS_src_Schema_DBTable();
   }
   return *default_instance_;
 }
@@ -515,7 +515,7 @@ void TableSchema::Swap(TableSchema* other) {
 // default_instance()
 const TableSchema& TableSchema::default_instance() {
   if (default_instance_ == nullptr) {
-    static_init_default_instances_home_hy_Desktop_Projects_DBMS_src_Schema_DBTable();
+    static_init_default_instances_usr_local_google_home_hangyuan_Desktop_test_DBMS_src_Schema_DBTable();
   }
   return *default_instance_;
 }

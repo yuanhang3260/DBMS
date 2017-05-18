@@ -30,7 +30,7 @@ class PageRecordsManager {
   DEFINE_ACCESSOR(total_size, int);
   DEFINE_ACCESSOR(tree, BplusTree*);
 
-  int NumRecords() const { return plrecords_.size(); }
+  uint32 NumRecords() const { return plrecords_.size(); }
   std::vector<PageLoadedRecord>& plrecords() { return plrecords_; }
 
   const RecordBase& record(uint32 index) const;
@@ -41,7 +41,7 @@ class PageRecordsManager {
 
   template<class T>
   T* GetRecord(int index) {
-    return reinterpret_cast<T*>(Record(index));
+    return dynamic_cast<T*>(Record(index));
   }
 
   template<class T>

@@ -14,9 +14,9 @@ namespace Storage {
 class PageLoadedRecord {
  public:
   PageLoadedRecord() = default;
-  PageLoadedRecord(int slot_id) : slot_id_(slot_id) {}
-  
-  DEFINE_ACCESSOR(slot_id, int);
+  PageLoadedRecord(int32 slot_id) : slot_id_(slot_id) {}
+
+  DEFINE_ACCESSOR(slot_id, int32);
 
   DEFINE_ACCESSOR_SMART_PTR(record, RecordBase);
   std::shared_ptr<RecordBase> Shared_Record() { return record_; }
@@ -48,7 +48,7 @@ class PageLoadedRecord {
 
  private:
   std::shared_ptr<RecordBase> record_;
-  int slot_id_ = -1;
+  int32 slot_id_ = -1;
 };
 
 
@@ -62,7 +62,7 @@ class RecordGroup {
   }
   uint32 start_index;
   uint32 num_records;
-  int size;
+  uint32 size;
 };
 
 
@@ -107,10 +107,10 @@ class DataRecordRidMutation {
                          const DataRecordRidMutation& r2,
                          const std::vector<int>& indexes);
 
-  static void Sort(std::vector<DataRecordRidMutation>& records,
+  static void Sort(std::vector<DataRecordRidMutation>* records,
                    const std::vector<int>& key_indexes);
 
-  static void SortByOldRid(std::vector<DataRecordRidMutation>& records);
+  static void SortByOldRid(std::vector<DataRecordRidMutation>* records);
 
   static bool ValidityCheck(const std::vector<DataRecordRidMutation>& v);
 
