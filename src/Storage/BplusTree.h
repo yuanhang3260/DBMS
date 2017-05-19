@@ -184,8 +184,8 @@ class BplusTree {
   bool InsertTreeNodeRecord(const TreeNodeRecord& tn_record,
                             RecordPage* tn_page);
 
-  bool BlukLoadInsertRecordToLeave(RecordPage* leave,
-                                   const RecordBase& record);
+  bool BlukLoadInsertRecordToLeave(const RecordBase& record,
+                                   RecordPage* leave);
 
   // Delete a node from the B+ tree.
   bool DeleteNodeFromTree(RecordPage* page, int slot_id_in_parent);
@@ -269,20 +269,20 @@ class BplusTree {
 
   // Search for a key in the page and returns next level page this key
   // should reside in.
-  SearchTreeNodeResult SearchInTreeNode(RecordPage* page,
-                                        const RecordBase& key);
+  SearchTreeNodeResult SearchInTreeNode(const RecordBase& key,
+                                        RecordPage* page);
 
   SearchTreeNodeResult LookUpTreeNodeInfoForPage(const RecordPage& page);
 
   // Fetch all matching records from BB+ tree.
   int FetchResultsFromLeave(
-          RecordPage* leave,
           const RecordBase& key,
+          RecordPage* leave,
           std::vector<std::shared_ptr<RecordBase>>* result);
 
   int DeleteMatchedRecordsFromLeave(
-         RecordPage* leave,
          const RecordBase& key,
+         RecordPage* leave,
          DataBase::DeleteResult* result);
 
   bool CheckKeyFieldsType(const RecordBase& key) const;
@@ -298,21 +298,21 @@ class BplusTree {
 
   // Redistribute records with next leave.
   RecordID ReDistributeToNextLeave(
+           const RecordBase& record,
            RecordPage* leave,
            SearchTreeNodeResult* search_result,
-           const RecordBase& record,
            std::vector<DataRecordRidMutation>* rid_mutations);
 
   // Incurring overflow page when inserting new record.
   RecordID InsertAfterOverflowLeave(
+           const RecordBase& record,
            RecordPage* leave,
            SearchTreeNodeResult* search_result,
-           const RecordBase& record,
            std::vector<DataRecordRidMutation>* rid_mutations);
   // Insert record to next leave.
-  RecordID InsertNewRecordToNextLeave(RecordPage* leave,
-                                  SearchTreeNodeResult* search_result,
-                                  const RecordBase& record);
+  RecordID InsertNewRecordToNextLeave(const RecordBase& record,
+                                      RecordPage* leave,
+                                      SearchTreeNodeResult* search_result);
 
   // Re-distribute records from next leave.
   bool ReDistributeRecordsWithinTwoPages(
@@ -327,9 +327,9 @@ class BplusTree {
 
   // Insert a new record to leave which will split the leave.
   RecordID InsertNewRecordToLeaveWithSplit(
-           RecordPage* leave,
-           int next_leave_id,
            const RecordBase& record,
+           int next_leave_id,
+           RecordPage* leave,
            std::vector<DataRecordRidMutation>* rid_mutations);
 
   // Go to last overflow page of an overflow chain.
@@ -337,7 +337,7 @@ class BplusTree {
 
   // Insert a new record to the end of a overflow chain of leaves.
   RecordID InsertNewRecordToOverFlowChain(
-           RecordPage* leave, const RecordBase& record);
+           const RecordBase& record, RecordPage* leave);
 
   // Create a new leave with a new record inserted.
   RecordPage* CreateNewLeaveWithRecord(

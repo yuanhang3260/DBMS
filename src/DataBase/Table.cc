@@ -220,7 +220,7 @@ bool Table::PreLoadData(
 
     Storage::IndexRecord irecord;
     for (auto& r: record_rids) {
-      (reinterpret_cast<Storage::DataRecord*>(r.record.get()))
+      (dynamic_cast<Storage::DataRecord*>(r.record.get()))
           ->ExtractKey(&irecord, key_index);
       irecord.set_rid(r.rid);
       // printf("insertng index record:\n");
