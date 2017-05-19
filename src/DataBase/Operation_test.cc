@@ -86,7 +86,7 @@ class OperationTest: public UnitTest {
     del_result.rid_mutations.emplace_back(std::shared_ptr<Storage::RecordBase>(),
                    Storage::RecordID(9,10), Storage::RecordID(7,8));
 
-    AssertTrue(del_list.MergeDeleteRidsFromMutatedRids(del_result),
+    AssertTrue(del_list.UpdateDeleteRidsFromMutatedRids(del_result),
                "Update delete rid list failed");
     AssertTrue(del_list.rid_deleted[0].old_rid == Storage::RecordID(3, 4));
     AssertTrue(del_list.rid_deleted[1].old_rid == Storage::RecordID(0, 1));

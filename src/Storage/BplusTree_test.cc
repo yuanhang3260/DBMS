@@ -314,7 +314,7 @@ class BplusTreeTest: public UnitTest {
       IndexRecord irecord;
       _GenerateIndeRecord(&irecord, 'a', 60);
       AssertTrue(irecord.InsertToRecordPage(leave) < 0);
-      auto result = prmanager.InsertRecordAndSplitPage(irecord, rid_mutations);
+      auto result = prmanager.InsertRecordAndSplitPage(irecord, &rid_mutations);
       AssertEqual(2, (int)result.size());
       result[0].record->Print();
       AssertEqual(3, (int)result[0].page->Meta()->num_records());
@@ -339,7 +339,7 @@ class BplusTreeTest: public UnitTest {
       _GenerateIndeRecord(&irecord, 'b', 60);
       AssertTrue(irecord.InsertToRecordPage(leave) < 0);
       
-      auto result = prmanager.InsertRecordAndSplitPage(irecord, rid_mutations);
+      auto result = prmanager.InsertRecordAndSplitPage(irecord, &rid_mutations);
       AssertEqual(2, (int)result.size());
       result[0].record->Print();
       AssertEqual(1, (int)result[0].page->Meta()->num_records());
@@ -373,7 +373,7 @@ class BplusTreeTest: public UnitTest {
       _GenerateIndeRecord(&irecord, 'b', 55);
       AssertTrue(irecord.InsertToRecordPage(leave) < 0);
       
-      auto result = prmanager.InsertRecordAndSplitPage(irecord, rid_mutations);
+      auto result = prmanager.InsertRecordAndSplitPage(irecord, &rid_mutations);
       AssertEqual(3, (int)result.size());
       result[0].record->Print();
       AssertEqual(2, (int)result[0].page->Meta()->num_records());
@@ -414,7 +414,7 @@ class BplusTreeTest: public UnitTest {
       _GenerateIndeRecord(&irecord, 'b', 50);
       AssertTrue(irecord.InsertToRecordPage(leave) < 0);
       
-      auto result = prmanager.InsertRecordAndSplitPage(irecord, rid_mutations);
+      auto result = prmanager.InsertRecordAndSplitPage(irecord, &rid_mutations);
       AssertEqual(3, (int)result.size());
       result[0].record->Print();
       AssertEqual(1, (int)result[0].page->Meta()->num_records());
@@ -447,7 +447,7 @@ class BplusTreeTest: public UnitTest {
       _GenerateIndeRecord(&irecord, 'a', 40);
       AssertTrue(irecord.InsertToRecordPage(leave) < 0);
 
-      auto result = prmanager.InsertRecordAndSplitPage(irecord, rid_mutations);
+      auto result = prmanager.InsertRecordAndSplitPage(irecord, &rid_mutations);
       AssertEqual(2, (int)result.size());
       result[0].record->Print();
       AssertEqual(3, (int)result[0].page->Meta()->num_records());
@@ -472,7 +472,7 @@ class BplusTreeTest: public UnitTest {
       _GenerateIndeRecord(&irecord, 'e', 30);
       AssertTrue(irecord.InsertToRecordPage(leave) < 0);
 
-      auto result = prmanager.InsertRecordAndSplitPage(irecord, rid_mutations);
+      auto result = prmanager.InsertRecordAndSplitPage(irecord, &rid_mutations);
       AssertEqual(2, (int)result.size());
       result[0].record->Print();
       AssertEqual(3, (int)result[0].page->Meta()->num_records());
@@ -497,7 +497,7 @@ class BplusTreeTest: public UnitTest {
       _GenerateIndeRecord(&irecord, 'a', 50);
       AssertTrue(irecord.InsertToRecordPage(leave) < 0);
 
-      auto result = prmanager.InsertRecordAndSplitPage(irecord, rid_mutations);
+      auto result = prmanager.InsertRecordAndSplitPage(irecord, &rid_mutations);
       AssertEqual(2, (int)result.size());
       result[0].record->Print();
       AssertEqual(4, (int)result[0].page->Meta()->num_records());
@@ -532,7 +532,7 @@ class BplusTreeTest: public UnitTest {
       _GenerateIndeRecord(&irecord, 'b', 50);
       AssertTrue(irecord.InsertToRecordPage(leave) < 0);
 
-      auto result = prmanager.InsertRecordAndSplitPage(irecord, rid_mutations);
+      auto result = prmanager.InsertRecordAndSplitPage(irecord, &rid_mutations);
       AssertEqual(3, (int)result.size());
       result[0].record->Print();
       AssertEqual(1, (int)result[0].page->Meta()->num_records());
@@ -566,7 +566,7 @@ class BplusTreeTest: public UnitTest {
       _GenerateIndeRecord(&irecord, 'b', 55);
       AssertTrue(irecord.InsertToRecordPage(leave) < 0);
 
-      auto result = prmanager.InsertRecordAndSplitPage(irecord, rid_mutations);
+      auto result = prmanager.InsertRecordAndSplitPage(irecord, &rid_mutations);
       AssertEqual(3, (int)result.size());
       result[0].record->Print();
       AssertEqual(1, (int)result[0].page->Meta()->num_records());
@@ -598,17 +598,17 @@ class BplusTreeTest: public UnitTest {
       record_resource[i]->Print();
       std::vector<DataRecordRidMutation> rid_mutations;
       if (file_type_ == INDEX_DATA) {
-        auto rid =tree.Do_InsertRecord(record_resource[i].get(), rid_mutations);
+        auto rid = tree.Do_InsertRecord(*record_resource[i], &rid_mutations);
         //rid.Print();
         AssertTrue(rid.IsValid(), "Insert Record returned invalid rid");
-        AssertTrue(tree.VerifyRecord(rid, record_resource[i].get()),
+        AssertTrue(tree.VerifyRecord(rid, *record_resource[i]),
                    "Verify record failed");
       }
       else {
         IndexRecord irecord;
         ((DataRecord*)record_resource[i].get())->
             ExtractKey(&irecord, key_index);
-        auto rid = tree.Do_InsertRecord(&irecord, rid_mutations);
+        auto rid = tree.Do_InsertRecord(irecord, &rid_mutations);
         AssertTrue(rid.IsValid());
       }
       // printf("rid mutations\n");
@@ -672,7 +672,7 @@ class BplusTreeTest: public UnitTest {
       printf("-------------------------------------------------------------\n");
       printf("i = %d, record size = %d\n", i, v[i]->size());
       v[i]->Print();
-      table->InsertRecord(v[i].get());
+      table->InsertRecord(*v[i]);
     }
     AssertTrue(table->ValidateAllIndexRecords(end));
 
@@ -801,7 +801,7 @@ class BplusTreeTest: public UnitTest {
       for (int insert_num = 0; insert_num < total_insert; insert_num++) {
         int insert_record_key = Utils::RandomNumber(kNumRecordsSource);
         //printf("insert_num = %d\n", insert_num);
-        table->InsertRecord(record_resource[insert_record_key].get());
+        table->InsertRecord(*record_resource[insert_record_key]);
       }
 
       // Validate index tree records consistency with data tree records.

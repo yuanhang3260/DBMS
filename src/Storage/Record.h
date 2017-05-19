@@ -125,7 +125,7 @@ class RecordBase {
   virtual int LoadFromMem(const byte* buf);
 
   virtual RecordBase* Duplicate() const;
-  bool CopyFieldsFrom(const RecordBase* source);
+  bool CopyFieldsFrom(const RecordBase& source);
 
   // Overloading operators.
   bool operator<(const RecordBase& other) const;

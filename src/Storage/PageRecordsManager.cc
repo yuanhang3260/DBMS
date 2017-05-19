@@ -66,7 +66,7 @@ bool PageRecordsManager::LoadRecordsFromPage() {
   // Clean previous data.
   plrecords_.clear();
 
-  const auto& slot_directory = page_->Meta()->slot_directory();
+  const auto& slot_directory = page_->meta().slot_directory();
   for (uint32 slot_id = 0; slot_id < slot_directory.size(); slot_id++) {
     int offset = slot_directory.at(slot_id).offset();
     int length = slot_directory.at(slot_id).length();
@@ -324,7 +324,7 @@ HalfSplitResult HalfSplitRecordGroups(const std::vector<RecordGroup>* rgroups,
 void PageRecordsManager::GroupRecords(std::vector<RecordGroup>* rgroups) {
   // Tree node records are guaranteed different and each group contains exactly
   // one record.
-  if (page_->Meta()->page_type() == TREE_NODE) {
+  if (page_->meta().page_type() == TREE_NODE) {
     for (uint32 i = 0; i < plrecords_.size(); i++) {
       rgroups->push_back(RecordGroup(i, 1, Record(i)->size()));
     }
@@ -356,7 +356,7 @@ void PageRecordsManager::GroupRecords(std::vector<RecordGroup>* rgroups) {
 std::vector<PageRecordsManager::SplitLeaveResults>
 PageRecordsManager::InsertRecordAndSplitPage(
     const RecordBase& new_record,
-    std::vector<DataRecordRidMutation>& rid_mutations) {
+    std::vector<DataRecordRidMutation>* rid_mutations) {
   // Insert new record to prmanager.
   std::vector<PageRecordsManager::SplitLeaveResults> result;
   if (!InsertNewRecord(new_record)) {
@@ -406,9 +406,9 @@ PageRecordsManager::InsertRecordAndSplitPage(
       else {
         page_->DeleteRecord(slot_id);
         if (file_type_ == INDEX_DATA) {
-          rid_mutations.emplace_back(Shared_Record(i),
-                                     RecordID(page_->id(), slot_id),
-                                     RecordID(page->id(), new_slot_id));
+          rid_mutations->emplace_back(Shared_Record(i),
+                                      RecordID(page_->id(), slot_id),
+                                      RecordID(page->id(), new_slot_id));
         }
       }
     }
@@ -478,9 +478,9 @@ PageRecordsManager::InsertRecordAndSplitPage(
           else {
             page_->DeleteRecord(slot_id);
             if (file_type_ == INDEX_DATA) {
-              rid_mutations.emplace_back(Shared_Record(i),
-                                         RecordID(page_->id(), slot_id),
-                                         RecordID(tail_page->id(),new_slot_id));
+              rid_mutations->emplace_back(Shared_Record(i),
+                                          RecordID(page_->id(), slot_id),
+                                          RecordID(tail_page->id(),new_slot_id));
             }
           }
         }
@@ -537,9 +537,9 @@ PageRecordsManager::InsertRecordAndSplitPage(
       else {
         page_->DeleteRecord(slot_id);
         if (file_type_ == INDEX_DATA) {
-          rid_mutations.emplace_back(Shared_Record(index),
-                                     RecordID(page_->id(), slot_id),
-                                     RecordID(tail_page->id(), new_slot_id));
+          rid_mutations->emplace_back(Shared_Record(index),
+                                      RecordID(page_->id(), slot_id),
+                                      RecordID(tail_page->id(), new_slot_id));
         }
       }
     }
@@ -569,9 +569,9 @@ PageRecordsManager::InsertRecordAndSplitPage(
           else {
             page_->DeleteRecord(slot_id);
             if (file_type_ == INDEX_DATA) {
-              rid_mutations.emplace_back(Shared_Record(index),
-                                         RecordID(page_->id(), slot_id),
-                                         RecordID(page2->id(), new_slot_id));
+              rid_mutations->emplace_back(Shared_Record(index),
+                                          RecordID(page_->id(), slot_id),
+                                          RecordID(page2->id(), new_slot_id));
             }
           }
         }
@@ -595,9 +595,9 @@ PageRecordsManager::InsertRecordAndSplitPage(
         else {
           page_->DeleteRecord(slot_id);
           if (file_type_ == INDEX_DATA) {
-            rid_mutations.emplace_back(Shared_Record(index),
-                                       RecordID(page_->id(), slot_id),
-                                       RecordID(page3->id(), new_slot_id));
+            rid_mutations->emplace_back(Shared_Record(index),
+                                        RecordID(page_->id(), slot_id),
+                                        RecordID(page3->id(), new_slot_id));
           }
         }
       }
@@ -625,7 +625,7 @@ PageRecordsManager::InsertRecordAndSplitPage(
 
 bool PageRecordsManager::UpdateRecordID(int slot_id, const RecordID& rid) {
   if (file_type_ != INDEX ||
-      page_->Meta()->page_type() != TREE_LEAVE) {
+      page_->meta().page_type() != TREE_LEAVE) {
     LogERROR("Can't update rid on page type other than (index_data, leave)");
     return false;
   }

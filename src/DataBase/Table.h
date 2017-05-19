@@ -46,7 +46,7 @@ class Table {
   bool UpdateIndexTrees(
            std::vector<Storage::DataRecordRidMutation>& rid_mutations);
 
-  bool InsertRecord(const Storage::RecordBase* record);
+  bool InsertRecord(const Storage::RecordBase& record);
 
   int DeleteRecord(const DeleteOp& op);
 

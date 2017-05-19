@@ -116,6 +116,7 @@ class RecordPage {
   // Accessors
   DEFINE_ACCESSOR(id, int);
   DEFINE_ACCESSOR(valid, bool);
+  const RecordPageMeta& meta() const { return *page_meta_; }
   RecordPageMeta* Meta() { return page_meta_.get(); }
   byte* data() { return data_.get(); }
 

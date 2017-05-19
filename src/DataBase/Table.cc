@@ -173,7 +173,7 @@ bool Table::PreLoadData(
     if (!record->CheckFieldsType(schema_)) {
       return false;
     }
-    if (!tree->BulkLoadRecord(record.get())) {
+    if (!tree->BulkLoadRecord(*record)) {
       LogERROR("Failed to bulk load record, stop");
       return false;
     }
@@ -225,7 +225,7 @@ bool Table::PreLoadData(
       irecord.set_rid(r.rid);
       // printf("insertng index record:\n");
       // irecord.Print();
-      tree->BulkLoadRecord(&irecord);
+      tree->BulkLoadRecord(irecord);
     }
     tree->SaveToDisk();
   }
@@ -336,8 +336,8 @@ bool Table::UpdateIndexTrees(
   return true;
 }
 
-bool Table::InsertRecord(const Storage::RecordBase* record) {
-  if (record->type() != Storage::DATA_RECORD) {
+bool Table::InsertRecord(const Storage::RecordBase& record) {
+  if (record.type() != Storage::DATA_RECORD) {
     LogERROR("Can't insert record other than DataRecord");
     return false;
   }
@@ -349,7 +349,7 @@ bool Table::InsertRecord(const Storage::RecordBase* record) {
   }
   // Insert record to data B+ tree.
   std::vector<Storage::DataRecordRidMutation> rid_mutations;
-  auto rid = data_tree->Do_InsertRecord(record, rid_mutations);
+  auto rid = data_tree->Do_InsertRecord(record, &rid_mutations);
   if (!rid.IsValid()) {
     LogFATAL("Failed to insert data record");
   }
@@ -373,10 +373,10 @@ bool Table::InsertRecord(const Storage::RecordBase* record) {
     // Index Tree.
     auto index_tree = Tree(Storage::INDEX, key_index);
     Storage::IndexRecord irecord;
-      (reinterpret_cast<const Storage::DataRecord*>(record))
-        ->ExtractKey(&irecord, key_index);
+    (dynamic_cast<const Storage::DataRecord&>(record))
+        .ExtractKey(&irecord, key_index);
     irecord.set_rid(rid);
-    auto irid = index_tree->Do_InsertRecord(&irecord, rid_mutations);
+    auto irid = index_tree->Do_InsertRecord(irecord, &rid_mutations);
     if (!irid.IsValid()) {
       LogFATAL("Failed to insert index record for the new record at index %d",
                key_index[0]);

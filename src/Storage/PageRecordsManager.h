@@ -108,7 +108,7 @@ class PageRecordsManager {
   // Insert a new data record to the plrecords list.
   std::vector<SplitLeaveResults> InsertRecordAndSplitPage(
       const RecordBase& record,
-      std::vector<DataRecordRidMutation>& rid_mutations);
+      std::vector<DataRecordRidMutation>* rid_mutations);
 
   friend class BplusTree;
 
