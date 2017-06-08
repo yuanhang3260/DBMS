@@ -14,8 +14,8 @@ namespace Storage {
 
 // **************************** PageLoadedRecord **************************** //
 bool PageLoadedRecord::GenerateRecordPrototype(
-         const Schema::TableSchema& schema,
-         std::vector<int> key_indexes,
+         const DB::TableSchema& schema,
+         const std::vector<int>& key_indexes,
          FileType file_type,
          PageType page_type) {
   // Create record based on file tpye and page type
@@ -37,7 +37,18 @@ bool PageLoadedRecord::GenerateRecordPrototype(
     return false;
   }
 
-  record_->InitRecordFields(schema, key_indexes, file_type, page_type);
+  std::vector<int> indexes;
+  if (file_type == INDEX_DATA && page_type == TREE_LEAVE) {
+    // DataRecord should contain all fields.
+    indexes.resize(schema.fields_size());
+    for (uint32 i = 0; i < indexes.size(); i++) {
+      indexes[i] = i;
+    }
+  } else {
+    indexes = key_indexes;
+  }
+
+  record_->InitRecordFields(schema, indexes);
   return true;
 }
 

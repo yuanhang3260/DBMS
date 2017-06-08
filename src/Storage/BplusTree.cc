@@ -195,7 +195,7 @@ BplusTree::~BplusTree() {
   }
 }
 
-BplusTree::BplusTree(DataBase::Table* table,
+BplusTree::BplusTree(DB::Table* table,
                      FileType file_type,
                      std::vector<int> key_indexes,
                      bool create) :
@@ -300,7 +300,7 @@ RecordPage* BplusTree::root() {
   return nullptr;
 }
 
-const Schema::TableSchema& BplusTree::schema() const {
+const DB::TableSchema& BplusTree::schema() const {
   return table_->schema();
 }
 
@@ -601,8 +601,7 @@ bool BplusTree::InsertTreeNodeRecord(const Storage::TreeNodeRecord& tn_record,
 
 bool BplusTree::AddFirstLeaveToTree(RecordPage* leave) {
   Storage::TreeNodeRecord min_tn_record;
-  min_tn_record.InitRecordFields(schema(), key_indexes_,
-                                 file_type_, TREE_NODE);
+  min_tn_record.InitRecordFields(schema(), key_indexes_);
   RecordPage* tree_node = AllocateNewPage(TREE_NODE);
   header_->set_root_page(tree_node->id());
   header_->set_depth(1);
@@ -1152,12 +1151,9 @@ std::shared_ptr<RecordBase> BplusTree::GetRecord(RecordID rid) {
   int load_size = plrecord.mutable_record()->LoadFromMem(page->Record(slot_id));
 
   int expect_len = page->RecordLength(slot_id);
-  if (load_size != expect_len) {
-    LogERROR("Error load slot %d from page %d - expect %d byte, actual %d ",
-             page->id(), slot_id, expect_len, load_size);
-    plrecord.mutable_record()->Print();
-    return std::shared_ptr<RecordBase>();
-  }
+  SANITY_CHECK(load_size == expect_len,
+               "Error load slot %d from page %d - expect %d byte, actual %d ",
+               page->id(), slot_id, expect_len, load_size);
   
   return plrecord.Shared_Record();
 }
@@ -1484,8 +1480,8 @@ bool BplusTree::ReDistributeRecordsWithinTwoPages(
   int gindex = gindex_start;
   for (; gindex != gindex_end; gindex -= move_direction) {
     if (!force_redistribute &&
-        std::abs(dest_page->meta().space_used() + rgroups[gindex].size -
-                 src_page->meta().space_used() + rgroups[gindex].size)
+        std::abs(dest_page->meta().space_used() + (int)rgroups[gindex].size -
+                 src_page->meta().space_used() + (int)rgroups[gindex].size)
         > min_gap) {
       break;
     }
@@ -1718,7 +1714,7 @@ bool BplusTree::DeleteNodeFromTree(RecordPage* page, int slot_id_in_parent) {
 
 bool BplusTree::ProcessNodeAfterRecordDeletion(
          RecordPage* page,
-         DataBase::DeleteResult* delete_result) {
+         DB::DeleteResult* delete_result) {
   if (!page) {
     LogERROR("nullptr page input to ProcessNodeAfterRecordDeletion");
     return false;
@@ -1832,7 +1828,7 @@ bool BplusTree::ProcessNodeAfterRecordDeletion(
 
 bool BplusTree::Do_DeleteRecordByKey(
          const std::vector<std::shared_ptr<RecordBase>>& keys,
-         DataBase::DeleteResult* result) {
+         DB::DeleteResult* result) {
   if (header_->root_page() < 0) {
     return true;
   }
@@ -1872,8 +1868,8 @@ bool BplusTree::Do_DeleteRecordByKey(
 }
 
 bool BplusTree::Do_DeleteRecordByRecordID(
-         DataBase::DeleteResult& index_del_result,
-         DataBase::DeleteResult* result) {
+         DB::DeleteResult& index_del_result,
+         DB::DeleteResult* result) {
   if (!result) {
     LogERROR("nullptr input 'result' to Do_DeleteRecordByRecordID");
     return false;
@@ -1897,7 +1893,7 @@ bool BplusTree::Do_DeleteRecordByRecordID(
 
     // delete this rids in [group_start, group_end - 1]
     auto page = Page(rid_deleted[group_start].old_rid.page_id());
-    DataBase::DeleteResult crt_result;
+    DB::DeleteResult crt_result;
     CheckLogFATAL(page, "Can't find data tree leave %d", page->id());
     printf("-------------\n");
     for (int j = group_start; j < group_end; j++) {
@@ -1946,7 +1942,7 @@ bool BplusTree::UpdateIndexRecords(
   for (int rg_index = 0; rg_index <= (int)rgroups.size(); rg_index++) {
     if (rg_index == (int)rgroups.size()) {
       if (is_delete_irecord) {
-        DataBase::DeleteResult result;
+        DB::DeleteResult result;
         ProcessNodeAfterRecordDeletion(crt_leave, &result);
       }
       break;
@@ -1966,7 +1962,7 @@ bool BplusTree::UpdateIndexRecords(
 
     // If we search to a different leave for this rgroup, post-process current
     // leave after deletion.
-    DataBase::DeleteResult result;
+    DB::DeleteResult result;
     if (crt_leave && crt_leave->id() != leave->id()) {
       result.mutated_leaves.clear();
       if (is_delete_irecord) {
@@ -2063,7 +2059,7 @@ bool BplusTree::UpdateIndexRecords(
 int BplusTree::DeleteMatchedRecordsFromLeave(
          const RecordBase& key,
          RecordPage* leave,
-         DataBase::DeleteResult* result) {
+         DB::DeleteResult* result) {
   if (!leave || !result) {
     LogERROR("Nullptr input to DeleteMatchedRecordsFromLeave");
     return -1;
@@ -2079,14 +2075,14 @@ int BplusTree::DeleteMatchedRecordsFromLeave(
     for (uint32 index = 0; index < prmanager.NumRecords(); index++) {
       if (prmanager.CompareRecordWithKey(key, prmanager.record(index)) == 0) {
         int slot_id = prmanager.RecordSlotID(index);
-        if (result->del_mode == DataBase::DeleteResult::DEL_DATA) {
+        if (result->del_mode == DB::DeleteResult::DEL_DATA) {
           // Save all records deleted from data tree.
           result->rid_deleted.emplace_back(
                                 prmanager.plrecords().at(index).Shared_Record(),
                                 RecordID(leave->id(), slot_id),
                                 RecordID());
         }
-        else if (result->del_mode == DataBase::DeleteResult::DEL_INDEX_PRE) {
+        else if (result->del_mode == DB::DeleteResult::DEL_INDEX_PRE) {
           // Save the rids to delete from data tree.
           auto index_record = prmanager.GetRecord<IndexRecord>(index);
           result->rid_deleted.emplace_back(

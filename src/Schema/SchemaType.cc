@@ -24,23 +24,23 @@ std::string Field::FieldTypeAsString(FieldType type) {
   return "Unknown";
 }
 
-bool Field::MatchesSchemaType(TableField::Type schema_type) const {
-  if (type() == INT && schema_type != TableField::INTEGER) {
+bool Field::MatchesSchemaType(DB::TableField::Type schema_type) const {
+  if (type() == INT && schema_type != DB::TableField::INTEGER) {
     return false;
   }
-  if (type() == LONGINT && schema_type != TableField::LLONG) {
+  if (type() == LONGINT && schema_type != DB::TableField::LLONG) {
     return false;
   }
-  if (type() == DOUBLE && schema_type != TableField::DOUBLE) {
+  if (type() == DOUBLE && schema_type != DB::TableField::DOUBLE) {
     return false;
   }
-  if (type() == BOOL && schema_type != TableField::BOOL) {
+  if (type() == BOOL && schema_type != DB::TableField::BOOL) {
     return false;
   }
-  if (type() == STRING && schema_type != TableField::STRING) {
+  if (type() == STRING && schema_type != DB::TableField::STRING) {
     return false;
   }
-  if (type() == CHARARRAY && schema_type != TableField::CHARARR) {
+  if (type() == CHARARRAY && schema_type != DB::TableField::CHARARR) {
     return false;
   }
 

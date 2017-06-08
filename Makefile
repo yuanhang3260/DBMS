@@ -16,12 +16,13 @@ HYLIB=../HyLib/libhy.a
 SRC_DIR=src
 OBJ_DIR=lib
 
-OBJ = $(OBJ_DIR)/DataBase/Table.o \
+OBJ = $(OBJ_DIR)/DataBase/Catalog_pb.o \
+      $(OBJ_DIR)/DataBase/DataBase.o \
+      $(OBJ_DIR)/DataBase/Table.o \
       $(OBJ_DIR)/DataBase/Operation.o \
       $(OBJ_DIR)/Schema/SchemaType.o \
       $(OBJ_DIR)/Schema/DataTypes.o \
-      $(OBJ_DIR)/Schema/DBTable_pb.o \
-			$(OBJ_DIR)/Storage/Common.o \
+      $(OBJ_DIR)/Storage/Common.o \
       $(OBJ_DIR)/Storage/RecordPage.o \
       $(OBJ_DIR)/Storage/BplusTree.o \
       $(OBJ_DIR)/Storage/Record.o \
@@ -44,6 +45,11 @@ TESTEXE = test/RecordPage_test.out \
           test/PageRecord_Common_test.out \
           test/BplusTree_test.out \
           test/Operation_test.out \
+
+all: pre_build library
+
+pre_build:
+	mkdir -p $(OBJ_DIR)/Storage $(OBJ_DIR)/DataBase $(OBJ_DIR)/Schema
 
 library: $(OBJ)
 	ar cr libDBMS.a $(OBJ)
@@ -81,9 +87,6 @@ test/%.out: $(OBJ_DIR)/Utility/%.o library
 test/%.out: $(OBJ_DIR)/Storage/%.o library
 	$(CC) $(CFLAGS) $< libDBMS.a $(ProtoBufLib) $(HYLIB) -o $@
 
-test/%.out: $(OBJ_DIR)/Base/%.o library
-	$(CC) $(CFLAGS) $< libDBMS.a $(ProtoBufLib) $(HYLIB) -o $@
-
 test/%.out: $(OBJ_DIR)/Schema/%.o library
 	$(CC) $(CFLAGS) $< libDBMS.a $(ProtoBufLib) $(HYLIB) -o $@
 
@@ -117,7 +120,4 @@ clean:
 	rm -rf $(OBJ_DIR)/Schema/*.o
 	rm -rf $(OBJ_DIR)/DataBase/*.o
 	rm -rf test/*.out
-	rm -rf data/*.data
-	rm -rf data/*.index
-	rm -rf data/*.indata
-	rm -rf data/*.schema.pb
+	rm -rf data/*

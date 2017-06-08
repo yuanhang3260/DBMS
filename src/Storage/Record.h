@@ -4,8 +4,8 @@
 #include <vector>
 #include <memory>
 
+#include "DataBase/Catalog_pb.h"
 #include "Schema/DataTypes.h"
-#include "Schema/DBTable_pb.h"
 #include "Storage/Common.h"
 #include "Storage/RecordPage.h"
 
@@ -103,15 +103,13 @@ class RecordBase {
   virtual void clear();
 
   // Init records fields with schema and key_indexes.
-  bool InitRecordFields(const Schema::TableSchema& schema,
-                        std::vector<int> key_indexes,
-                        FileType file_type,
-                        PageType page_type);
+  bool InitRecordFields(const DB::TableSchema& schema,
+                        const std::vector<int>& indexes);
 
   // Check all fields type match a schema.
-  bool CheckFieldsType(const Schema::TableSchema& schema,
+  bool CheckFieldsType(const DB::TableSchema& schema,
                        std::vector<int> key_indexes) const;
-  bool CheckFieldsType(const Schema::TableSchema& schema) const;
+  bool CheckFieldsType(const DB::TableSchema& schema) const;
 
   // Parse from text of format as Print() method prints.
   bool ParseFromText(std::string str, int chararray_len_limit);

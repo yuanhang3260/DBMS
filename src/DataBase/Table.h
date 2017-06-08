@@ -5,7 +5,6 @@
 #include <map>
 #include <memory>
 
-#include "Schema/DBTable_pb.h"
 #include "Storage/Record.h"
 #include "Storage/BplusTree.h"
 #include "DataBase/Operation.h"
@@ -14,18 +13,18 @@ namespace Storage {
   class BplusTree;
 }
 
-namespace DataBase {
+namespace DB {
 
 class Table {
  public:
   Table() = default;
-  Table(std::string name);
-  FORBID_COPY_AND_ASSIGN(Table);
+  Table(const std::string& db_name, const std::string& name,
+        const TableSchema* schema);
 
   DEFINE_ACCESSOR(name, std::string);
   DEFINE_ACCESSOR(idata_indexes, std::vector<int>);
 
-  const Schema::TableSchema& schema() const { return schema_; }
+  const DB::TableSchema& schema() const { return *schema_; }
 
   std::string BplusTreeFileName(Storage::FileType file_type,
                                 std::vector<int> key_indexes);
@@ -33,8 +32,7 @@ class Table {
   // Bulkload data records and generate all index files.
   bool PreLoadData(std::vector<std::shared_ptr<Storage::RecordBase>>& records);
 
-  Storage::BplusTree* Tree(Storage::FileType,
-                                 std::vector<int> key_indexes);
+  Storage::BplusTree* Tree(Storage::FileType, std::vector<int> key_indexes);
 
   bool IsDataFileKey(int index) const;
   std::vector<int> DataTreeKey() const;
@@ -52,7 +50,6 @@ class Table {
 
  private:
   bool BuildFieldIndexMap();
-  bool LoadSchema();
 
   // Given a sorted list of DataRecordRidMutation groups, we further group them
   // into leave groups - that is, group them based on the index B+ tree leave 
@@ -70,8 +67,9 @@ class Table {
     int leave_id;
   };
 
+  std::string db_name_;
   std::string name_;
-  Schema::TableSchema schema_;
+  const DB::TableSchema* schema_;
 
   // indexes of INDEX_DATA file.
   std::vector<int> idata_indexes_;
@@ -81,6 +79,8 @@ class Table {
   using TreeMap =
           std::map<std::string, std::shared_ptr<Storage::BplusTree>>;
   TreeMap tree_map_;
+
+  FORBID_COPY_AND_ASSIGN(Table);
 };
 
 }  // namespace DATABASE

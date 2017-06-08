@@ -9,7 +9,7 @@
 #include "Base/MacroUtils.h"
 #include "Base/BaseTypes.h"
 #include "Base/Utils.h"
-#include "SchemaType.h"
+#include "Schema/SchemaType.h"
 
 namespace Schema {
 

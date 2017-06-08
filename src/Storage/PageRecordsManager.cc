@@ -14,8 +14,8 @@ namespace Storage {
 
 // ************************** PageRecordsManager **************************** //
 PageRecordsManager::PageRecordsManager(RecordPage* page,
-                                       const Schema::TableSchema& schema,
-                                       std::vector<int> key_indexes,
+                                       const DB::TableSchema& schema,
+                                       const std::vector<int>& key_indexes,
                                        FileType file_type,
                                        PageType page_type) :
     page_(page),

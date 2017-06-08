@@ -7,7 +7,7 @@
 #include "Storage/Record.h"
 #include "Storage/PageRecord_Common.h"
 
-namespace DataBase {
+namespace DB {
 
 enum OpCondition {
   EQ = 0,
@@ -49,6 +49,6 @@ class DeleteResult {
   bool ValidityCheck();
 };
 
-}  // namespace DataBase
+}  // namespace DB
 
 #endif  /* DATABSE_TABLE_OPERATION_ */

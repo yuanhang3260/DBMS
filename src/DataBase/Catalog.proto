@@ -1,4 +1,4 @@
-package Schema;
+package DB;
 
 message TableField {
   enum Type {
@@ -23,4 +23,9 @@ message TableSchema {
   repeated int32 primary_key_indexes = 3;
 
   // TODO: foreign keys, constraints, assertions ...
+}
+
+message DatabaseCatalog {
+  optional int32 name = 1;
+  repeated TableSchema tables = 2;
 }

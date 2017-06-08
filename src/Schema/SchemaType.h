@@ -3,9 +3,9 @@
 
 #include <string>
 
+#include "DataBase/Catalog_pb.h"
 #include "Base/BaseTypes.h"
 #include "Base/MacroUtils.h"
-#include "DBTable_pb.h"
 
 namespace Schema {
 
@@ -34,7 +34,7 @@ class Field {
 
   static std::string FieldTypeAsString(FieldType type);
 
-  bool MatchesSchemaType(TableField::Type type) const;
+  bool MatchesSchemaType(DB::TableField::Type type) const;
 
  protected:
 };

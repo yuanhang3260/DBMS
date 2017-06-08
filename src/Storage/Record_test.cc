@@ -18,7 +18,7 @@ class RecordTest: public UnitTest {
   std::map<int, std::shared_ptr<IndexRecord>> indexrecord_resource;
   std::map<int, std::shared_ptr<TreeNodeRecord>> treenoderecord_resource;
   const int kNumRecordsSource = 1000;
-  Schema::TableSchema schema;
+  DB::TableSchema schema;
   std::vector<int> key_indexes = std::vector<int>{1, 0};
 
  public:
@@ -37,35 +37,35 @@ class RecordTest: public UnitTest {
     // Create a table schema.
     schema.set_name("testTable");
     // Add string type
-    Schema::TableField* field = schema.add_fields();
+    DB::TableField* field = schema.add_fields();
     field->set_name("name");
     field->set_index(0);
-    field->set_type(Schema::TableField::STRING);
+    field->set_type(DB::TableField::STRING);
     // Add int type
     field = schema.add_fields();
     field->set_name("age");
     field->set_index(1);
-    field->set_type(Schema::TableField::INTEGER);
+    field->set_type(DB::TableField::INTEGER);
     // Add long int type
     field = schema.add_fields();
     field->set_name("money");
     field->set_index(2);
-    field->set_type(Schema::TableField::LLONG);
+    field->set_type(DB::TableField::LLONG);
     // Add double type
     field = schema.add_fields();
     field->set_name("weight");
     field->set_index(3);
-    field->set_type(Schema::TableField::DOUBLE);
+    field->set_type(DB::TableField::DOUBLE);
     // Add bool type
     field = schema.add_fields();
     field->set_name("adult");
     field->set_index(4);
-    field->set_type(Schema::TableField::BOOL);
+    field->set_type(DB::TableField::BOOL);
     // Add char array type
     field = schema.add_fields();
     field->set_name("signature");
     field->set_index(5);
-    field->set_type(Schema::TableField::CHARARR);
+    field->set_type(DB::TableField::CHARARR);
     field->set_size(20);
   }
 

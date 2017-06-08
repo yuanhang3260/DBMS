@@ -7,7 +7,7 @@
 #include "DataBase/Table.h"
 #include "Storage/PageRecord_Common.h"
 
-namespace DataBase {
+namespace DB {
 
 class TableTest: public UnitTest {
  private:
@@ -19,7 +19,7 @@ class TableTest: public UnitTest {
 }  // namespace Schema
 
 int main() {
-  DataBase::TableTest test;
+  DB::TableTest test;
   test.setup();
   test.teardown();
 

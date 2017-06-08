@@ -5,9 +5,9 @@
 #include <memory>
 #include <queue>
 
+#include "DataBase/Catalog_pb.h"
 #include "DataBase/Table.h"
 #include "DataBase/Operation.h"
-#include "Schema/DBTable_pb.h"
 #include "Storage/Record.h"
 #include "Storage/PageRecord_Common.h"
 #include "Storage/PageBase.h"
@@ -17,7 +17,7 @@ namespace Schema {
   class PageRecordsManager;
 }
 
-namespace DataBase {
+namespace DB {
   class Table;
 }
 
@@ -63,7 +63,7 @@ class BplusTree {
  public:
   BplusTree() = default;
   // Contruct B+ tree from an existing file.
-  BplusTree(DataBase::Table* table,
+  BplusTree(DB::Table* table,
             FileType file_type,
             std::vector<int> key_indexes,
             bool create=false);
@@ -73,12 +73,12 @@ class BplusTree {
 
   // Accessors
   DEFINE_ACCESSOR(file, FILE*);
-  DEFINE_ACCESSOR(table, DataBase::Table*);
+  DEFINE_ACCESSOR(table, DB::Table*);
   DEFINE_ACCESSOR(key_indexes, std::vector<int>);
   DEFINE_ACCESSOR_ENUM(file_type, FileType);
   BplusTreeHeaderPage* meta() { return header_.get(); }
   RecordPage* root();
-  const Schema::TableSchema& schema() const;
+  const DB::TableSchema& schema() const;
 
   // Load B+ tree from file.
   bool LoadTree();
@@ -129,14 +129,14 @@ class BplusTree {
   // Delete records by key.
   bool Do_DeleteRecordByKey(
            const std::vector<std::shared_ptr<RecordBase>>& keys,
-           DataBase::DeleteResult* result);
+           DB::DeleteResult* result);
 
   // Delete records by Record ID - This is used in deleting data records after
   // deletion from index tree.
   // arg index_del_result: delete result from index tree deletion.
   bool Do_DeleteRecordByRecordID(
-           DataBase::DeleteResult& index_del_result,
-           DataBase::DeleteResult* result);
+           DB::DeleteResult& index_del_result,
+           DB::DeleteResult* result);
 
   // Update/Delete index records for an index tree, after data tree has been
   // modified (delete or insert records).
@@ -170,7 +170,7 @@ class BplusTree {
   // Load root node from disk.
   bool LoadRootNode();
   // Load table schema from schema file, which is a serialized protocal buffer
-  // raw file. It saves message Schema::TableSchema defined in Schema/DBTable.proto.
+  // raw file. It saves message DB::TableSchema defined in Schema/DBTable.proto.
   bool LoadSchema();
 
   // Verify an empty tree.
@@ -196,7 +196,7 @@ class BplusTree {
   // propagate tree node record deletion to upper nodes.
   bool ProcessNodeAfterRecordDeletion(
            RecordPage* page,
-           DataBase::DeleteResult* result);
+           DB::DeleteResult* result);
 
   // Used in bulk loading. We don't allow records with same key are spread
   // to 2 successive pages. Same keys must be merged into a single page and
@@ -283,7 +283,7 @@ class BplusTree {
   int DeleteMatchedRecordsFromLeave(
          const RecordBase& key,
          RecordPage* leave,
-         DataBase::DeleteResult* result);
+         DB::DeleteResult* result);
 
   bool CheckKeyFieldsType(const RecordBase& key) const;
   bool CheckRecordFieldsType(const RecordBase& record) const;
@@ -347,7 +347,7 @@ class BplusTree {
   FILE* file_ = nullptr;
 
   // Table Schema
-  DataBase::Table* table_;
+  DB::Table* table_;
 
   // FileType
   FileType file_type_ = UNKNOWN_FILETYPE;

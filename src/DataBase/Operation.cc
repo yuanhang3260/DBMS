@@ -6,7 +6,7 @@
 
 #include "DataBase/Operation.h"
 
-namespace DataBase {
+namespace DB {
 
 bool DeleteResult::MergeFrom(DeleteResult& other) {
   // printf("^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n");
@@ -137,4 +137,4 @@ bool DeleteResult::ValidityCheck() {
   return true;
 }
 
-}  // namespace DataBase
+}  // namespace DB

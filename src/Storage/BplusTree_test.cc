@@ -5,23 +5,26 @@
 
 #include "Base/Utils.h"
 #include "Base/Log.h"
+#include "IO/FileSystemUtils.h"
+#include "Strings/Utils.h"
 #include "UnitTest/UnitTest.h"
 
-#include "Schema/DBTable_pb.h"
+#include "DataBase/Catalog_pb.h"
+#include "DataBase/Operation.h"
+#include "DataBase/Table.h"
 #include "Storage/BplusTree.h"
 #include "Storage/PageRecordsManager.h"
 #include "Storage/Record.h"
-#include "DataBase/Operation.h"
-#include "DataBase/Table.h"
 
 namespace Storage {
 
 class BplusTreeTest: public UnitTest {
  private:
+  std::string db_name = "test_db";
   std::string tablename = "testTable";
   std::vector<int> key_indexes;
-  Schema::TableSchema schema;
-  DataBase::Table* table;
+  DB::TableSchema schema;
+  DB::Table* table;
   std::map<int, std::shared_ptr<DataRecord>> record_resource;
   const int kNumRecordsSource = 1000;
 
@@ -30,35 +33,35 @@ class BplusTreeTest: public UnitTest {
     // Create a table schema.
     schema.set_name(tablename);
     // Add string type
-    Schema::TableField* field = schema.add_fields();
+    DB::TableField* field = schema.add_fields();
     field->set_name("name");
     field->set_index(0);
-    field->set_type(Schema::TableField::STRING);
+    field->set_type(DB::TableField::STRING);
     // Add int type
     field = schema.add_fields();
     field->set_name("age");
     field->set_index(1);
-    field->set_type(Schema::TableField::INTEGER);
+    field->set_type(DB::TableField::INTEGER);
     // Add long int type
     field = schema.add_fields();
     field->set_name("id");
     field->set_index(2);  // primary key
-    field->set_type(Schema::TableField::LLONG);
+    field->set_type(DB::TableField::LLONG);
     // Add double type
     field = schema.add_fields();
     field->set_name("weight");
     field->set_index(3);
-    field->set_type(Schema::TableField::DOUBLE);
+    field->set_type(DB::TableField::DOUBLE);
     // Add bool type
     field = schema.add_fields();
     field->set_name("adult");
     field->set_index(4);
-    field->set_type(Schema::TableField::BOOL);
+    field->set_type(DB::TableField::BOOL);
     // Add char array type
     field = schema.add_fields();
     field->set_name("signature");
     field->set_index(5);
-    field->set_type(Schema::TableField::CHARARR);
+    field->set_type(DB::TableField::CHARARR);
     field->set_size(20);
 
     schema.add_primary_key_indexes(2);
@@ -135,16 +138,21 @@ class BplusTreeTest: public UnitTest {
 
   void setup() override {
     InitSchema();
-    CreateSchemaFile(tablename);
+    CreateDBDirectory();
     InitRecordResource();
     //InitRecordResourceFromFile("out1");
-    table = new DataBase::Table(tablename);
+    table = new DB::Table(db_name, tablename, &schema);
   }
 
   void teardown() override {
     if (table) {
       delete table;
     }
+  }
+
+  bool CreateDBDirectory() {
+    std::string db_dir = Strings::StrCat(Storage::kDataDirectory, db_name);
+    return FileSystem::CreateDir(db_dir);
   }
 
   bool CreateSchemaFile(std::string tablename) {
@@ -632,13 +640,13 @@ class BplusTreeTest: public UnitTest {
     //std::sort(del_keys.begin(), del_keys.end());
     for (int i: del_keys) {
       printf("--------------------- i = %d ---------------------------\n", i);
-      DataBase::DeleteOp op;
+      DB::DeleteOp op;
       op.key_index = key_index[0];
       op.keys.push_back(std::make_shared<RecordBase>());
       op.keys.back()->AddField(new Schema::LongIntField(i));
       op.keys.back()->Print();
 
-      DataBase::DeleteResult delete_result;
+      DB::DeleteResult delete_result;
       tree.Do_DeleteRecordByKey(op.keys, &delete_result);
 
       tree.SaveToDisk();
@@ -695,11 +703,11 @@ class BplusTreeTest: public UnitTest {
     printf("********************** Begin Deleting *************************\n");
 
     BplusTree tree(table, INDEX, key_index);
-    DataBase::DeleteResult delete_result;
-    delete_result.del_mode = DataBase::DeleteResult::DEL_INDEX_PRE;
+    DB::DeleteResult delete_result;
+    delete_result.del_mode = DB::DeleteResult::DEL_INDEX_PRE;
 
     // Generate delete operator.
-    DataBase::DeleteOp op;
+    DB::DeleteOp op;
     std::vector<int> ages = Utils::RandomListFromRange(0,10);
     for (int i = 0; i < (int)ages.size(); i++) {
       op.key_index = key_index[0];
@@ -724,7 +732,7 @@ class BplusTreeTest: public UnitTest {
       data_record->Print();
     }
     // Delete data records.
-    DataBase::DeleteResult data_del_result;
+    DB::DeleteResult data_del_result;
     data_tree.Do_DeleteRecordByRecordID(delete_result, &data_del_result);
     printf("deleted %d data records from data tree\n",
            (int)data_del_result.rid_deleted.size());
@@ -738,7 +746,7 @@ class BplusTreeTest: public UnitTest {
     printf("********************** Begin Deleting *************************\n");
 
     // Generate delete operator.
-    DataBase::DeleteOp op;
+    DB::DeleteOp op;
     std::vector<int> ages = Utils::RandomListFromRange(0, 0);
     for (int i = 0; i < (int)ages.size(); i++) {
       op.key_index = key_index[0];
@@ -778,7 +786,7 @@ class BplusTreeTest: public UnitTest {
       int group_len = Utils::RandomNumber(5) + 1;
       group_len = start + group_len >= 100 ? (100 - start) : group_len;
       // Generate delete operator, delete ages from index [start, start + len].
-      DataBase::DeleteOp op;
+      DB::DeleteOp op;
       //LogERROR("start = %d, end = %d", start, start + group_len - 1);
       for (int i = start; i < start + group_len; i++) {
         op.key_index = 1;

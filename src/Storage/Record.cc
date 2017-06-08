@@ -285,38 +285,27 @@ void RecordBase::clear() {
   fields_.clear();
 }
 
-bool RecordBase::InitRecordFields(const Schema::TableSchema& schema,
-                                  std::vector<int> key_indexes,
-                                  FileType file_type,
-                                  PageType page_type) {
-  // Create record based on file tpye and page type
-  if (file_type == INDEX_DATA &&
-      page_type == TREE_LEAVE) {
-    // DataRecord should contain all fields.
-    key_indexes.resize(schema.fields_size());
-    for (int i = 0; i < (int)key_indexes.size(); i++) {
-      key_indexes[i] = i;
-    }
-  }
+bool RecordBase::InitRecordFields(const DB::TableSchema& schema,
+                                  const std::vector<int>& indexes) {
   clear();
-  for (int index: key_indexes) {
+  for (int index: indexes) {
     auto type = schema.fields(index).type();
-    if (type == Schema::TableField::INTEGER) {
+    if (type == DB::TableField::INTEGER) {
       AddField(new Schema::IntField());
     }
-    if (type == Schema::TableField::LLONG) {
+    if (type == DB::TableField::LLONG) {
       AddField(new Schema::LongIntField());
     }
-    if (type == Schema::TableField::DOUBLE) {
+    if (type == DB::TableField::DOUBLE) {
       AddField(new Schema::DoubleField());
     }
-    if (type == Schema::TableField::BOOL) {
+    if (type == DB::TableField::BOOL) {
       AddField(new Schema::BoolField());
     }
-    if (type == Schema::TableField::STRING) {
+    if (type == DB::TableField::STRING) {
       AddField(new Schema::StringField());
     }
-    if (type == Schema::TableField::CHARARR) {
+    if (type == DB::TableField::CHARARR) {
       AddField(new Schema::CharArrayField(schema.fields(index).size()));
     }
   }
@@ -324,7 +313,7 @@ bool RecordBase::InitRecordFields(const Schema::TableSchema& schema,
 }
 
 // Check fields type match a schema.
-bool RecordBase::CheckFieldsType(const Schema::TableSchema& schema,
+bool RecordBase::CheckFieldsType(const DB::TableSchema& schema,
                                  std::vector<int> key_indexes) const {
   if (fields_.size() != key_indexes.size()) {
     LogERROR("Index/TreeNode record has mismatchig number of fields - "
@@ -343,7 +332,7 @@ bool RecordBase::CheckFieldsType(const Schema::TableSchema& schema,
   return true;
 }
 
-bool RecordBase::CheckFieldsType(const Schema::TableSchema& schema) const {
+bool RecordBase::CheckFieldsType(const DB::TableSchema& schema) const {
   if ((int)fields_.size() != schema.fields_size()) {
     LogERROR("Data record has mismatchig number of fields with schema - "
              "schema has %d indexes, record has %d",
@@ -519,4 +508,4 @@ void TreeNodeRecord::reset() {
   page_id_ = -1;
 }
 
-}  // namespace Schema
+}  // namespace Storage

@@ -5,7 +5,7 @@
 #include "Base/Log.h"
 #include "Operation.h"
 
-namespace DataBase {
+namespace DB {
 
 class OperationTest: public UnitTest {
  private:
@@ -95,10 +95,10 @@ class OperationTest: public UnitTest {
   }
 };
 
-}  // namespace Schema
+}  // namespace DB
 
 int main() {
-  DataBase::OperationTest test;
+  DB::OperationTest test;
   test.setup();
   test.Test_MergeDeleteResult();
   test.Test_UpdateDeleteRidList();
