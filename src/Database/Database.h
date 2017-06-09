@@ -5,18 +5,20 @@
 #include <map>
 #include <memory>
 
-#include "DataBase/Catalog_pb.h"
-#include "DataBase/Table.h"
+#include "Database/Catalog_pb.h"
+#include "Database/Table.h"
 
 namespace DB {
 
-class DataBase {
+class Database {
  public:
   // TODO: Pass in db schema definition instead of db name.
-  static std::unique_ptr<DataBase> CreateDataBase(const std::string& name);
+  static std::unique_ptr<Database> CreateDatabase(const std::string& name);
+
+  const DatabaseCatalog catalog() const { return catalog_; }
 
  private:
-  DataBase(const std::string& name);
+  Database(const std::string& name);
   bool LoadCatalog();
 
   std::string name_;
@@ -24,7 +26,7 @@ class DataBase {
 
   std::map<std::string, std::unique_ptr<Table>> tables_;
 
-  FORBID_COPY_AND_ASSIGN(DataBase);
+  FORBID_COPY_AND_ASSIGN(Database);
 };
 
 }  // namsespace DB

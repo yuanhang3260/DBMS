@@ -26,6 +26,6 @@ message TableSchema {
 }
 
 message DatabaseCatalog {
-  optional int32 name = 1;
+  optional string name = 1;
   repeated TableSchema tables = 2;
 }

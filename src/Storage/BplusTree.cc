@@ -1159,8 +1159,20 @@ std::shared_ptr<RecordBase> BplusTree::GetRecord(RecordID rid) {
 }
 
 int BplusTree::SearchRecords(
-         const RecordBase& key,
-         std::vector<std::shared_ptr<RecordBase>>* result) {
+        const std::vector<std::shared_ptr<RecordBase>>& keys,
+        std::vector<std::shared_ptr<RecordBase>>* result) {
+  int total_matches = 0;
+  for (const auto& key : keys) {
+    int num_matches_this_key = SearchRecords(*key, result);
+    if (num_matches_this_key > 0) {
+      total_matches += num_matches_this_key;
+    }
+  }
+  return total_matches;
+}
+
+int BplusTree::SearchRecords(const RecordBase& key,
+                             std::vector<std::shared_ptr<RecordBase>>* result) {
   auto leave = SearchByKey(key);
   if (!leave) {
     LogERROR("Can't search to leave by this key");
@@ -1169,7 +1181,7 @@ int BplusTree::SearchRecords(
 
   result->clear();
   FetchResultsFromLeave(key, leave, result);
-  return result->size();
+  return result->size(); 
 }
 
 RecordPage* BplusTree::SearchByKey(const RecordBase& key) {
@@ -2599,5 +2611,5 @@ RecordID BplusTree::InsertNewRecordToLeaveWithSplit(
 }
 
 
-}  // namespace DataBaseFiles
+}  // namespace Storage
 

@@ -4,7 +4,7 @@
 #include "Base/Log.h"
 #include "Base/Utils.h"
 
-#include "DataBase/Operation.h"
+#include "Database/Operation.h"
 
 namespace DB {
 

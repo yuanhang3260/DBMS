@@ -7,7 +7,7 @@
 
 #include "Storage/Record.h"
 #include "Storage/BplusTree.h"
-#include "DataBase/Operation.h"
+#include "Database/Operation.h"
 
 namespace Storage {
   class BplusTree;
@@ -34,7 +34,7 @@ class Table {
 
   Storage::BplusTree* Tree(Storage::FileType, std::vector<int> key_indexes);
 
-  bool IsDataFileKey(int index) const;
+  bool IsDataFileKey(const std::vector<int>& indexes) const;
   std::vector<int> DataTreeKey() const;
 
   bool InitTrees();

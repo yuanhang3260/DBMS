@@ -5,7 +5,7 @@
 #include "Base/Utils.h"
 #include "Strings/Utils.h"
 
-#include "DataBase/Table.h"
+#include "Database/Table.h"
 #include "Storage/PageRecord_Common.h"
 #include "Storage/PageRecordsManager.h"
 
@@ -89,11 +89,22 @@ std::vector<int> Table::DataTreeKey() const {
   return idata_indexes_;
 }
 
-bool Table::IsDataFileKey(int index) const {
-  if (idata_indexes_.size() > 1) {
+bool Table::IsDataFileKey(const std::vector<int>& indexes) const {
+  // if (idata_indexes_.size() > 1) {
+  //   return false;
+  // }
+  // return idata_indexes_[0] == index;
+
+  if (indexes.size() != idata_indexes_.size()) {
     return false;
   }
-  return idata_indexes_[0] == index;
+
+  for (uint32 i = 0; i < indexes.size(); i++) {
+    if (indexes.at(i) != idata_indexes_.at(i)) {
+      return false;
+    }
+  }
+  return true;
 }
 
 bool Table::InitTrees() {
@@ -106,13 +117,13 @@ bool Table::InitTrees() {
 
   // Index trees.
   for (auto field: schema().fields()) {
-    auto key_index = std::vector<int>{field.index()};
-    if (IsDataFileKey(key_index[0])) {
+    std::vector<int> key_indexes{field.index()};
+    if (IsDataFileKey(key_indexes)) {
       continue;
     }
-    filename = BplusTreeFileName(Storage::INDEX, key_index);
+    filename = BplusTreeFileName(Storage::INDEX, key_indexes);
     tree = std::make_shared<Storage::BplusTree>(
-                     this, Storage::INDEX, key_index, true);
+                     this, Storage::INDEX, key_indexes, true);
     tree->CreateBplusTreeFile();
     tree_map_.emplace(filename, tree);
     tree->SaveToDisk();
@@ -175,25 +186,25 @@ bool Table::PreLoadData(
 
   // Generate Index B+ tree files.
   for (auto field: schema().fields()) {
-    auto key_index = std::vector<int>{field.index()};
-    if (IsDataFileKey(key_index[0])) {
+    std::vector<int> key_indexes{field.index()};
+    if (IsDataFileKey(key_indexes)) {
       continue;
     }
-    Storage::DataRecordWithRid::Sort(&record_rids, key_index);
+    Storage::DataRecordWithRid::Sort(&record_rids, key_indexes);
     // printf("sort by index %d\n", key_index[0]);
     // for (auto r: record_rids) {
     //   r.record->Print();
     // }
     // printf("***********************\n");
-    filename = BplusTreeFileName(Storage::INDEX, key_index);
+    filename = BplusTreeFileName(Storage::INDEX, key_indexes);
     tree = std::make_shared<Storage::BplusTree>(
-                     this, Storage::INDEX, key_index, true);
+                     this, Storage::INDEX, key_indexes, true);
     tree_map_.emplace(filename, tree);
 
     Storage::IndexRecord irecord;
     for (auto& r: record_rids) {
       (dynamic_cast<Storage::DataRecord*>(r.record.get()))
-          ->ExtractKey(&irecord, key_index);
+          ->ExtractKey(&irecord, key_indexes);
       irecord.set_rid(r.rid);
       // printf("insertng index record:\n");
       // irecord.Print();
@@ -218,14 +229,14 @@ bool Table::ValidateAllIndexRecords(int num_records) {
   drecord.InitRecordFields(schema(), indexes);
 
   for (auto field: schema().fields()) {
-    auto key_index = std::vector<int>{field.index()};
-    if (IsDataFileKey(key_index[0])) {
+    std::vector<int> key_indexes{field.index()};
+    if (IsDataFileKey(key_indexes)) {
       continue;
     }
     //printf("Verifying index %d file\n", key_index[0]);
     // Get the index tree.
-    auto tree = Tree(Storage::INDEX, key_index);
-    CheckLogFATAL(tree, "Can't find B+ tree for index %d", key_index[0]);
+    auto tree = Tree(Storage::INDEX, key_indexes);
+    CheckLogFATAL(tree, "Can't find B+ tree for index %d", key_indexes[0]);
 
     // Empty tree.
     if (tree->meta()->num_pages() == 1) {
@@ -236,7 +247,7 @@ bool Table::ValidateAllIndexRecords(int num_records) {
 
     // An IndexRecord instance to load index records from tree leaves.
     Storage::IndexRecord irecord;
-    irecord.InitRecordFields(schema(), key_index);
+    irecord.InitRecordFields(schema(), key_indexes);
 
     // Traverse all leaves for this index tree.
     auto leave = tree->FirstLeave();
@@ -258,9 +269,9 @@ bool Table::ValidateAllIndexRecords(int num_records) {
         CheckLogFATAL(drecord.LoadFromMem(data_tree->Record(rid)) >= 0,
                       "Load data record failed");
         if (Storage::RecordBase::CompareRecordWithKey(irecord, drecord,
-                                                      key_index) != 0) {
+                                                      key_indexes) != 0) {
           LogERROR("Compare index %d record failed with original data record",
-                   key_index[0]);
+                   key_indexes[0]);
           drecord.Print();
           irecord.Print();
           printf("*********\n");
@@ -288,18 +299,18 @@ bool Table::UpdateIndexTrees(
   }
 
   for (auto field: schema().fields()) {
-    auto key_index = std::vector<int>{field.index()};
-    if (IsDataFileKey(key_index[0])) {
+    std::vector<int> key_indexes{field.index()};
+    if (IsDataFileKey(key_indexes)) {
       continue;
     }
     // printf("************** Updating Rid for index tree %d ******************\n",
     //        key_index[0]);
 
     // Index Tree.
-    auto tree = Tree(Storage::INDEX, key_index);
+    auto tree = Tree(Storage::INDEX, key_indexes);
     if (!tree) {
       // (TODO): Skip or Fatal ?
-      LogERROR("Can't find B+ tree for index %d", key_index[0]);
+      LogERROR("Can't find B+ tree for index %d", key_indexes[0]);
       continue;
     }
     tree->UpdateIndexRecords(rid_mutations);
@@ -338,20 +349,20 @@ bool Table::InsertRecord(const Storage::RecordBase& record) {
   // Insert IndexRecord of the new record to index files.
   rid_mutations.clear();
   for (auto field: schema().fields()) {
-    auto key_index = std::vector<int>{field.index()};
-    if (IsDataFileKey(key_index[0])) {
+    std::vector<int> key_indexes{field.index()};
+    if (IsDataFileKey(key_indexes)) {
       continue;
     }
     // Index Tree.
-    auto index_tree = Tree(Storage::INDEX, key_index);
+    auto index_tree = Tree(Storage::INDEX, key_indexes);
     Storage::IndexRecord irecord;
     (dynamic_cast<const Storage::DataRecord&>(record))
-        .ExtractKey(&irecord, key_index);
+        .ExtractKey(&irecord, key_indexes);
     irecord.set_rid(rid);
     auto irid = index_tree->Do_InsertRecord(irecord, &rid_mutations);
     if (!irid.IsValid()) {
       LogFATAL("Failed to insert index record for the new record at index %d",
-               key_index[0]);
+               key_indexes[0]);
     }
   }
 
@@ -368,7 +379,7 @@ int Table::DeleteRecord(const DeleteOp& op) {
   DeleteResult data_delete_result;
   int pre_index = -1;
   if (op.op_cond == EQ) {
-    if (IsDataFileKey(op.key_index)) {
+    if (IsDataFileKey({op.key_index})) {
       auto data_tree = Tree(Storage::INDEX_DATA, idata_indexes_);
       if (!data_tree) {
         LogERROR("Can't find DataRecord B+ tree");
@@ -402,13 +413,13 @@ int Table::DeleteRecord(const DeleteOp& op) {
     // Update and delete index records in all index trees.
     printf("Begin updating index trees\n");
     for (auto field: schema().fields()) {
-      auto key_index = std::vector<int>{field.index()};
-      if (IsDataFileKey(key_index[0])) {
+      auto key_indexes = std::vector<int>{field.index()};
+      if (IsDataFileKey(key_indexes)) {
         continue;
       }
       // Index Tree.
-      auto index_tree = Tree(Storage::INDEX, key_index);
-      if (pre_index != key_index[0]) {
+      auto index_tree = Tree(Storage::INDEX, key_indexes);
+      if (pre_index != key_indexes[0]) {
         index_tree->UpdateIndexRecords(data_delete_result.rid_deleted);
       }
       index_tree->UpdateIndexRecords(data_delete_result.rid_mutations);

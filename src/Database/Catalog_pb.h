@@ -9,8 +9,8 @@
 #include "Proto/RepeatedFields.h"
 #include "Proto/SerializedMessage.h"
 
-void static_init_home_hy_Desktop_Projects_DBMS_src_DataBase_Catalog();
-void static_init_default_instances_home_hy_Desktop_Projects_DBMS_src_DataBase_Catalog();
+void static_init_home_hy_Desktop_Projects_DBMS_src_Database_Catalog();
+void static_init_default_instances_home_hy_Desktop_Projects_DBMS_src_Database_Catalog();
 
 namespace DB {
 
@@ -88,8 +88,8 @@ class TableField: public ::proto::Message {
   // default instance
   static TableField* default_instance_;
 
-  friend void ::static_init_home_hy_Desktop_Projects_DBMS_src_DataBase_Catalog();
-  friend void ::static_init_default_instances_home_hy_Desktop_Projects_DBMS_src_DataBase_Catalog();
+  friend void ::static_init_home_hy_Desktop_Projects_DBMS_src_Database_Catalog();
+  friend void ::static_init_default_instances_home_hy_Desktop_Projects_DBMS_src_Database_Catalog();
 };
 
 class TableSchema: public ::proto::Message {
@@ -156,8 +156,8 @@ class TableSchema: public ::proto::Message {
   // default instance
   static TableSchema* default_instance_;
 
-  friend void ::static_init_home_hy_Desktop_Projects_DBMS_src_DataBase_Catalog();
-  friend void ::static_init_default_instances_home_hy_Desktop_Projects_DBMS_src_DataBase_Catalog();
+  friend void ::static_init_home_hy_Desktop_Projects_DBMS_src_Database_Catalog();
+  friend void ::static_init_default_instances_home_hy_Desktop_Projects_DBMS_src_Database_Catalog();
 };
 
 class DatabaseCatalog: public ::proto::Message {
@@ -186,8 +186,11 @@ class DatabaseCatalog: public ::proto::Message {
 
   // "name" = 1
   bool has_name() const;
-  int name() const;
-  void set_name(int name);
+  const std::string& name() const;
+  void set_name(const std::string& name);
+  void set_name(const char* name);
+  void set_name(const char* name, int size);
+  std::string mutable_name();
   void clear_name();
 
   // "tables" = 2
@@ -203,7 +206,7 @@ class DatabaseCatalog: public ::proto::Message {
   // has bits
   char has_bits_[1];
   // message fields
-  int name_ = 0;
+  std::string name_ = "";
   ::proto::RepeatedPtrField<TableSchema> tables_;
 
   // InitAsDefaultInstance()
@@ -211,8 +214,8 @@ class DatabaseCatalog: public ::proto::Message {
   // default instance
   static DatabaseCatalog* default_instance_;
 
-  friend void ::static_init_home_hy_Desktop_Projects_DBMS_src_DataBase_Catalog();
-  friend void ::static_init_default_instances_home_hy_Desktop_Projects_DBMS_src_DataBase_Catalog();
+  friend void ::static_init_home_hy_Desktop_Projects_DBMS_src_Database_Catalog();
+  friend void ::static_init_default_instances_home_hy_Desktop_Projects_DBMS_src_Database_Catalog();
 };
 
 }  // namespace DB

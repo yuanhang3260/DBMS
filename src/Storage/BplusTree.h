@@ -5,9 +5,9 @@
 #include <memory>
 #include <queue>
 
-#include "DataBase/Catalog_pb.h"
-#include "DataBase/Table.h"
-#include "DataBase/Operation.h"
+#include "Database/Catalog_pb.h"
+#include "Database/Table.h"
+#include "Database/Operation.h"
 #include "Storage/Record.h"
 #include "Storage/PageRecord_Common.h"
 #include "Storage/PageBase.h"
@@ -115,6 +115,9 @@ class BplusTree {
   std::shared_ptr<RecordBase> GetRecord(RecordID rid);
 
   // Serach records by a key. Returns all records that matches this key.
+  int SearchRecords(const std::vector<std::shared_ptr<RecordBase>>& keys,
+                    std::vector<std::shared_ptr<RecordBase>>* result);
+
   int SearchRecords(const RecordBase& key,
                     std::vector<std::shared_ptr<RecordBase>>* result);
 

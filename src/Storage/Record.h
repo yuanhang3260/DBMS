@@ -4,7 +4,7 @@
 #include <vector>
 #include <memory>
 
-#include "DataBase/Catalog_pb.h"
+#include "Database/Catalog_pb.h"
 #include "Schema/DataTypes.h"
 #include "Storage/Common.h"
 #include "Storage/RecordPage.h"

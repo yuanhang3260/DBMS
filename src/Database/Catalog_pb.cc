@@ -22,7 +22,7 @@ std::string GetProtoContent();
 
 }  // namepsace
 
-void static_init_default_instances_home_hy_Desktop_Projects_DBMS_src_DataBase_Catalog() {
+void static_init_default_instances_home_hy_Desktop_Projects_DBMS_src_Database_Catalog() {
   if (DB::TableField::default_instance_ == nullptr) {
     DB::TableField::default_instance_ = new DB::TableField();
     DB::TableField::default_instance_->InitAsDefaultInstance();
@@ -37,7 +37,7 @@ void static_init_default_instances_home_hy_Desktop_Projects_DBMS_src_DataBase_Ca
   }
 }
 
-void static_init_home_hy_Desktop_Projects_DBMS_src_DataBase_Catalog() {
+void static_init_home_hy_Desktop_Projects_DBMS_src_Database_Catalog() {
   static bool already_called = false;
   if (already_called) return;
   already_called = true;
@@ -47,7 +47,7 @@ void static_init_home_hy_Desktop_Projects_DBMS_src_DataBase_Catalog() {
   CHECK(file_dscpt != nullptr, "Build class descriptor failed.");
   ::proto::MessageFactory::RegisterParsedProtoFile(file_dscpt);
 
-  static_init_default_instances_home_hy_Desktop_Projects_DBMS_src_DataBase_Catalog();
+  static_init_default_instances_home_hy_Desktop_Projects_DBMS_src_Database_Catalog();
 
   // static init for class TableField
   static const int TableField_offsets_[4] = {
@@ -102,12 +102,12 @@ void static_init_home_hy_Desktop_Projects_DBMS_src_DataBase_Catalog() {
 
 }
 
-// Force static_init_home_hy_Desktop_Projects_DBMS_src_DataBase_Catalog() to be called at initialization time.
-struct static_init_forcer_home_hy_Desktop_Projects_DBMS_src_DataBase_Catalog {
-  static_init_forcer_home_hy_Desktop_Projects_DBMS_src_DataBase_Catalog() {
-    static_init_home_hy_Desktop_Projects_DBMS_src_DataBase_Catalog();
+// Force static_init_home_hy_Desktop_Projects_DBMS_src_Database_Catalog() to be called at initialization time.
+struct static_init_forcer_home_hy_Desktop_Projects_DBMS_src_Database_Catalog {
+  static_init_forcer_home_hy_Desktop_Projects_DBMS_src_Database_Catalog() {
+    static_init_home_hy_Desktop_Projects_DBMS_src_Database_Catalog();
   }
-} static_init_forcer_home_hy_Desktop_Projects_DBMS_src_DataBase_Catalog_obj_;
+} static_init_forcer_home_hy_Desktop_Projects_DBMS_src_Database_Catalog_obj_;
 
 
 namespace DB {
@@ -272,7 +272,7 @@ void TableField::Swap(TableField* other) {
 // default_instance()
 const TableField& TableField::default_instance() {
   if (default_instance_ == nullptr) {
-    static_init_default_instances_home_hy_Desktop_Projects_DBMS_src_DataBase_Catalog();
+    static_init_default_instances_home_hy_Desktop_Projects_DBMS_src_Database_Catalog();
   }
   return *default_instance_;
 }
@@ -537,7 +537,7 @@ void TableSchema::Swap(TableSchema* other) {
 // default_instance()
 const TableSchema& TableSchema::default_instance() {
   if (default_instance_ == nullptr) {
-    static_init_default_instances_home_hy_Desktop_Projects_DBMS_src_DataBase_Catalog();
+    static_init_default_instances_home_hy_Desktop_Projects_DBMS_src_Database_Catalog();
   }
   return *default_instance_;
 }
@@ -700,7 +700,7 @@ void DatabaseCatalog::MoveFrom(DatabaseCatalog&& other) {
   for (unsigned int i = 0; i < sizeof(has_bits_); i++) {
     has_bits_[i] = other.has_bits_[i];
   }
-  name_ = other.name();
+  name_ = std::move(other.mutable_name());
   tables_ = std::move(other.mutable_tables());
   for (unsigned int i = 0; i < sizeof(has_bits_); i++) {
     other.has_bits_[i] = 0;
@@ -741,7 +741,7 @@ void DatabaseCatalog::Print(int indent_num) const {
   std::cout << "DatabaseCatalog " << "{" << std::endl;
   if (has_name()) {
     PrintIndent(indent_num + 1);
-    std::cout << "name: " << name_ << std::endl;
+    std::cout << "name: " << "\"" << name_ << "\"" << std::endl;
   }
   if (tables_size() > 0) {
     PrintIndent(indent_num + 1);
@@ -767,9 +767,9 @@ void DatabaseCatalog::Swap(DatabaseCatalog* other) {
     buf[i + sizeof(has_bits_)] = other->has_bits_[i];
   }
 
-  int name_tmp__ = other->name();
-  other->set_name(name_);
-  set_name(name_tmp__);
+  std::string name_tmp__ = std::move(other->mutable_name());
+  other->mutable_name() = std::move(name_);
+  name_ = std::move(name_tmp__);
 
   ::proto::RepeatedPtrField<TableSchema> tables_tmp__ = std::move(other->mutable_tables());
   other->mutable_tables() = std::move(tables_);
@@ -786,7 +786,7 @@ void DatabaseCatalog::Swap(DatabaseCatalog* other) {
 // default_instance()
 const DatabaseCatalog& DatabaseCatalog::default_instance() {
   if (default_instance_ == nullptr) {
-    static_init_default_instances_home_hy_Desktop_Projects_DBMS_src_DataBase_Catalog();
+    static_init_default_instances_home_hy_Desktop_Projects_DBMS_src_Database_Catalog();
   }
   return *default_instance_;
 }
@@ -810,17 +810,31 @@ bool DatabaseCatalog::has_name() const {
   return (has_bits_[0] & 0x2) != 0;
 }
 
-int DatabaseCatalog::name() const {
+const std::string& DatabaseCatalog::name() const {
   return name_;
 }
 
-void DatabaseCatalog::set_name(int name) {
+void DatabaseCatalog::set_name(const std::string& name) {
   name_ = name;
   has_bits_[0] |= 0x2;
 }
 
+void DatabaseCatalog::set_name(const char* name) {
+  name_ = std::string(name);
+  has_bits_[0] |= 0x2;
+}
+
+void DatabaseCatalog::set_name(const char* name, int size) {
+  name_ = std::string(name, size);
+  has_bits_[0] |= 0x2;
+}
+
+std::string DatabaseCatalog::mutable_name() {
+  return name_;
+}
+
 void DatabaseCatalog::clear_name() {
-  name_ = 0;
+  name_ = "";
   has_bits_[0] &= (~0x2);
 }
 
@@ -886,7 +900,7 @@ std::string GetProtoContent() {
 "}\n"
 "\n"
 "message DatabaseCatalog {\n"
-"  optional int32 name = 1;\n"
+"  optional string name = 1;\n"
 "  repeated TableSchema tables = 2;\n"
 "}\n"
 "\n"

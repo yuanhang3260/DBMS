@@ -3,7 +3,7 @@
 
 #include <string>
 
-#include "DataBase/Catalog_pb.h"
+#include "Database/Catalog_pb.h"
 #include "Base/BaseTypes.h"
 #include "Base/MacroUtils.h"
 

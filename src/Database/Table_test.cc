@@ -4,7 +4,7 @@
 #include "Base/Log.h"
 #include "UnitTest/UnitTest.h"
 
-#include "DataBase/Table.h"
+#include "Database/Table.h"
 #include "Storage/PageRecord_Common.h"
 
 namespace DB {

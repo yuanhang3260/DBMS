@@ -1,5 +1,5 @@
 #
-# DataBase Management System
+# Database Management System
 #
 # Hang Yuan <yuanhang3260@gmail.com>
 #
@@ -16,10 +16,10 @@ HYLIB=../HyLib/libhy.a
 SRC_DIR=src
 OBJ_DIR=lib
 
-OBJ = $(OBJ_DIR)/DataBase/Catalog_pb.o \
-      $(OBJ_DIR)/DataBase/DataBase.o \
-      $(OBJ_DIR)/DataBase/Table.o \
-      $(OBJ_DIR)/DataBase/Operation.o \
+OBJ = $(OBJ_DIR)/Database/Catalog_pb.o \
+      $(OBJ_DIR)/Database/Database.o \
+      $(OBJ_DIR)/Database/Table.o \
+      $(OBJ_DIR)/Database/Operation.o \
       $(OBJ_DIR)/Schema/SchemaType.o \
       $(OBJ_DIR)/Schema/DataTypes.o \
       $(OBJ_DIR)/Storage/Common.o \
@@ -35,8 +35,9 @@ TESTOBJ = $(OBJ_DIR)/Schema/DataTypes_test.o \
           $(OBJ_DIR)/Storage/RecordPage_test.o \
           $(OBJ_DIR)/Storage/Record_test.o \
 					$(OBJ_DIR)/Storage/PageRecord_Common_test.o \
-					$(OBJ_DIR)/DataBase/Table_test.o \
-					$(OBJ_DIR)/DataBase/Operation_test.o \
+					$(OBJ_DIR)/Database/Database_test.o \
+					$(OBJ_DIR)/Database/Table_test.o \
+					$(OBJ_DIR)/Database/Operation_test.o \
 
 
 TESTEXE = test/RecordPage_test.out \
@@ -45,11 +46,13 @@ TESTEXE = test/RecordPage_test.out \
           test/PageRecord_Common_test.out \
           test/BplusTree_test.out \
           test/Operation_test.out \
+          test/Database_test.out \
 
 all: pre_build library
 
 pre_build:
-	mkdir -p $(OBJ_DIR)/Storage $(OBJ_DIR)/DataBase $(OBJ_DIR)/Schema
+	mkdir -p data
+	mkdir -p $(OBJ_DIR)/Storage $(OBJ_DIR)/Database $(OBJ_DIR)/Schema
 
 library: $(OBJ)
 	ar cr libDBMS.a $(OBJ)
@@ -73,10 +76,10 @@ $(OBJ_DIR)/Schema/%.o: $(SRC_DIR)/Schema/%.cc $(SRC_DIR)/Schema/%.h
 $(OBJ_DIR)/Schema/%.o: $(SRC_DIR)/Schema/%.cc
 	$(CC) $(CFLAGS) $(IFLAGS) -c $< -o $@
 
-$(OBJ_DIR)/DataBase/%.o: $(SRC_DIR)/DataBase/%.cc $(SRC_DIR)/DataBase/%.h
+$(OBJ_DIR)/Database/%.o: $(SRC_DIR)/Database/%.cc $(SRC_DIR)/Database/%.h
 	$(CC) $(CFLAGS) $(IFLAGS) -c $< -o $@
 
-$(OBJ_DIR)/DataBase/%.o: $(SRC_DIR)/DataBase/%.cc
+$(OBJ_DIR)/Database/%.o: $(SRC_DIR)/Database/%.cc
 	$(CC) $(CFLAGS) $(IFLAGS) -c $< -o $@
 
 
@@ -90,7 +93,7 @@ test/%.out: $(OBJ_DIR)/Storage/%.o library
 test/%.out: $(OBJ_DIR)/Schema/%.o library
 	$(CC) $(CFLAGS) $< libDBMS.a $(ProtoBufLib) $(HYLIB) -o $@
 
-test/%.out: $(OBJ_DIR)/DataBase/%.o library
+test/%.out: $(OBJ_DIR)/Database/%.o library
 	$(CC) $(CFLAGS) $< libDBMS.a $(ProtoBufLib) $(HYLIB) -o $@
 
 tinyclean:
@@ -100,7 +103,7 @@ tinyclean:
 	rm -rf $(OBJ_DIR)/*.o
 	rm -rf $(OBJ_DIR)/Storage/*.o
 	rm -rf $(OBJ_DIR)/Schema/*.o
-	rm -rf $(OBJ_DIR)/DataBase/*.o
+	rm -rf $(OBJ_DIR)/Database/*.o
 	rm -rf test/*.out
 	rm -rf data/*.data
 	rm -rf data/*.index
@@ -118,6 +121,6 @@ clean:
 	rm -rf $(OBJ_DIR)/Utility/*.o
 	rm -rf $(OBJ_DIR)/Storage/*.o
 	rm -rf $(OBJ_DIR)/Schema/*.o
-	rm -rf $(OBJ_DIR)/DataBase/*.o
+	rm -rf $(OBJ_DIR)/Database/*.o
 	rm -rf test/*.out
 	rm -rf data/*
