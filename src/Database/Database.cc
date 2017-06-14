@@ -4,6 +4,7 @@
 #include "Base/BaseTypes.h"
 #include "Base/Log.h"
 #include "Base/Path.h"
+#include "IO/FileSystemUtils.h"
 #include "Strings/Utils.h"
 
 #include "Database/Database.h"

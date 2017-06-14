@@ -23,6 +23,8 @@ enum FileType {
 
 bool ContentEqual (const byte* data1, const byte* data2, int length);
 
+std::string DBDataDir(const std::string& db_name);
+
 }  // namespace Storage
 
 

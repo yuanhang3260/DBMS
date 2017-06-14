@@ -52,6 +52,20 @@ bool PageLoadedRecord::GenerateRecordPrototype(
   return true;
 }
 
+int PageLoadedRecord::PageLoadedRecord::LoadFromMem(const byte* buf) {
+  if (!record_) {
+    return -1;
+  }
+  return record_->LoadFromMem(buf);
+}
+
+int PageLoadedRecord::DumpToMem(byte* buf) const {
+  if (!record_) {
+    return -1;
+  }
+  return record_->DumpToMem(buf);
+}
+
 bool PageLoadedRecord::Comparator(const PageLoadedRecord& r1,
                                   const PageLoadedRecord& r2,
                                   const std::vector<int>& indexes) {

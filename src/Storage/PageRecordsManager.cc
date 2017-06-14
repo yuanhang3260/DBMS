@@ -76,8 +76,7 @@ bool PageRecordsManager::LoadRecordsFromPage() {
     plrecords_.push_back(PageLoadedRecord(slot_id));
     plrecords_.back().GenerateRecordPrototype(*schema_, key_indexes_,
                                               file_type_, page_type_);
-    int load_size = plrecords_.back().mutable_record()->
-                        LoadFromMem(page_->Record(slot_id));
+    int load_size = plrecords_.back().LoadFromMem(page_->Record(slot_id));
     if (load_size != length) {
       LogERROR("Error load slot %d from page %d - expect %d byte, actual %d ",
                page_->id(), slot_id, length, load_size);

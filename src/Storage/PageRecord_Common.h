@@ -46,6 +46,9 @@ class PageLoadedRecord {
     record_->Print();
   }
 
+  int LoadFromMem(const byte* buf);
+  int DumpToMem(byte* buf) const;
+
  private:
   std::shared_ptr<RecordBase> record_;
   int32 slot_id_ = -1;
