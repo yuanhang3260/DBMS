@@ -115,10 +115,6 @@ clean:
 	rm -rf out
 	rm -rf output/*
 	rm -rf $(OBJ_DIR)/*.o
-	rm -rf $(OBJ_DIR)/Base/*.o
-	rm -rf $(OBJ_DIR)/Log/*.o
-	rm -rf $(OBJ_DIR)/UnitTest/*.o
-	rm -rf $(OBJ_DIR)/Utility/*.o
 	rm -rf $(OBJ_DIR)/Storage/*.o
 	rm -rf $(OBJ_DIR)/Schema/*.o
 	rm -rf $(OBJ_DIR)/Database/*.o
