@@ -18,7 +18,7 @@ class MergeSortTest: public UnitTest {
  private:
   std::vector<std::shared_ptr<DataRecord>> record_resource_;
   DB::TableSchema schema_;
-  std::vector<int> key_indexes_ = std::vector<int>{1, 0};
+  std::vector<int> key_indexes_ = std::vector<int>{0, 1};
   std::unique_ptr<MergeSorter> sorter_;
 
  public:
@@ -86,23 +86,22 @@ class MergeSortTest: public UnitTest {
     InitRecordResource();
 
     // Create merge sorter.
-    MergeSortOptions opts(kDBName, 1 /* txn_id*/, &schema_,
-                          key_indexes_, INDEX_DATA);
+    MergeSortOptions opts(kDBName, 1 /* txn_id*/, &schema_, key_indexes_,
+                          key_indexes_, INDEX_DATA, 3);
     sorter_ = ptr::MakeUnique<MergeSorter>(opts);
     AssertTrue(sorter_->Init());
   }
 
   void Test_WriteRead() {
     std::string ms_file_name = sorter_->TempfilePath(0, 0);
-    FileSystem::Remove(ms_file_name);
     MergeSortTempfileManager ms_file_manager(&sorter_->options(), ms_file_name);
-    AssertTrue(ms_file_manager.Init());
+    AssertTrue(ms_file_manager.InitForWriting());
 
     // Write records to file.
     for (uint32 i = 0; i < record_resource_.size(); i++) {
       AssertTrue(ms_file_manager.WriteRecord(*record_resource_.at(i)));
     }
-    ms_file_manager.FinishFile();
+    ms_file_manager.FinishWriting();
 
     // Read records from file and compare with original records.
     AssertTrue(ms_file_manager.InitForReading());

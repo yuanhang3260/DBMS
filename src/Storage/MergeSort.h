@@ -56,18 +56,25 @@ struct MergeSortOptions {
                    uint32 txn_id_,
                    const DB::TableSchema* schema_,
                    const std::vector<int>& key_indexes_,
-                   FileType file_type_) :
+                   const std::vector<int>& sort_indexes_,
+                   FileType file_type_,
+                   uint32 num_buf_pages_) :
     db_name(db_name_),
     txn_id(txn_id_),
     schema(schema_),
     key_indexes(key_indexes_),
-    file_type(file_type_) {}
+    sort_indexes(sort_indexes_),
+    file_type(file_type_),
+    num_buf_pages(num_buf_pages_) {}
 
   std::string db_name;
   uint32 txn_id;
   const DB::TableSchema* schema;
   std::vector<int> key_indexes;
+  std::vector<int> sort_indexes;
   FileType file_type;  // data or index record?
+
+  uint32 num_buf_pages = 0;
 };
 
 class MergeSortTempfileManager {
@@ -75,22 +82,25 @@ class MergeSortTempfileManager {
   explicit MergeSortTempfileManager(const MergeSortOptions* opts,
                                     const std::string& filename);
 
-  // Open the file, in r/w mode.
-  bool Init();
-
-  // Get next record from the file.
+  // It must be called before reading records from file.
   bool InitForReading();
+  // Get next record from the file.
   std::shared_ptr<RecordBase> NextRecord();
 
+  // It must be called before writing records to file.
+  bool InitForWriting();
   // Write out (append) a record to file.
   bool WriteRecord(const RecordBase& record);
   // FinishFile must be called after writing all records to file. It flushes
   // the last page to disk and close the file descriptor.
-  bool FinishFile();
+  bool FinishWriting();
 
   std::string filename() const { return filename_; }
 
  private:
+  // Check file and open it.
+  bool Init();
+
   const MergeSortOptions* opts_;
   std::string filename_;
   uint32 num_pages_;
@@ -117,12 +127,18 @@ class MergeSorter {
   // Sort records, and return the output file name or empty in failure.
   std::string Sort(const std::vector<std::shared_ptr<RecordBase>>& records);
 
-  // Tempfile naming : //data/db_name/MergeSort/txnid_pass_chunk.
+  // Tempfile naming : //data/db_name/MergeSort/txnid/pass_chunk.
   std::string TempfilePath(int pass_num, int chunk_num);
 
   const MergeSortOptions& options() const { return opts_; }
 
+  void set_num_buffer_pages(uint32 num) { opts_.num_buf_pages = num; }
+
  private:
+  std::string TempfileDir() const;
+
+  std::vector<int> ProduceSortIndexes();
+
   MergeSortOptions opts_;
 };
 

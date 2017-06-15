@@ -1,6 +1,10 @@
+#include <algorithm>
+#include <queue>
+
 #include "Base/Log.h"
 #include "Base/Path.h"
 #include "Base/Ptr.h"
+#include "Base/Utils.h"
 #include "Strings/Utils.h"
 #include "IO/FileSystemUtils.h"
 
@@ -26,6 +30,10 @@ std::pair<uint32, byte*> FlatRecordPage::ConsumeNextRecord() {
   // Check meta data is parsed or not.
   if (num_records_ == 0) {
     memcpy(&num_records_, data_, sizeof(num_records_));
+    // Loaded an empty page? Maybe, in case we did something wrong.
+    if (num_records_ == 0) {
+      return {0, nullptr}; 
+    }
     crt_offset_ = sizeof(num_records_);
     crt_rindex_ = 0;
   }
@@ -87,9 +95,8 @@ MergeSortTempfileManager::MergeSortTempfileManager(
   filename_(filename) {}
 
 bool MergeSortTempfileManager::Init() {
-  if (!FileSystem::FileExists(filename_) &&
-      !FileSystem::CreateFile(filename_)) {
-    LogERROR("Failed to create file %s", filename_);
+  if (!FileSystem::FileExists(filename_)) {
+    LogERROR("MergeSort tempfile %s doesn't exist!", filename_.c_str());
     return false;
   }
 
@@ -115,6 +122,25 @@ bool MergeSortTempfileManager::Init() {
 }
 
 bool MergeSortTempfileManager::InitForReading() {
+  if (!Init()) {
+    return false;
+  }
+  buf_page_.reset();
+  return true;
+}
+
+bool MergeSortTempfileManager::InitForWriting() {
+  // Check the file. If it already exists, empty it. Otherwise create new file. 
+  if (FileSystem::FileExists(filename_)) {
+    if (!FileSystem::TruncateFile(filename_, 0)) {
+      LogERROR("Failed to empty existing file %s", filename_.c_str());
+      return false;
+    }
+  } else if (!FileSystem::CreateFile(filename_)) {
+    LogERROR("Failed to create file %s", filename_.c_str());
+    return false;
+  }
+
   if (!Init()) {
     return false;
   }
@@ -200,7 +226,7 @@ bool MergeSortTempfileManager::WriteRecord(const RecordBase& record) {
   return re;
 }
 
-bool MergeSortTempfileManager::FinishFile() {
+bool MergeSortTempfileManager::FinishWriting() {
   buf_page_->FinishPage();
   int nwrite = file_descriptor_->Write(buf_page_->data(), Storage::kPageSize);
   if (nwrite != Storage::kPageSize) {
@@ -215,15 +241,164 @@ bool MergeSortTempfileManager::FinishFile() {
 MergeSorter::MergeSorter(const MergeSortOptions& opts) : opts_(opts) {}
 
 bool MergeSorter::Init() {
-  return FileSystem::CreateDir(
-            Path::JoinPath(Storage::DBDataDir(opts_.db_name), "MergeSort"));
+  return FileSystem::CreateDirRecursive(TempfileDir());
+}
+
+std::string MergeSorter::TempfileDir() const {
+  return Path::JoinPath(Storage::DBDataDir(opts_.db_name), "MergeSort",
+                        Strings::StrCat("txn_", std::to_string(opts_.txn_id)));
 }
 
 std::string MergeSorter::TempfilePath(int pass_num, int chunk_num) {
-  return Path::JoinPath(Storage::DBDataDir(opts_.db_name), "MergeSort",
-                        Strings::StrCat("txn_", std::to_string(opts_.txn_id),
-                                        "_pass_", std::to_string(pass_num),
+  return Path::JoinPath(TempfileDir(),
+                        Strings::StrCat("_pass_", std::to_string(pass_num),
                                         "_chunk_", std::to_string(chunk_num)));
+}
+
+std::string MergeSorter::Sort(
+    const std::vector<std::shared_ptr<RecordBase>>& records) {
+  // TODO: Add a cleanup which cleans merge-sort directory.
+
+  // Load records as much as possible to all available buffer pages, sort them
+  // and write to tempfile of first pass.
+  auto sort_indexes = ProduceSortIndexes();
+  auto comparator = [&sort_indexes] (std::shared_ptr<RecordBase> r1,
+                                     std::shared_ptr<RecordBase> r2) {
+    return RecordBase::RecordComparator(*r1, *r2, sort_indexes);
+  };
+
+  std::vector<std::shared_ptr<MergeSortTempfileManager>> out_tempfiles;
+
+  uint32 sort_size = 0;
+  std::vector<std::shared_ptr<RecordBase>> sort_group;
+  uint32 chunk_num = 0;
+  auto CreateChunkfile = [&] {
+    // Sort current group and write to tempfile.
+    std::stable_sort(sort_group.begin(), sort_group.end(), comparator);
+    std::shared_ptr<MergeSortTempfileManager> out_file_manager(
+        new MergeSortTempfileManager(&opts_, TempfilePath(0, chunk_num)));
+    if (!out_file_manager->InitForWriting()) {
+      LogERROR("Failed to init writing for tempfile %s",
+               out_file_manager->filename().c_str());
+      return false;
+    }
+    for (uint32 j = 0; j < sort_group.size(); j++) {
+      out_file_manager->WriteRecord(*sort_group.at(j));
+    }
+    if (!out_file_manager->FinishWriting()) {
+      LogERROR("Failed to finish writing file %s",
+               out_file_manager->filename().c_str());
+      return false;
+    }
+    out_tempfiles.push_back(out_file_manager);
+
+    chunk_num++;
+    sort_size = 0;
+    sort_group.clear();
+    return true;
+  };
+
+  for (uint32 i = 0; i < records.size(); i++) {
+    if (sort_size + records.at(i)->size() >
+            Storage::kPageSize * opts_.num_buf_pages) {
+      if (!CreateChunkfile()) {
+        return "";
+      }
+    }
+    sort_group.push_back(records.at(i));
+    sort_size += records.at(i)->size();
+  }
+  if (!sort_group.empty()) {
+    if (!CreateChunkfile()) {
+      return "";
+    }
+  }
+
+  // Begin merge sort.
+  uint32 pass_num = 1;
+  std::vector<std::shared_ptr<MergeSortTempfileManager>> in_tempfiles;
+  while (out_tempfiles.size() > 1) {
+    // Output of last pass is input of this pass.
+    for (const auto& file : out_tempfiles) {
+      in_tempfiles.push_back(file);
+      if (!in_tempfiles.back()->InitForReading()) {
+        LogERROR("Failed to init reading for tempfile %s",
+                 in_tempfiles.back()->filename().c_str());
+        return "";
+      }
+    }
+    out_tempfiles.clear();
+
+    // Group input files by num_buf_pages, and do merge sort on each group.
+    uint32 num_groups =
+        (in_tempfiles.size() + opts_.num_buf_pages - 1) % opts_.num_buf_pages; 
+    for (uint32 group = 0; group < num_groups; group++) {
+      // Do merge sort on this group and write out result to a tempfile.
+      auto out_file_manager = ptr::MakeShared<MergeSortTempfileManager>(
+                                  &opts_, TempfilePath(pass_num, group));
+      if (!out_file_manager->InitForWriting()) {
+        LogERROR("Failed to init writing for tempfile %s",
+                 out_file_manager->filename().c_str());
+        return "";
+      }
+
+      // Create a min-heap and do K-lists sort merge.
+      struct HeapNode {
+        std::shared_ptr<RecordBase> record;
+        uint32 file_index;
+      };
+      auto gt_comparator = [&] (const HeapNode& n1, const HeapNode& n2) {
+        return comparator(n1.record, n2.record);
+      };
+      std::priority_queue<struct HeapNode, std::vector<struct HeapNode>,
+                          decltype(gt_comparator)> min_heap(gt_comparator);
+
+      // Begin merge sorting!
+      uint32 group_start = group * opts_.num_buf_pages;
+      uint32 group_end = Utils::Min((group + 1) * opts_.num_buf_pages,
+                                    in_tempfiles.size());
+      for (uint32 i = group_start; i < group_end; i++) {
+        auto record = in_tempfiles.at(i)->NextRecord();
+        SANITY_CHECK(record, "Get a null record from file %s",
+                             in_tempfiles.at(i)->filename().c_str());
+        HeapNode node = {record, i};
+        min_heap.push(node);
+      }
+      while (!min_heap.empty()) {
+        // Fetch top element from heap.
+        auto min_ele = min_heap.top();
+        min_heap.pop();
+        if (!out_file_manager->WriteRecord(*min_ele.record)) {
+          LogERROR("Failed to write record to file %s",
+                   out_file_manager->filename().c_str());
+          return "";
+        }
+
+        auto next_record = in_tempfiles.at(min_ele.file_index)->NextRecord();
+        if (next_record) {
+          HeapNode node = {next_record, min_ele.file_index};
+          min_heap.push(node);
+        }
+      }
+      // Finish writing an out tempfile.
+      if (!out_file_manager->FinishWriting()) {
+        LogERROR("Failed to finish writing file %s",
+                 out_file_manager->filename().c_str());
+        return "";
+      }
+      out_tempfiles.push_back(out_file_manager);
+    }
+
+    pass_num++;
+  }
+
+  // TODO: rename the final out file as "result".
+  return out_tempfiles.at(0)->filename();
+}
+
+std::vector<int> MergeSorter::ProduceSortIndexes() {
+  // TODO: ?
+  return opts_.key_indexes;
 }
 
 
