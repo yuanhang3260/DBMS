@@ -12,6 +12,10 @@
 
 namespace Storage {
 
+namespace {
+const char* const kResultFile = "result";
+}
+
 // *************************** FlatRecordPage ******************************* //
 FlatRecordPage::FlatRecordPage() {
   data_ = new byte[Storage::kPageSize];
@@ -233,9 +237,23 @@ bool MergeSortTempfileManager::FinishWriting() {
     LogERROR("Error writing page %d to file", crt_page_num_);
     return false;
   }
-  return file_descriptor_->Close();
+  return file_descriptor_->Close() == 0;
 }
 
+bool MergeSortTempfileManager::DeleteFile() {
+  int re = file_descriptor_->Close();
+  if (re != 0) {
+    LogERROR("Failed to close file %s", filename_.c_str());
+    return false;
+  }
+
+  if (!FileSystem::Remove(filename_)) {
+    LogERROR("Failed to delete file %s", filename_.c_str());
+    return false;
+  }
+
+  return true;
+}
 
 // *************************** MergeSorter ********************************** //
 MergeSorter::MergeSorter(const MergeSortOptions& opts) : opts_(opts) {}
@@ -251,8 +269,18 @@ std::string MergeSorter::TempfileDir() const {
 
 std::string MergeSorter::TempfilePath(int pass_num, int chunk_num) {
   return Path::JoinPath(TempfileDir(),
-                        Strings::StrCat("_pass_", std::to_string(pass_num),
+                        Strings::StrCat("pass_", std::to_string(pass_num),
                                         "_chunk_", std::to_string(chunk_num)));
+}
+
+bool MergeSorter::SortComparator(std::shared_ptr<RecordBase> r1,
+                                 std::shared_ptr<RecordBase> r2) {
+  auto sort_indexes = ProduceSortIndexes();
+  if (!opts_.desc) {
+    return RecordBase::RecordComparator(*r1, *r2, sort_indexes);
+  } else {
+    return RecordBase::RecordComparatorGt(*r1, *r2, sort_indexes);
+  }
 }
 
 std::string MergeSorter::Sort(
@@ -261,10 +289,9 @@ std::string MergeSorter::Sort(
 
   // Load records as much as possible to all available buffer pages, sort them
   // and write to tempfile of first pass.
-  auto sort_indexes = ProduceSortIndexes();
-  auto comparator = [&sort_indexes] (std::shared_ptr<RecordBase> r1,
-                                     std::shared_ptr<RecordBase> r2) {
-    return RecordBase::RecordComparator(*r1, *r2, sort_indexes);
+  auto comparator = [&] (std::shared_ptr<RecordBase> r1,
+                         std::shared_ptr<RecordBase> r2) {
+    return SortComparator(r1, r2);
   };
 
   std::vector<std::shared_ptr<MergeSortTempfileManager>> out_tempfiles;
@@ -331,7 +358,7 @@ std::string MergeSorter::Sort(
 
     // Group input files by num_buf_pages, and do merge sort on each group.
     uint32 num_groups =
-        (in_tempfiles.size() + opts_.num_buf_pages - 1) % opts_.num_buf_pages; 
+        (in_tempfiles.size() + opts_.num_buf_pages - 1) / opts_.num_buf_pages;
     for (uint32 group = 0; group < num_groups; group++) {
       // Do merge sort on this group and write out result to a tempfile.
       auto out_file_manager = ptr::MakeShared<MergeSortTempfileManager>(
@@ -347,16 +374,17 @@ std::string MergeSorter::Sort(
         std::shared_ptr<RecordBase> record;
         uint32 file_index;
       };
-      auto gt_comparator = [&] (const HeapNode& n1, const HeapNode& n2) {
-        return comparator(n1.record, n2.record);
+      auto hp_comparator = [&] (const HeapNode& n1, const HeapNode& n2) {
+        return !comparator(n1.record, n2.record);
       };
       std::priority_queue<struct HeapNode, std::vector<struct HeapNode>,
-                          decltype(gt_comparator)> min_heap(gt_comparator);
+                          decltype(hp_comparator)> min_heap(hp_comparator);
 
       // Begin merge sorting!
       uint32 group_start = group * opts_.num_buf_pages;
       uint32 group_end = Utils::Min((group + 1) * opts_.num_buf_pages,
                                     in_tempfiles.size());
+      //printf("group_start = %d, group_end = %d\n", group_start, group_end);
       for (uint32 i = group_start; i < group_end; i++) {
         auto record = in_tempfiles.at(i)->NextRecord();
         SANITY_CHECK(record, "Get a null record from file %s",
@@ -364,6 +392,7 @@ std::string MergeSorter::Sort(
         HeapNode node = {record, i};
         min_heap.push(node);
       }
+
       while (!min_heap.empty()) {
         // Fetch top element from heap.
         auto min_ele = min_heap.top();
@@ -389,11 +418,23 @@ std::string MergeSorter::Sort(
       out_tempfiles.push_back(out_file_manager);
     }
 
+    // Input tempfile of this pass is no longer needed. Delete them.
+    for (auto& in_file : in_tempfiles) {
+      if (!in_file->DeleteFile()) {
+        return "";
+      }
+    }
+    in_tempfiles.clear();
+
     pass_num++;
   }
 
   // TODO: rename the final out file as "result".
-  return out_tempfiles.at(0)->filename();
+  if (!FileSystem::RenameFile(out_tempfiles.at(0)->filename(), kResultFile)) {
+    LogERROR("Failed to rename final result file");
+    return "";
+  }
+  return Path::JoinPath(TempfileDir(), kResultFile);
 }
 
 std::vector<int> MergeSorter::ProduceSortIndexes() {

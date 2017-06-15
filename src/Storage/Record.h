@@ -141,6 +141,12 @@ class RecordBase {
                                const RecordBase& r2,
                                const std::vector<int>& indexes);
 
+  // Greater comparator. This can be used in containers like std::priority_queue
+  // which is a max heap, to provide stable sort.
+  static bool RecordComparatorGt(const RecordBase& r1,
+                                 const RecordBase& r2,
+                                 const std::vector<int>& indexes);
+
   static int CompareRecordWithKey(const RecordBase& key,
                                   const RecordBase& record,
                                   const std::vector<int>& indexes);

@@ -11,12 +11,12 @@ namespace Storage {
 namespace {
 const char* const kDBName = "test_db";
 const char* const kTableName = "testTable";
-const int kNumRecordsSource = 1000;
-}  // namespace 
+const int kNumRecordsSource = 10000;
+}  // namespace
 
 class MergeSortTest: public UnitTest {
  private:
-  std::vector<std::shared_ptr<DataRecord>> record_resource_;
+  std::vector<std::shared_ptr<RecordBase>> record_resource_;
   DB::TableSchema schema_;
   std::vector<int> key_indexes_ = std::vector<int>{0, 1};
   std::unique_ptr<MergeSorter> sorter_;
@@ -87,7 +87,8 @@ class MergeSortTest: public UnitTest {
 
     // Create merge sorter.
     MergeSortOptions opts(kDBName, 1 /* txn_id*/, &schema_, key_indexes_,
-                          key_indexes_, INDEX_DATA, 3);
+                          key_indexes_, INDEX_DATA, 5);
+    //opts.desc = true;
     sorter_ = ptr::MakeUnique<MergeSorter>(opts);
     AssertTrue(sorter_->Init());
   }
@@ -116,6 +117,41 @@ class MergeSortTest: public UnitTest {
     }
     AssertEqual(record_resource_.size(), total_records);
   }
+
+  void Test_Sort() {
+    std::string result_file = sorter_->Sort(record_resource_);
+    AssertTrue(!result_file.empty());
+
+    MergeSortTempfileManager ms_file_manager(&sorter_->options(), result_file);
+    AssertTrue(ms_file_manager.InitForReading());
+
+    auto comparator = [&] (std::shared_ptr<RecordBase> r1,
+                           std::shared_ptr<RecordBase> r2) {
+      return sorter_->SortComparator(r1, r2);
+    };
+    // // Sort the original record list.
+    // std::stable_sort(record_resource_.begin(), record_resource_.end(),
+    //                  comparator);
+
+    uint32 total_records = 0;
+    std::shared_ptr<RecordBase> last_record;
+    while (true) {
+      auto next_record = ms_file_manager.NextRecord();
+      if (!next_record) {
+        break;
+      }
+      //next_record->Print();
+
+      // Compare with expected record in sorted list.
+      if (last_record) {
+        AssertFalse(comparator(next_record, last_record));
+        last_record = next_record;
+      }
+
+      total_records++;
+    }
+    AssertEqual(record_resource_.size(), total_records);
+  }
 };
 
 }  // namespace Storage
@@ -124,7 +160,8 @@ int main() {
   Storage::MergeSortTest test;
   test.setup();
 
-  test.Test_WriteRead();
+  //test.Test_WriteRead();
+  test.Test_Sort();
 
   test.teardown();
 

@@ -149,6 +149,12 @@ bool RecordBase::RecordComparator(const RecordBase& r1,
   return CompareRecordsBasedOnIndex(r1, r2, indexes) < 0;
 }
 
+bool RecordBase::RecordComparatorGt(const RecordBase& r1,
+                                    const RecordBase& r2,
+                                    const std::vector<int>& indexes) {
+  return CompareRecordsBasedOnIndex(r1, r2, indexes) > 0;
+}
+
 int RecordBase::CompareRecordWithKey(const RecordBase& key,
                                      const RecordBase& record,
                                      const std::vector<int>& indexes) {

@@ -75,6 +75,7 @@ struct MergeSortOptions {
   FileType file_type;  // data or index record?
 
   uint32 num_buf_pages = 0;
+  bool desc = false;
 };
 
 class MergeSortTempfileManager {
@@ -96,6 +97,8 @@ class MergeSortTempfileManager {
   bool FinishWriting();
 
   std::string filename() const { return filename_; }
+
+  bool DeleteFile();
 
  private:
   // Check file and open it.
@@ -133,6 +136,9 @@ class MergeSorter {
   const MergeSortOptions& options() const { return opts_; }
 
   void set_num_buffer_pages(uint32 num) { opts_.num_buf_pages = num; }
+
+  bool SortComparator(std::shared_ptr<RecordBase> r1,
+                      std::shared_ptr<RecordBase> r2);
 
  private:
   std::string TempfileDir() const;
