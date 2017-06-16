@@ -128,6 +128,7 @@ bool RecordBase::operator==(const RecordBase& other) const {
 int RecordBase::CompareRecordsBasedOnIndex(const RecordBase& r1,
                                            const RecordBase& r2,
                                            const std::vector<int>& indexes) {
+  SANITY_CHECK(!indexes.empty(), "empty comparing indexes");
   for (int i = 0; i < (int)indexes.size(); i++) {
     int re = RecordBase::CompareSchemaFields(
                  r1.fields_.at(indexes[i]).get(),
@@ -158,6 +159,7 @@ bool RecordBase::RecordComparatorGt(const RecordBase& r1,
 int RecordBase::CompareRecordWithKey(const RecordBase& key,
                                      const RecordBase& record,
                                      const std::vector<int>& indexes) {
+  SANITY_CHECK(!indexes.empty(), "empty comparing indexes");
   for (int i = 0; i < (int)indexes.size(); i++) {
     int re = RecordBase::CompareSchemaFields(
                  key.fields_.at(i).get(),

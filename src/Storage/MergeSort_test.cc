@@ -11,14 +11,14 @@ namespace Storage {
 namespace {
 const char* const kDBName = "test_db";
 const char* const kTableName = "testTable";
-const int kNumRecordsSource = 10000;
+const int kNumRecordsSource = 100;
 }  // namespace
 
 class MergeSortTest: public UnitTest {
  private:
   std::vector<std::shared_ptr<RecordBase>> record_resource_;
   DB::TableSchema schema_;
-  std::vector<int> key_indexes_ = std::vector<int>{0, 1};
+  std::vector<int> key_fields_ = std::vector<int>{0, 2, 3};
   std::unique_ptr<MergeSorter> sorter_;
 
  public:
@@ -30,15 +30,20 @@ class MergeSortTest: public UnitTest {
     field->set_name("name");
     field->set_index(0);
     field->set_type(DB::TableField::STRING);
+    // Add double type
+    field = schema_.add_fields();
+    field->set_name("weight");
+    field->set_index(1);
+    field->set_type(DB::TableField::DOUBLE);
     // Add int type
     field = schema_.add_fields();
     field->set_name("age");
-    field->set_index(1);
+    field->set_index(2);
     field->set_type(DB::TableField::INTEGER);
     // Add char array type
     field = schema_.add_fields();
     field->set_name("signature");
-    field->set_index(5);
+    field->set_index(3);
     field->set_type(DB::TableField::CHARARR);
     field->set_size(20);
   }
@@ -46,7 +51,9 @@ class MergeSortTest: public UnitTest {
   void InitRecordResource() {
     record_resource_.clear();
     for (int i = 0; i < kNumRecordsSource; i++) {
-      record_resource_.push_back(std::make_shared<DataRecord>());
+      auto record = std::make_shared<IndexRecord>();
+      record->set_rid(RecordID(0, 0));
+      record_resource_.push_back(record);
 
       // Init fields to records.
       // name
@@ -56,11 +63,11 @@ class MergeSortTest: public UnitTest {
         for (int i = 0; i < str_len; i++) {
           buf[i] = 'a' + Utils::RandomNumber(26);
         }
-        record_resource_[i]->AddField(new Schema::StringField(buf, str_len));
+        record->AddField(new Schema::StringField(buf, str_len));
       }
       // age
       int rand_int = Utils::RandomNumber(20);
-      record_resource_[i]->AddField(new Schema::IntField(rand_int));
+      record->AddField(new Schema::IntField(rand_int));
       // signature
       {
         int len_limit = 20;
@@ -69,7 +76,7 @@ class MergeSortTest: public UnitTest {
         for (int i = 0; i < str_len; i++) {
           buf[i] = 'a' + Utils::RandomNumber(26);
         }
-        record_resource_[i]->AddField(
+        record->AddField(
             new Schema::CharArrayField(buf, str_len, len_limit));
       }
     }
@@ -86,8 +93,8 @@ class MergeSortTest: public UnitTest {
     InitRecordResource();
 
     // Create merge sorter.
-    MergeSortOptions opts(kDBName, 1 /* txn_id*/, &schema_, key_indexes_,
-                          key_indexes_, INDEX_DATA, 5);
+    MergeSortOptions opts(kDBName, 1 /* txn_id*/, &schema_, key_fields_,
+                          {0,2} /* sort by (name, age) */, INDEX, 5);
     //opts.desc = true;
     sorter_ = ptr::MakeUnique<MergeSorter>(opts);
     AssertTrue(sorter_->Init());
@@ -140,7 +147,7 @@ class MergeSortTest: public UnitTest {
       if (!next_record) {
         break;
       }
-      //next_record->Print();
+      next_record->Print();
 
       // Compare with expected record in sorted list.
       if (last_record) {

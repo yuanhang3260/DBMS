@@ -195,11 +195,11 @@ std::shared_ptr<RecordBase> MergeSortTempfileManager::NextRecord() {
 
   // Load next record.
   PageLoadedRecord plrecord;
-  plrecord.GenerateRecordPrototype(*opts_->schema, opts_->key_indexes,
+  plrecord.GenerateRecordPrototype(*opts_->schema, opts_->key_fields,
                                    opts_->file_type, TREE_LEAVE);
   int load_size = plrecord.LoadFromMem(record_data);
   SANITY_CHECK(load_size == (int)record_length,
-               "Error record from page %ud - expect %d bytes, actual %d ",
+               "Error record from page %u - expect %d bytes, actual %d ",
                crt_page_num_, record_length, load_size);
   
   total_records_++;
@@ -256,7 +256,10 @@ bool MergeSortTempfileManager::DeleteFile() {
 }
 
 // *************************** MergeSorter ********************************** //
-MergeSorter::MergeSorter(const MergeSortOptions& opts) : opts_(opts) {}
+MergeSorter::MergeSorter(const MergeSortOptions& opts) : opts_(opts) {
+  SANITY_CHECK(OptionsValid(), "Invalid MergeSortOptions");
+  ProduceSortIndexes();
+}
 
 bool MergeSorter::Init() {
   return FileSystem::CreateDirRecursive(TempfileDir());
@@ -273,13 +276,84 @@ std::string MergeSorter::TempfilePath(int pass_num, int chunk_num) {
                                         "_chunk_", std::to_string(chunk_num)));
 }
 
+bool MergeSorter::OptionsValid() {
+  if (!opts_.schema) {
+    LogERROR("schema nullptr");
+    return false;
+  }
+
+  // Check index duplication.
+  std::set<int> key_fields_set;
+  for (int i : opts_.key_fields) {
+    if (key_fields_set.find(i) != key_fields_set.end()) {
+      LogERROR("Duplicated key index %d", i);
+      return false;
+    }
+    key_fields_set.insert(i);
+  }
+
+  std::set<int> sort_fields_set;
+  for (int i : opts_.sort_fields) {
+    if (sort_fields_set.find(i) != sort_fields_set.end()) {
+      LogERROR("Duplicated sort index %d", i);
+      return false;
+    }
+    sort_fields_set.insert(i);
+  }
+
+  // Check sort_fields. It must be a subset of key_fields if records are
+  // index records.
+  if (opts_.file_type == INDEX_DATA) {
+    for (int i : opts_.sort_fields) {
+      if (i < 0 || i >= opts_.schema->fields_size()) {
+        LogERROR("Sort index %d out of range : [0, %d)",
+                 i, opts_.schema->fields_size());
+        return false;
+      }
+    }
+  } else if (opts_.file_type == INDEX) {
+    for (int i : opts_.sort_fields) {
+      if (key_fields_set.find(i) == key_fields_set.end()) {
+        LogERROR("Sort index %d can't be find in key_fields", i);
+      return false;
+      }
+    }
+  } else {
+    LogERROR("Invalid file type %d", opts_.file_type);
+    return false;
+  }
+
+  return true;
+}
+
+void MergeSorter::ProduceSortIndexes() {
+  sort_indexes_.clear();
+  if (opts_.file_type == INDEX_DATA) {
+    sort_indexes_ = opts_.sort_fields;
+  } else if (opts_.file_type == INDEX) {
+    for (int sort_field : opts_.sort_fields) {
+      for (uint32 i = 0; i < opts_.key_fields.size(); i++) {
+        if (sort_field == opts_.key_fields.at(i)) {
+          sort_indexes_.push_back(i);
+          break;
+        }
+      }
+    }
+  }
+  // for (int i : sort_indexes_) {
+  //   printf("%d ", i);
+  // }
+  // printf("\n");
+  SANITY_CHECK(sort_indexes_.size() == opts_.sort_fields.size(),
+               "sort indexes size mismatch with sort fields");
+}
+
 bool MergeSorter::SortComparator(std::shared_ptr<RecordBase> r1,
                                  std::shared_ptr<RecordBase> r2) {
-  auto sort_indexes = ProduceSortIndexes();
   if (!opts_.desc) {
-    return RecordBase::RecordComparator(*r1, *r2, sort_indexes);
+    return RecordBase::RecordComparator(*r1, *r2, sort_indexes_);
   } else {
-    return RecordBase::RecordComparatorGt(*r1, *r2, sort_indexes);
+    return RecordBase::RecordComparatorGt(*r1, *r2, sort_indexes_);
   }
 }
 
@@ -288,7 +362,7 @@ std::string MergeSorter::Sort(
   // TODO: Add a cleanup which cleans merge-sort directory.
 
   // Load records as much as possible to all available buffer pages, sort them
-  // and write to tempfile of first pass.
+  // and write to tempfiles of first pass.
   auto comparator = [&] (std::shared_ptr<RecordBase> r1,
                          std::shared_ptr<RecordBase> r2) {
     return SortComparator(r1, r2);
@@ -299,7 +373,7 @@ std::string MergeSorter::Sort(
   uint32 sort_size = 0;
   std::vector<std::shared_ptr<RecordBase>> sort_group;
   uint32 chunk_num = 0;
-  auto CreateChunkfile = [&] {
+  auto create_chunkfile = [&] {
     // Sort current group and write to tempfile.
     std::stable_sort(sort_group.begin(), sort_group.end(), comparator);
     std::shared_ptr<MergeSortTempfileManager> out_file_manager(
@@ -328,7 +402,7 @@ std::string MergeSorter::Sort(
   for (uint32 i = 0; i < records.size(); i++) {
     if (sort_size + records.at(i)->size() >
             Storage::kPageSize * opts_.num_buf_pages) {
-      if (!CreateChunkfile()) {
+      if (!create_chunkfile()) {
         return "";
       }
     }
@@ -336,7 +410,7 @@ std::string MergeSorter::Sort(
     sort_size += records.at(i)->size();
   }
   if (!sort_group.empty()) {
-    if (!CreateChunkfile()) {
+    if (!create_chunkfile()) {
       return "";
     }
   }
@@ -429,17 +503,12 @@ std::string MergeSorter::Sort(
     pass_num++;
   }
 
-  // TODO: rename the final out file as "result".
+  // Rename the final out file as "result".
   if (!FileSystem::RenameFile(out_tempfiles.at(0)->filename(), kResultFile)) {
     LogERROR("Failed to rename final result file");
     return "";
   }
   return Path::JoinPath(TempfileDir(), kResultFile);
-}
-
-std::vector<int> MergeSorter::ProduceSortIndexes() {
-  // TODO: ?
-  return opts_.key_indexes;
 }
 
 

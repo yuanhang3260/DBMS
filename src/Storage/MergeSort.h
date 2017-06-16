@@ -55,23 +55,23 @@ struct MergeSortOptions {
   MergeSortOptions(const std::string& db_name_,
                    uint32 txn_id_,
                    const DB::TableSchema* schema_,
-                   const std::vector<int>& key_indexes_,
-                   const std::vector<int>& sort_indexes_,
+                   const std::vector<int>& key_fields_,
+                   const std::vector<int>& sort_fields_,
                    FileType file_type_,
                    uint32 num_buf_pages_) :
     db_name(db_name_),
     txn_id(txn_id_),
     schema(schema_),
-    key_indexes(key_indexes_),
-    sort_indexes(sort_indexes_),
+    key_fields(key_fields_),
+    sort_fields(sort_fields_),
     file_type(file_type_),
     num_buf_pages(num_buf_pages_) {}
 
   std::string db_name;
   uint32 txn_id;
   const DB::TableSchema* schema;
-  std::vector<int> key_indexes;
-  std::vector<int> sort_indexes;
+  std::vector<int> key_fields;
+  std::vector<int> sort_fields;
   FileType file_type;  // data or index record?
 
   uint32 num_buf_pages = 0;
@@ -143,9 +143,12 @@ class MergeSorter {
  private:
   std::string TempfileDir() const;
 
-  std::vector<int> ProduceSortIndexes();
+  void ProduceSortIndexes();
+
+  bool OptionsValid();
 
   MergeSortOptions opts_;
+  std::vector<int> sort_indexes_;
 };
 
 }  // Storage
