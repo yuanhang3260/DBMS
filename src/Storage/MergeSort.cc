@@ -7,6 +7,7 @@
 #include "Base/Utils.h"
 #include "Strings/Utils.h"
 #include "IO/FileSystemUtils.h"
+#include "Utility/CleanUp.h"
 
 #include "Storage/MergeSort.h"
 
@@ -359,7 +360,10 @@ bool MergeSorter::SortComparator(std::shared_ptr<RecordBase> r1,
 
 std::string MergeSorter::Sort(
     const std::vector<std::shared_ptr<RecordBase>>& records) {
-  // TODO: Add a cleanup which cleans merge-sort directory.
+  // Clean up merge-sort directory.
+  auto cleanup = Utility::CleanUp([&] {
+    FileSystem::CleanDir(TempfileDir()); 
+  });
 
   // Load records as much as possible to all available buffer pages, sort them
   // and write to tempfiles of first pass.
@@ -508,6 +512,8 @@ std::string MergeSorter::Sort(
     LogERROR("Failed to rename final result file");
     return "";
   }
+
+  cleanup.clear();
   return Path::JoinPath(TempfileDir(), kResultFile);
 }
 

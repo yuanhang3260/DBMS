@@ -55,6 +55,7 @@ all: pre_build library
 
 pre_build:
 	mkdir -p data
+	mkdir -p test
 	mkdir -p $(OBJ_DIR)/Storage $(OBJ_DIR)/Database $(OBJ_DIR)/Schema
 
 library: $(OBJ)

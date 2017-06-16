@@ -11,7 +11,7 @@ namespace Storage {
 namespace {
 const char* const kDBName = "test_db";
 const char* const kTableName = "testTable";
-const int kNumRecordsSource = 100;
+const int kNumRecordsSource = 10000;
 }  // namespace
 
 class MergeSortTest: public UnitTest {
@@ -147,7 +147,7 @@ class MergeSortTest: public UnitTest {
       if (!next_record) {
         break;
       }
-      next_record->Print();
+      // next_record->Print();
 
       // Compare with expected record in sorted list.
       if (last_record) {
