@@ -9,8 +9,8 @@
 #include "Proto/RepeatedFields.h"
 #include "Proto/SerializedMessage.h"
 
-void static_init_home_hy_Desktop_Projects_DBMS_src_Database_Catalog();
-void static_init_default_instances_home_hy_Desktop_Projects_DBMS_src_Database_Catalog();
+void static_init_usr_local_google_home_hangyuan_Desktop_test_DBMS_src_Database_Catalog();
+void static_init_default_instances_usr_local_google_home_hangyuan_Desktop_test_DBMS_src_Database_Catalog();
 
 namespace DB {
 
@@ -88,8 +88,8 @@ class TableField: public ::proto::Message {
   // default instance
   static TableField* default_instance_;
 
-  friend void ::static_init_home_hy_Desktop_Projects_DBMS_src_Database_Catalog();
-  friend void ::static_init_default_instances_home_hy_Desktop_Projects_DBMS_src_Database_Catalog();
+  friend void ::static_init_usr_local_google_home_hangyuan_Desktop_test_DBMS_src_Database_Catalog();
+  friend void ::static_init_default_instances_usr_local_google_home_hangyuan_Desktop_test_DBMS_src_Database_Catalog();
 };
 
 class TableSchema: public ::proto::Message {
@@ -156,8 +156,8 @@ class TableSchema: public ::proto::Message {
   // default instance
   static TableSchema* default_instance_;
 
-  friend void ::static_init_home_hy_Desktop_Projects_DBMS_src_Database_Catalog();
-  friend void ::static_init_default_instances_home_hy_Desktop_Projects_DBMS_src_Database_Catalog();
+  friend void ::static_init_usr_local_google_home_hangyuan_Desktop_test_DBMS_src_Database_Catalog();
+  friend void ::static_init_default_instances_usr_local_google_home_hangyuan_Desktop_test_DBMS_src_Database_Catalog();
 };
 
 class DatabaseCatalog: public ::proto::Message {
@@ -214,8 +214,8 @@ class DatabaseCatalog: public ::proto::Message {
   // default instance
   static DatabaseCatalog* default_instance_;
 
-  friend void ::static_init_home_hy_Desktop_Projects_DBMS_src_Database_Catalog();
-  friend void ::static_init_default_instances_home_hy_Desktop_Projects_DBMS_src_Database_Catalog();
+  friend void ::static_init_usr_local_google_home_hangyuan_Desktop_test_DBMS_src_Database_Catalog();
+  friend void ::static_init_default_instances_usr_local_google_home_hangyuan_Desktop_test_DBMS_src_Database_Catalog();
 };
 
 }  // namespace DB

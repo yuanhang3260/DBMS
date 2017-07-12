@@ -362,7 +362,7 @@ std::string MergeSorter::Sort(
     const std::vector<std::shared_ptr<RecordBase>>& records) {
   // Clean up merge-sort directory.
   auto cleanup = Utility::CleanUp([&] {
-    FileSystem::CleanDir(TempfileDir()); 
+    FileSystem::CleanDir(TempfileDir());
   });
 
   // Load records as much as possible to all available buffer pages, sort them

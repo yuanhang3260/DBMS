@@ -1,7 +1,13 @@
+CC=g++ -std=c++11
+CFLAGS=-Wall -Werror -O2 -g
+IFLAGS=-I../ -I../Public/
+
+HYLIB=../../../HyLib/libhy.a
+
 all:
 	flex -o scanner.cpp scanner.l
 	bison -o parser.cpp parser.y
-	g++ -std=c++11 -g main.cpp scanner.cpp parser.cpp interpreter.cpp -o a.out
+	$(CC) $(CFLAGS) $(IFLAGS) main.cpp scanner.cpp parser.cpp interpreter.cpp $(HYLIB) -o a.out
 
 clean:
 	rm -rf a.out
