@@ -40,19 +40,22 @@ INTERGER    (-*[1-9][0-9]*)
 DOUBLE      (-*[0-9]+(\.[0-9]+)?)
 STRING      (\"[^"\n]*\")
 CHAR        ('.')
+BOOL        (TRUE|True|true|FALSE|False|false)
 
 /* Value operators */
-OPERATOR    {[+-*/%]}
-COMPARATOR1 {[<>=]}
-COMPARATOR2 {>=|<=|!=}
+OPERATOR    ([\+\-\*\/%])
+COMPARATOR1 ([<>=])
+COMPARATOR2 (>=|<=|!=)
 
 /* Conditional logic */
-AND         {AND|and}
-OR          {OR|or}
-NOT         {NOT|not}
+AND         (AND|and)
+OR          (OR|or)
+NOT         (NOT|not)
 
 /* Column name, which allows format table.column */
-COLUMN      ([a-z0-9]+(\.[[a-z0-9]]+)*)
+DATABASE    ([a-z0-9_]+)
+TABLE       ([a-z0-9_]+)
+COLUMN      ([a-z0-9_]+(\.[[a-z0-9_]]+)*)
 
 /* Sql keywords */
 SELECT      (SELECT|select)
@@ -83,7 +86,7 @@ WHERE       (WHERE|where)
 
 {STRING}    {
               //std::cout << "==> STRING " << yytext << std::endl;
-              std::string str = Strings::Strip(std::string(yytext, "\""));
+              std::string str = Strings::Strip(std::string(yytext), "\"");
               return Sql::Parser::make_STRING(str, Sql::location()); 
             }
 
@@ -91,6 +94,15 @@ WHERE       (WHERE|where)
               //std::cout << "==> CHAR " << yytext << std::endl;
               char c = yytext[1];
               return Sql::Parser::make_CHAR(c, Sql::location()); 
+            }
+
+{BOOL}      {
+              //std::cout << "==> BOOL " << yytext << std::endl;
+              std::string str_value(yytext);
+              bool semantic_bool = (str_value == "TRUE" ||
+                                    str_value == "True" ||
+                                    str_value == "true") ? true : false;
+              return Sql::Parser::make_BOOL(semantic_bool, Sql::location()); 
             }
 
 {OPERATOR}  {
@@ -137,6 +149,16 @@ WHERE       (WHERE|where)
             //std::cout << "==> WHERE" << std::endl;
             return Sql::Parser::make_WHERE(Sql::location()); }
 
+{DATABASE}  {
+              //std::cout << "==> DATABASE " << yytext << std::endl;
+              return Sql::Parser::make_DATABASE(yytext, Sql::location());
+            }
+
+{TABLE}   {
+            //std::cout << "==> TABLE " << yytext << std::endl;
+            return Sql::Parser::make_TABLE(yytext, Sql::location());
+          }
+
 {COLUMN}  {
             //std::cout << "==> COLUMN " << yytext << std::endl;
             return Sql::Parser::make_COLUMN(yytext, Sql::location());
@@ -164,7 +186,9 @@ WHERE       (WHERE|where)
 
 [\n\t ]   { /* cout << "==> whitespace (ignored)" << endl; */ }
 
-.         { cout << "==> unknown character [" << yytext << "]" << endl; }
+.         {
+            std::cout << "==> unknown char [" << yytext << "]" << std::endl;
+          }
 
 <<EOF>>   { return yyterminate(); }
 

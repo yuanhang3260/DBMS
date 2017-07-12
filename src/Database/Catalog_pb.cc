@@ -22,7 +22,7 @@ std::string GetProtoContent();
 
 }  // namepsace
 
-void static_init_default_instances_usr_local_google_home_hangyuan_Desktop_test_DBMS_src_Database_Catalog() {
+void static_init_default_instances_home_hy_Desktop_Projects_DBMS_src_Database_Catalog() {
   if (DB::TableField::default_instance_ == nullptr) {
     DB::TableField::default_instance_ = new DB::TableField();
     DB::TableField::default_instance_->InitAsDefaultInstance();
@@ -37,7 +37,7 @@ void static_init_default_instances_usr_local_google_home_hangyuan_Desktop_test_D
   }
 }
 
-void static_init_usr_local_google_home_hangyuan_Desktop_test_DBMS_src_Database_Catalog() {
+void static_init_home_hy_Desktop_Projects_DBMS_src_Database_Catalog() {
   static bool already_called = false;
   if (already_called) return;
   already_called = true;
@@ -47,7 +47,7 @@ void static_init_usr_local_google_home_hangyuan_Desktop_test_DBMS_src_Database_C
   CHECK(file_dscpt != nullptr, "Build class descriptor failed.");
   ::proto::MessageFactory::RegisterParsedProtoFile(file_dscpt);
 
-  static_init_default_instances_usr_local_google_home_hangyuan_Desktop_test_DBMS_src_Database_Catalog();
+  static_init_default_instances_home_hy_Desktop_Projects_DBMS_src_Database_Catalog();
 
   // static init for class TableField
   static const int TableField_offsets_[4] = {
@@ -102,12 +102,12 @@ void static_init_usr_local_google_home_hangyuan_Desktop_test_DBMS_src_Database_C
 
 }
 
-// Force static_init_usr_local_google_home_hangyuan_Desktop_test_DBMS_src_Database_Catalog() to be called at initialization time.
-struct static_init_forcer_usr_local_google_home_hangyuan_Desktop_test_DBMS_src_Database_Catalog {
-  static_init_forcer_usr_local_google_home_hangyuan_Desktop_test_DBMS_src_Database_Catalog() {
-    static_init_usr_local_google_home_hangyuan_Desktop_test_DBMS_src_Database_Catalog();
+// Force static_init_home_hy_Desktop_Projects_DBMS_src_Database_Catalog() to be called at initialization time.
+struct static_init_forcer_home_hy_Desktop_Projects_DBMS_src_Database_Catalog {
+  static_init_forcer_home_hy_Desktop_Projects_DBMS_src_Database_Catalog() {
+    static_init_home_hy_Desktop_Projects_DBMS_src_Database_Catalog();
   }
-} static_init_forcer_usr_local_google_home_hangyuan_Desktop_test_DBMS_src_Database_Catalog_obj_;
+} static_init_forcer_home_hy_Desktop_Projects_DBMS_src_Database_Catalog_obj_;
 
 
 namespace DB {
@@ -272,7 +272,7 @@ void TableField::Swap(TableField* other) {
 // default_instance()
 const TableField& TableField::default_instance() {
   if (default_instance_ == nullptr) {
-    static_init_default_instances_usr_local_google_home_hangyuan_Desktop_test_DBMS_src_Database_Catalog();
+    static_init_default_instances_home_hy_Desktop_Projects_DBMS_src_Database_Catalog();
   }
   return *default_instance_;
 }
@@ -537,7 +537,7 @@ void TableSchema::Swap(TableSchema* other) {
 // default_instance()
 const TableSchema& TableSchema::default_instance() {
   if (default_instance_ == nullptr) {
-    static_init_default_instances_usr_local_google_home_hangyuan_Desktop_test_DBMS_src_Database_Catalog();
+    static_init_default_instances_home_hy_Desktop_Projects_DBMS_src_Database_Catalog();
   }
   return *default_instance_;
 }
@@ -786,7 +786,7 @@ void DatabaseCatalog::Swap(DatabaseCatalog* other) {
 // default_instance()
 const DatabaseCatalog& DatabaseCatalog::default_instance() {
   if (default_instance_ == nullptr) {
-    static_init_default_instances_usr_local_google_home_hangyuan_Desktop_test_DBMS_src_Database_Catalog();
+    static_init_default_instances_home_hy_Desktop_Projects_DBMS_src_Database_Catalog();
   }
   return *default_instance_;
 }

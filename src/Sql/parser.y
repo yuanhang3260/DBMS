@@ -27,10 +27,12 @@ namespace Sql {
 }
 
 // Bison calls yylex() function that must be provided by us to suck tokens
-// from the scanner. This block will be placed at the beginning of IMPLEMENTATION file (cpp).
+// from the scanner. This block will be placed at the beginning of
+// IMPLEMENTATION file (cpp).
+// 
 // We define this function here (function! not method).
-// This function is called only inside Bison, so we make it static to limit symbol visibility for the linker
-// to avoid potential linking conflicts.
+// This function is called only inside Bison, so we make it static to limit
+// symbol visibility for the linker to avoid potential linking conflicts.
 %code top
 {
 #include <iostream>
@@ -39,14 +41,32 @@ namespace Sql {
 #include "interpreter.h"
 #include "location.hh"
 
-// yylex() arguments are defined in parser.y
-static Sql::Parser::symbol_type yylex(Sql::Scanner &scanner, Sql::Interpreter &driver) {
+#include "Base/BaseTypes.h"
+
+// yylex() can take user arguments, defined by %parse-param below.
+//
+// scanner.get_next_token() is defined to macro YY_DECL, whose body is defined
+// in the generated scanner.cpp. This is the most critical function generated
+// by lexer, which does all heavy work.
+//
+// For more explaination, the magic here is:
+//
+//   1. YY_DECL must be #defined a function as: Sql::Parser::symbol_type f(void)
+//      which is implemented in the generated lexer cpp code.
+//
+//   2. yylex is #defined or function-defined. It must call YY_DECL, maybe as
+//      simple as just a YY_DECL inside, or take additional user arguments
+//      (e.g. Interpreter) and do more complicated work.
+static Sql::Parser::symbol_type yylex(Sql::Scanner &scanner,
+                                      Sql::Interpreter &driver) {
+  // Is driver unused? Probably not. Maybe it can be used to record errors in
+  // lexer token parsing.
   return scanner.get_next_token();
 }
 
 // you can accomplish the same thing by inlining the code using preprocessor
 // x and y are same as in above static function
-// #define yylex(x, y) scanner.get_next_token()
+// #define yylex(scanner, driver) scanner.get_next_token()
 
 using namespace Sql;
 }
@@ -61,76 +81,58 @@ using namespace Sql;
 
 %define api.token.prefix {TOKEN_}
 
-%token END 0 "end of file"
-%token <std::string> STRING  "string";
-%token <uint64_t> NUMBER "number";
-%token LEFTPAR "leftpar";
-%token RIGHTPAR "rightpar";
+%token END 0 "EOF"
+
+%token <int64_t> INTEGER "Integer";
+%token <double> DOUBLE "Double";
+%token <std::string> STRING  "String";
+%token <char> CHAR  "Char";
+%token <bool> BOOL  "Boolean";
+
+%token <std::string> OPERATOR  "Operator";
+%token <std::string> COMPARATOR1  "Comparator1";
+%token <std::string> COMPARATOR2  "Comparator2";
+
+%token AND "AND";
+%token OR "OR";
+%token NOT "NOR";
+
+%token <std::string> DATABASE  "Database";
+%token <std::string> TABLE  "Table";
+%token <std::string> COLUMN  "Column";
+
+%token SELECT "SELECT";
+%token FROM "FROM";
+%token WHERE "WHERE";
+
+%token LEFTPAR "leftparen";
+%token RIGHTPAR "rightparen";
 %token SEMICOLON "semicolon";
 %token COMMA "comma";
 
-%type< std::vector<uint64_t> > arguments;
+%type<int64_t> expr;
 
-%start program
+%start expr
 
 %%
 
-program : {
-            cout << "*** RUN ***" << endl;
-            cout << "Type function with list of parmeters. Parameter list can be empty" << endl
-                 << "or contain positive integers only. Examples: " << endl
-                 << " * function()" << endl
-                 << " * function(1,2,3)" << endl
-                 << "Terminate listing with ; to see parsed AST" << endl
-                 << "Terminate parser with Ctrl-D" << endl;
-        
-                 cout << endl << "prompt> ";
-        
-            driver.clear();
-          }
-    | program command
-      {
-        cout << "command parsed, updating AST" << endl;
-        cout << endl << "prompt> ";
+expr: INTEGER {
+        $$ = $1;
       }
-    | program SEMICOLON
-      {
-        cout << "*** STOP RUN ***" << endl;
-        cout << driver.str() << endl;
+    | DOUBLE {
+        $$ = $1;
+      }
+    | STRING {
+        $$ = $1;
+      }
+    | CHAR {
+        $$ = $1;
+      }
+    | BOOL {
+        $$ = $1;
       }
     ;
 
-
-command : STRING LEFTPAR RIGHTPAR
-    {
-      string &id = $1;
-      cout << "ID: " << id << endl;
-    }
-  | STRING LEFTPAR arguments RIGHTPAR
-    {
-      string &id = $1;
-      const std::vector<uint64_t> &args = $3;
-      cout << "function: " << id << ", " << args.size() << endl;
-    }
-  ;
-
-arguments : NUMBER
-    {
-      uint64_t number = $1;
-      $$ = std::vector<uint64_t>();
-      $$.push_back(number);
-      cout << "first argument: " << number << endl;
-    }
-  | arguments COMMA NUMBER
-    {
-      uint64_t number = $3;
-      std::vector<uint64_t> &args = $1;
-      args.push_back(number);
-      $$ = args;
-      cout << "next argument: " << number << ", arg list size = " << args.size() << endl;
-    }
-  ;
-  
 %%
 
 // Bison expects us to provide implementation - otherwise linker complains
