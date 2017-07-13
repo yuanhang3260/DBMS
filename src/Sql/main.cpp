@@ -32,7 +32,6 @@
 #include "interpreter.h"
 
 using namespace Sql;
-using namespace std;
 
 int main(int argc, char **argv) {
   Interpreter i;
@@ -44,6 +43,9 @@ int main(int argc, char **argv) {
     res = i.parse();
   }
 
-  cout << "Parse complete. Result = " << res << endl;
+  auto node = i.GetCurrentNode();
+  node->value().Print();
+
+  std::cout << "Parse complete. Result = " << res << std::endl;
   return res;
 }

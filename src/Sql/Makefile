@@ -3,11 +3,12 @@ CFLAGS=-Wall -Werror -O2 -g
 IFLAGS=-I../ -I../Public/ -I../../../ProtoBuf/src/
 
 HYLIB=../../../HyLib/libhy.a
+DBMSLIB=../../libDBMS.a
 
 all:
 	flex -o scanner.cpp scanner.l
 	bison -o parser.cpp parser.y
-	$(CC) $(CFLAGS) $(IFLAGS) main.cpp scanner.cpp parser.cpp interpreter.cpp $(HYLIB) -o a.out
+	$(CC) $(CFLAGS) $(IFLAGS) main.cpp scanner.cpp parser.cpp interpreter.cpp $(DBMSLIB) $(HYLIB) -o a.out
 
 clean:
 	rm -rf a.out

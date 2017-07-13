@@ -121,20 +121,33 @@ using namespace Sql;
 expr: INTEGER {
         $$ = std::shared_ptr<Query::ExprTreeNode>(
             new Query::ConstValueNode(
-                  Query::NodeValue((int64)$1, Query::NodeValue::INT64)));
+                  Query::NodeValue::Create<int64>($1, Query::NodeValue::INT64)));
+        driver.node_ = $$;
       }
-    // | DOUBLE {
-    //     $$ = $1;
-    //   }
-    // | STRING {
-    //     $$ = $1;
-    //   }
-    // | CHAR {
-    //     $$ = $1;
-    //   }
-    // | BOOL {
-    //     $$ = $1;
-    //   }
+    | DOUBLE {
+        $$ = std::shared_ptr<Query::ExprTreeNode>(
+            new Query::ConstValueNode(
+                  Query::NodeValue::Create<double>($1, Query::NodeValue::DOUBLE)));
+        driver.node_ = $$;
+      }
+    | STRING {
+        $$ = std::shared_ptr<Query::ExprTreeNode>(
+            new Query::ConstValueNode(
+                  Query::NodeValue::Create<std::string>($1, Query::NodeValue::STRING)));
+        driver.node_ = $$;
+      }
+    | CHAR {
+        $$ = std::shared_ptr<Query::ExprTreeNode>(
+            new Query::ConstValueNode(
+                  Query::NodeValue::Create<char>($1, Query::NodeValue::CHAR)));
+        driver.node_ = $$;
+      }
+    | BOOL {
+        $$ = std::shared_ptr<Query::ExprTreeNode>(
+            new Query::ConstValueNode(
+                  Query::NodeValue::Create<bool>($1, Query::NodeValue::BOOL)));
+        driver.node_ = $$;
+      }
     ;
 
 %%
