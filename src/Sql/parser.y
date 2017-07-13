@@ -11,11 +11,15 @@
 %define api.namespace { Sql }
 %code requires
 {
-
 #include <iostream>
+#include <memory>
 #include <string>
 #include <vector>
 #include <stdint.h>
+
+#include "Base/BaseTypes.h"
+
+#include "Query/Expression.h"
 
 using namespace std;
 
@@ -40,8 +44,6 @@ namespace Sql {
 #include "parser.hpp"
 #include "interpreter.h"
 #include "location.hh"
-
-#include "Base/BaseTypes.h"
 
 // yylex() can take user arguments, defined by %parse-param below.
 //
@@ -83,7 +85,7 @@ using namespace Sql;
 
 %token END 0 "EOF"
 
-%token <int64_t> INTEGER "Integer";
+%token <int64> INTEGER "Integer";
 %token <double> DOUBLE "Double";
 %token <std::string> STRING  "String";
 %token <char> CHAR  "Char";
@@ -110,27 +112,29 @@ using namespace Sql;
 %token SEMICOLON "semicolon";
 %token COMMA "comma";
 
-%type<int64_t> expr;
+%type<std::shared_ptr<Query::ExprTreeNode>> expr;
 
 %start expr
 
 %%
 
 expr: INTEGER {
-        $$ = $1;
+        $$ = std::shared_ptr<Query::ExprTreeNode>(
+            new Query::ConstValueNode(
+                  Query::NodeValue((int64)$1, Query::NodeValue::INT64)));
       }
-    | DOUBLE {
-        $$ = $1;
-      }
-    | STRING {
-        $$ = $1;
-      }
-    | CHAR {
-        $$ = $1;
-      }
-    | BOOL {
-        $$ = $1;
-      }
+    // | DOUBLE {
+    //     $$ = $1;
+    //   }
+    // | STRING {
+    //     $$ = $1;
+    //   }
+    // | CHAR {
+    //     $$ = $1;
+    //   }
+    // | BOOL {
+    //     $$ = $1;
+    //   }
     ;
 
 %%

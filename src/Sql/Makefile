@@ -1,6 +1,6 @@
 CC=g++ -std=c++11
 CFLAGS=-Wall -Werror -O2 -g
-IFLAGS=-I../ -I../Public/
+IFLAGS=-I../ -I../Public/ -I../../../ProtoBuf/src/
 
 HYLIB=../../../HyLib/libhy.a
 

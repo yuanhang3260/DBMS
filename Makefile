@@ -20,6 +20,7 @@ OBJ = $(OBJ_DIR)/Database/Catalog_pb.o \
       $(OBJ_DIR)/Database/Database.o \
       $(OBJ_DIR)/Database/Table.o \
       $(OBJ_DIR)/Database/Operation.o \
+      $(OBJ_DIR)/Query/Expression.o \
       $(OBJ_DIR)/Schema/SchemaType.o \
       $(OBJ_DIR)/Schema/DataTypes.o \
       $(OBJ_DIR)/Storage/RecordPage.o \
@@ -56,7 +57,7 @@ all: pre_build library
 pre_build:
 	mkdir -p data
 	mkdir -p test
-	mkdir -p $(OBJ_DIR)/Storage $(OBJ_DIR)/Database $(OBJ_DIR)/Schema
+	mkdir -p $(OBJ_DIR)/Storage $(OBJ_DIR)/Database $(OBJ_DIR)/Schema $(OBJ_DIR)/Query
 
 library: $(OBJ)
 	ar cr libDBMS.a $(OBJ)
@@ -86,6 +87,12 @@ $(OBJ_DIR)/Database/%.o: $(SRC_DIR)/Database/%.cc $(SRC_DIR)/Database/%.h
 $(OBJ_DIR)/Database/%.o: $(SRC_DIR)/Database/%.cc
 	$(CC) $(CFLAGS) $(IFLAGS) -c $< -o $@
 
+$(OBJ_DIR)/Query/%.o: $(SRC_DIR)/Query/%.cc $(SRC_DIR)/Query/%.h
+	$(CC) $(CFLAGS) $(IFLAGS) -c $< -o $@
+
+$(OBJ_DIR)/Query/%.o: $(SRC_DIR)/Query/%.cc
+	$(CC) $(CFLAGS) $(IFLAGS) -c $< -o $@
+
 
 # Tests
 test/%.out: $(OBJ_DIR)/Utility/%.o library
@@ -108,6 +115,7 @@ tinyclean:
 	rm -rf $(OBJ_DIR)/Storage/*.o
 	rm -rf $(OBJ_DIR)/Schema/*.o
 	rm -rf $(OBJ_DIR)/Database/*.o
+	rm -rf $(OBJ_DIR)/Query/*.o
 	rm -rf test/*.out
 	rm -rf data/*.data
 	rm -rf data/*.index
@@ -122,5 +130,6 @@ clean:
 	rm -rf $(OBJ_DIR)/Storage/*.o
 	rm -rf $(OBJ_DIR)/Schema/*.o
 	rm -rf $(OBJ_DIR)/Database/*.o
+	rm -rf $(OBJ_DIR)/Query/*.o
 	rm -rf test/*.out
 	rm -rf data/*
