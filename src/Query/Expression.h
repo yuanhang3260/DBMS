@@ -6,6 +6,7 @@
 
 #include "Base/BaseTypes.h"
 
+#include "Query/Common.h"
 #include "Schema/SchemaType.h"
 
 namespace Query {
@@ -17,19 +18,11 @@ struct NodeValue {
   char v_char = 0;
   bool v_bool = false;
 
-  enum Type {
-    UNKNOWN_TYPE,
-    INT64,
-    DOUBLE,
-    STRING,
-    CHAR,
-    BOOL,
-  };
+  ValueType type = UNKNOWN_VALUE_TYPE;
+  bool negative = false;
 
-  Type type;
-
-  NodeValue() : type(UNKNOWN_TYPE) {}
-  NodeValue(Type type_arg) : type(type_arg) {}
+  NodeValue() : type(UNKNOWN_VALUE_TYPE) {}
+  NodeValue(ValueType type_arg) : type(type_arg) {}
 
   NodeValue static IntValue(int64 v);
   NodeValue static DoubleValue(double v);
@@ -43,7 +36,7 @@ struct NodeValue {
 class ExprTreeNode {
  public:
   enum Type {
-    UNKNOWN_TYPE,
+    UNKNOWN_NODE_TYPE,
     CONST_VALUE,    // const value
     TABLE_COLUMN,   // table column indentifier.
     OPERATOR,       // e.g. person.age > 18;
@@ -69,17 +62,23 @@ class ExprTreeNode {
   }
 
   virtual Type type() const = 0;
-  virtual const NodeValue& value() { return value_; };
+  static std::string NodeTypeStr(ExprTreeNode::Type node_type);
 
-  virtual void Print() const = 0;
+  const NodeValue& value() { return value_; }
+  void set_value_type(ValueType value_type) { value_.type = value_type; }
+
+  // Careful! Usually this can only be applied to ConstValueNode and ColumnNode.
+  void set_negative() { value_.negative = true; }
+
+  virtual void Print() const {}
 
   bool valid() const { return valid_; }
-  // Implement this for different node types.
-  virtual void CheckValid() {}
+  std::string error_msg() const { return error_msg_; }
 
  protected:
   NodeValue value_;
   bool valid_ = true;
+  std::string error_msg_;
 
   std::shared_ptr<ExprTreeNode> left_;
   std::shared_ptr<ExprTreeNode> right_;
@@ -106,6 +105,10 @@ class ColumnNode : public ExprTreeNode {
       column_(column) {}
   ColumnNode(const std::string& name);
 
+  // TODO: Init Column node. It takes table schema and try to get the value
+  // type.
+  // void Init()
+
   Type type() const override { return ExprTreeNode::TABLE_COLUMN; }
 
   void Print() const override;
@@ -115,10 +118,10 @@ class ColumnNode : public ExprTreeNode {
   std::string column_;
 };
 
+
 class OperatorNode : public ExprTreeNode {
  public:
-  OperatorNode(char op) : op_(op) {}
-  OperatorNode(char op,
+  OperatorNode(OperatorType op,
                std::shared_ptr<ExprTreeNode> left,
                std::shared_ptr<ExprTreeNode> right);
 
@@ -127,7 +130,18 @@ class OperatorNode : public ExprTreeNode {
   void Print() const override;
 
  private:
-  char op_;
+  // Init() does a lot of work:
+  //   1. Check binary operator must have two children nodes.
+  //   2. Check children node type must be CONST_VALUE/TABLE_COLUMN/OPERATOR.
+  //   3. Check children node value type and make sure they are meaningful for
+  //      this operator. Derive value type of this node.
+  //   4. Set valid and error msg for this node, based on above checks.
+  bool Init();
+
+  ValueType DeriveResultValueType(ValueType t1,
+                                        ValueType t2);
+
+  OperatorType op_;
 };
 
 }  // namespace Query

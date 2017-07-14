@@ -21,6 +21,7 @@ OBJ = $(OBJ_DIR)/Database/Catalog_pb.o \
       $(OBJ_DIR)/Database/Table.o \
       $(OBJ_DIR)/Database/Operation.o \
       $(OBJ_DIR)/Query/Expression.o \
+      $(OBJ_DIR)/Query/Common.o \
       $(OBJ_DIR)/Schema/SchemaType.o \
       $(OBJ_DIR)/Schema/DataTypes.o \
       $(OBJ_DIR)/Storage/RecordPage.o \

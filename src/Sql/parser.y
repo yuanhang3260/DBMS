@@ -121,6 +121,7 @@ using namespace Sql;
 %left ADD SUB;
 %left MUL DIV MOD;
 %left UMINUS
+%left COMPARATOR1 COMPARATOR2
 %left OR;
 %left AND;
 %left NOT;
@@ -160,24 +161,37 @@ expr: INTEGER {
 
 expr: expr ADD expr {
         std::cout << '+' << std::endl;
+        $$ = std::shared_ptr<Query::ExprTreeNode>(
+                new Query::OperatorNode(Query::ADD, $1, $3));
+        driver.node_ = $$;
       }
     | expr SUB expr {
+        $$ = std::shared_ptr<Query::ExprTreeNode>(
+                new Query::OperatorNode(Query::SUB, $1, $3));
         std::cout << '-' << std::endl;
       }
     | expr MUL expr {
+        $$ = std::shared_ptr<Query::ExprTreeNode>(
+                new Query::OperatorNode(Query::MUL, $1, $3));
         std::cout << '*' << std::endl;
       }
     | expr DIV expr {
+        $$ = std::shared_ptr<Query::ExprTreeNode>(
+                new Query::OperatorNode(Query::DIV, $1, $3));
         std::cout << '/' << std::endl;
       }
     | expr MOD expr {
+        $$ = std::shared_ptr<Query::ExprTreeNode>(
+                new Query::OperatorNode(Query::MOD, $1, $3));
         std::cout << '%' << std::endl;
       }
     | SUB expr %prec UMINUS {
         // '-' as negative sign.
+        $2->set_negative();
+        $$ = $2;
         std::cout << "negative" << std::endl;
       }
-    | expr COMPARATOR2 expr {
+    | expr COMPARATOR1 expr {
 
       }
     | expr AND expr {
@@ -190,7 +204,7 @@ expr: expr ADD expr {
 
       }
     | LEFTPAR expr RIGHTPAR {
-      
+      $$ = $2;
     }
     ;
 

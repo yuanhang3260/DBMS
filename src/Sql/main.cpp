@@ -48,6 +48,11 @@ int main(int argc, char **argv) {
     node->Print();
   }
 
+  printf("Node is valid ? %s\n", node->valid() ? "Yes" : "No");
+  if (!node->valid()) {
+    printf("%s\n", node->error_msg().c_str());
+  }
+
   std::cout << "Parse complete. Result = " << res << std::endl;
   return res;
 }
