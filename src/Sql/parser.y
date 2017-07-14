@@ -91,7 +91,11 @@ using namespace Sql;
 %token <char> CHAR  "Char";
 %token <bool> BOOL  "Boolean";
 
-%token <std::string> OPERATOR  "Operator";
+%token ADD "+";
+%token SUB "-";
+%token MUL "*";
+%token DIV "/";
+%token MOD "%%";
 %token <std::string> COMPARATOR1  "Comparator1";
 %token <std::string> COMPARATOR2  "Comparator2";
 
@@ -99,9 +103,7 @@ using namespace Sql;
 %token OR "OR";
 %token NOT "NOR";
 
-%token <std::string> DATABASE  "Database";
-%token <std::string> TABLE  "Table";
-%token <std::string> COLUMN  "Column";
+%token <std::string> IDENTIFIER  "Identifier";
 
 %token SELECT "SELECT";
 %token FROM "FROM";
@@ -116,38 +118,80 @@ using namespace Sql;
 
 %start expr
 
+%left ADD SUB;
+%left MUL DIV MOD;
+%left UMINUS
+%left OR;
+%left AND;
+%left NOT;
+
 %%
 
 expr: INTEGER {
         $$ = std::shared_ptr<Query::ExprTreeNode>(
-            new Query::ConstValueNode(
-                  Query::NodeValue::Create<int64>($1, Query::NodeValue::INT64)));
+            new Query::ConstValueNode(Query::NodeValue::IntValue($1)));
         driver.node_ = $$;
       }
     | DOUBLE {
         $$ = std::shared_ptr<Query::ExprTreeNode>(
-            new Query::ConstValueNode(
-                  Query::NodeValue::Create<double>($1, Query::NodeValue::DOUBLE)));
+            new Query::ConstValueNode(Query::NodeValue::DoubleValue($1)));
         driver.node_ = $$;
       }
     | STRING {
         $$ = std::shared_ptr<Query::ExprTreeNode>(
-            new Query::ConstValueNode(
-                  Query::NodeValue::Create<std::string>($1, Query::NodeValue::STRING)));
+            new Query::ConstValueNode(Query::NodeValue::StringValue($1)));
         driver.node_ = $$;
       }
     | CHAR {
         $$ = std::shared_ptr<Query::ExprTreeNode>(
-            new Query::ConstValueNode(
-                  Query::NodeValue::Create<char>($1, Query::NodeValue::CHAR)));
+            new Query::ConstValueNode(Query::NodeValue::CharValue($1)));
         driver.node_ = $$;
       }
     | BOOL {
         $$ = std::shared_ptr<Query::ExprTreeNode>(
-            new Query::ConstValueNode(
-                  Query::NodeValue::Create<bool>($1, Query::NodeValue::BOOL)));
+            new Query::ConstValueNode(Query::NodeValue::BoolValue($1)));
         driver.node_ = $$;
       }
+    | IDENTIFIER {
+        $$ = std::shared_ptr<Query::ExprTreeNode>(new Query::ColumnNode($1));
+        driver.node_ = $$;
+      }
+    ;
+
+expr: expr ADD expr {
+        std::cout << '+' << std::endl;
+      }
+    | expr SUB expr {
+        std::cout << '-' << std::endl;
+      }
+    | expr MUL expr {
+        std::cout << '*' << std::endl;
+      }
+    | expr DIV expr {
+        std::cout << '/' << std::endl;
+      }
+    | expr MOD expr {
+        std::cout << '%' << std::endl;
+      }
+    | SUB expr %prec UMINUS {
+        // '-' as negative sign.
+        std::cout << "negative" << std::endl;
+      }
+    | expr COMPARATOR2 expr {
+
+      }
+    | expr AND expr {
+
+      }
+    | expr OR expr {
+
+      }
+    | NOT expr {
+
+      }
+    | LEFTPAR expr RIGHTPAR {
+      
+    }
     ;
 
 %%

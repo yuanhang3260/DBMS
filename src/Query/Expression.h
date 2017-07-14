@@ -11,20 +11,11 @@
 namespace Query {
 
 struct NodeValue {
-  struct Value {
-    // Value() = default;
-    // Value(const Value& other) {
-    //   v_int64 = other.v_int64;
-    //   v_double = other.v_double;
-    //   v_str = other.v_str;
-    //   v_char = other.v_char;
-    // }
-
-    int64 v_int64;
-    double v_double;
-    std::string v_str;
-    char v_char;
-  };
+  int64 v_int64 = 0;
+  double v_double = 0;
+  std::string v_str;
+  char v_char = 0;
+  bool v_bool = false;
 
   enum Type {
     UNKNOWN_TYPE,
@@ -32,32 +23,21 @@ struct NodeValue {
     DOUBLE,
     STRING,
     CHAR,
+    BOOL,
   };
 
-  NodeValue() : type(UNKNOWN_TYPE) {}
-
-  template<typename T>
-  NodeValue(T v, Type type_arg) : type(type_arg) {
-    switch(type) {
-      case INT64:
-        value.v_int64 = v;
-        break;
-      case DOUBLE:
-        value.v_double = v;   
-        break;
-      case STRING:
-        value.v_str = v;
-        break;
-      case CHAR:
-        value.v_char = v;
-        break;
-      default:
-        break;
-    }
-  }
-
-  Value value;
   Type type;
+
+  NodeValue() : type(UNKNOWN_TYPE) {}
+  NodeValue(Type type_arg) : type(type_arg) {}
+
+  NodeValue static IntValue(int64 v);
+  NodeValue static DoubleValue(double v);
+  NodeValue static StringValue(const std::string& v);
+  NodeValue static CharValue(char v);
+  NodeValue static BoolValue(bool v);
+
+  std::string AsString() const;
 };
 
 class ExprTreeNode {
@@ -70,19 +50,84 @@ class ExprTreeNode {
     LOGICAL,        // e.g. expr AND|OR exprt, NOT expr
   };
 
+  ExprTreeNode() {}
+  ExprTreeNode(std::shared_ptr<ExprTreeNode> left,
+               std::shared_ptr<ExprTreeNode> right) :
+      left_(left),
+      right_(right) {}
+
+  void set_parent(std::shared_ptr<ExprTreeNode> parent) {
+    parent_ = parent;
+  }
+
+  void set_left_child(std::shared_ptr<ExprTreeNode> left) {
+    left_ = left;
+  }
+
+  void set_right_child(std::shared_ptr<ExprTreeNode> right) {
+    right_ = right;
+  }
+
   virtual Type type() const = 0;
-  virtual const NodeValue& value() const = 0;
+  virtual const NodeValue& value() { return value_; };
+
+  virtual void Print() const = 0;
+
+  bool valid() const { return valid_; }
+  // Implement this for different node types.
+  virtual void CheckValid() {}
+
+ protected:
+  NodeValue value_;
+  bool valid_ = true;
+
+  std::shared_ptr<ExprTreeNode> left_;
+  std::shared_ptr<ExprTreeNode> right_;
+  std::shared_ptr<ExprTreeNode> parent_;
 };
+
 
 class ConstValueNode : public ExprTreeNode {
  public:
-  ConstValueNode(const NodeValue& value) : value_(value) {}
+  ConstValueNode(const NodeValue& value) {
+    value_ = value;
+  }
 
   Type type() const override { return ExprTreeNode::CONST_VALUE; }
-  const NodeValue& value() const override { return value_; }
+
+  void Print() const override;
+};
+
+
+class ColumnNode : public ExprTreeNode {
+ public:
+  ColumnNode(const std::string& table, const std::string& column) :
+      table_(table),
+      column_(column) {}
+  ColumnNode(const std::string& name);
+
+  Type type() const override { return ExprTreeNode::TABLE_COLUMN; }
+
+  void Print() const override;
 
  private:
-  NodeValue value_;
+  std::string table_;
+  std::string column_;
+};
+
+class OperatorNode : public ExprTreeNode {
+ public:
+  OperatorNode(char op) : op_(op) {}
+  OperatorNode(char op,
+               std::shared_ptr<ExprTreeNode> left,
+               std::shared_ptr<ExprTreeNode> right);
+
+  Type type() const override { return ExprTreeNode::OPERATOR; }
+
+  void Print() const override;
+
+ private:
+  char op_;
 };
 
 }  // namespace Query

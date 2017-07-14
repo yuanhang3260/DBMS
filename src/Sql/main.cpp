@@ -44,7 +44,9 @@ int main(int argc, char **argv) {
   }
 
   auto node = i.GetCurrentNode();
-  node->value().Print();
+  if (node) {
+    node->Print();
+  }
 
   std::cout << "Parse complete. Result = " << res << std::endl;
   return res;
