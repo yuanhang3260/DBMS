@@ -21,6 +21,7 @@ struct NodeValue {
   ValueType type = UNKNOWN_VALUE_TYPE;
   bool negative = false;
 
+  bool has_value() const { return has_value_flags_ != 0; }
   byte has_value_flags_ = 0;
 
   NodeValue() : type(UNKNOWN_VALUE_TYPE) {}
@@ -70,7 +71,7 @@ class ExprTreeNode {
   void set_value_type(ValueType value_type) { value_.type = value_type; }
 
   // Careful! Usually this can only be applied to ConstValueNode and ColumnNode.
-  void set_negative(bool neg) { value_.negative = neg; }
+  void set_negative(bool neg);
 
   virtual void Print() const {}
 

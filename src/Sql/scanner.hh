@@ -19,20 +19,22 @@
 #undef YY_DECL
 #define YY_DECL Sql::Parser::symbol_type Sql::Scanner::get_next_token()
 
-#include "parser.hpp" // this is needed for symbol_type
+#include "parser.hh" // this is needed for symbol_type
+
+namespace Query {
+class Interpreter; 
+}
 
 namespace Sql {
-
-class Interpreter; 
     
 class Scanner : public yyFlexLexer {
 public:
-  Scanner(Interpreter &driver) : m_driver(driver) {}
+  Scanner(Query::Interpreter& driver) : m_driver(driver) {}
 	virtual ~Scanner() {}
 	virtual Sql::Parser::symbol_type get_next_token();
         
 private:
-  Interpreter &m_driver;
+  Query::Interpreter& m_driver;
 };
 
 }  // namespace Sql

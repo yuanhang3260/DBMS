@@ -24,9 +24,12 @@
 using namespace std;
 
 namespace Sql {
-  class Scanner;
-  class Interpreter;
-}  // namespace Sql
+class Scanner;
+}
+
+namespace Query {
+class Interpreter;
+}
 
 }
 
@@ -40,10 +43,12 @@ namespace Sql {
 %code top
 {
 #include <iostream>
-#include "scanner.h"
-#include "parser.hpp"
-#include "interpreter.h"
+
+#include "scanner.hh"
+#include "parser.hh"
 #include "location.hh"
+
+#include "Query/Interpreter.h"
 
 // yylex() can take user arguments, defined by %parse-param below.
 //
@@ -60,7 +65,7 @@ namespace Sql {
 //      simple as just a YY_DECL inside, or take additional user arguments
 //      (e.g. Interpreter) and do more complicated work.
 static Sql::Parser::symbol_type yylex(Sql::Scanner &scanner,
-                                      Sql::Interpreter &driver) {
+                                      Query::Interpreter &driver) {
   // Is driver unused? Probably not. Maybe it can be used to record errors in
   // lexer token parsing.
   return scanner.get_next_token();
@@ -74,9 +79,9 @@ using namespace Sql;
 }
 
 %lex-param { Sql::Scanner &scanner }
-%lex-param { Sql::Interpreter &driver }
+%lex-param { Query::Interpreter &driver }
 %parse-param { Sql::Scanner &scanner }
-%parse-param { Sql::Interpreter &driver }
+%parse-param { Query::Interpreter &driver }
 %locations
 %define parse.trace
 %define parse.error verbose
@@ -160,50 +165,71 @@ expr: INTEGER {
     ;
 
 expr: expr ADD expr {
-        std::cout << '+' << std::endl;
+        if (driver.debug()) {
+          std::cout << '+' << std::endl;
+        }
         $$ = std::shared_ptr<Query::ExprTreeNode>(
                 new Query::OperatorNode(Query::ADD, $1, $3));
+        // TODO: Check the OperatorNode is valid (Init() returns success);
         driver.node_ = $$;
       }
     | expr SUB expr {
-        std::cout << '-' << std::endl;
+        if (driver.debug()) {
+          std::cout << '-' << std::endl;
+        }
         $$ = std::shared_ptr<Query::ExprTreeNode>(
                 new Query::OperatorNode(Query::SUB, $1, $3));
         driver.node_ = $$;
       }
     | expr MUL expr {
-        std::cout << '*' << std::endl;
+        if (driver.debug()) {
+          std::cout << '*' << std::endl;
+        }
         $$ = std::shared_ptr<Query::ExprTreeNode>(
                 new Query::OperatorNode(Query::MUL, $1, $3));
         driver.node_ = $$;
       }
     | expr DIV expr {
-        std::cout << '/' << std::endl;
+        if (driver.debug()) {
+          std::cout << '/' << std::endl;
+        }
         $$ = std::shared_ptr<Query::ExprTreeNode>(
                 new Query::OperatorNode(Query::DIV, $1, $3));
         driver.node_ = $$;
       }
     | expr MOD expr {
-        std::cout << '%' << std::endl;
+        if (driver.debug()) {
+          std::cout << '%' << std::endl;
+        }
         $$ = std::shared_ptr<Query::ExprTreeNode>(
                 new Query::OperatorNode(Query::MOD, $1, $3));
         driver.node_ = $$;
       }
     | SUB expr %prec UMINUS {
         // '-' as negative sign.
-        std::cout << "negative" << std::endl;
+        //
+        // TODO: It should only be applied to ConstValueNode and ColumnNode,
+        // and not meaningful STRING type. Add a check here and return syntax
+        // error.
+        if (driver.debug()) {
+          std::cout << "negative" << std::endl;
+        }
         $2->set_negative(true);
         $$ = $2;
         driver.node_ = $$;
       }
     | expr COMPARATOR1 expr {
-        std::cout << $2 << std::endl;
+        if (driver.debug()) {
+          std::cout << $2 << std::endl;
+        }
         $$ = std::shared_ptr<Query::ExprTreeNode>(
                 new Query::OperatorNode(Query::StrToOp($2), $1, $3));
         driver.node_ = $$;
       }
     | expr COMPARATOR2 expr {
-        std::cout << $2 << std::endl;
+        if (driver.debug()) {
+          std::cout << $2 << std::endl;
+        }
         $$ = std::shared_ptr<Query::ExprTreeNode>(
                 new Query::OperatorNode(Query::StrToOp($2), $1, $3));
         driver.node_ = $$;

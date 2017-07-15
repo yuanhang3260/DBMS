@@ -10,30 +10,35 @@ namespace Query {
 NodeValue NodeValue::IntValue(int64 v) {
   NodeValue value(INT64);
   value.v_int64 = v;
+  value.has_value_flags_ = 1;
   return value;
 }
 
 NodeValue NodeValue::DoubleValue(double v) {
   NodeValue value(DOUBLE);
   value.v_double = v;
+  value.has_value_flags_ = 1;
   return value;
 }
 
 NodeValue NodeValue::StringValue(const std::string& v) {
   NodeValue value(STRING);
   value.v_str = v;
+  value.has_value_flags_ = 1;
   return value;
 }
 
 NodeValue NodeValue::CharValue(char v) {
   NodeValue value(CHAR);
   value.v_char = v;
+  value.has_value_flags_ = 1;
   return value;
 }
 
 NodeValue NodeValue::BoolValue(bool v) {
   NodeValue value(BOOL);
   value.v_bool = v;
+  value.has_value_flags_ = 1;
   return value;
 }
 
@@ -71,6 +76,14 @@ std::string ExprTreeNode::NodeTypeStr(ExprTreeNode::Type node_type) {
       return "UNKNOWN_NODE_TYPE";
   }
   return "UNKNOWN_NODE_TYPE";
+}
+
+void ExprTreeNode::set_negative(bool neg) {
+  if (value_.type == STRING || value_.type == UNKNOWN_VALUE_TYPE) {
+    LogERROR("Can use negative sign on type %s", ValueTypeStr(value_.type));
+    return;
+  }
+  value_.negative = neg;
 }
 
 
@@ -249,18 +262,26 @@ ValueType OperatorNode::DeriveResultValueType(ValueType t1, ValueType t2) {
 #define PRODUCE_RESULT_VALUE_1(t1, t2, t_result, t1_name, t2_name, t_result_name, op)    \
     if (types_match(t1, t2)) {                                                           \
       value_.type = t_result;                                                            \
-      value_.v_##t_result_name = left_value.v_##t1_name op right_value.v_##t2_name;      \
+      value_.has_value_flags_ = 1;                                                       \
+      value_.v_##t_result_name =                                                         \
+        (left_value.negative? -left_value.v_##t1_name : left_value.v_##t1_name) op       \
+        (right_value.negative? -right_value.v_##t2_name : right_value.v_##t2_name);      \
     }                                                                                    \
 
 #define PRODUCE_RESULT_VALUE_2(t1, t2, t_result, t1_name, t2_name, t_result_name, op)    \
-    if (types_match(t1, t2)) {                                                           \
-      value_.type = t_result;                                                            \
-      value_.v_##t_result_name = left_value.v_##t1_name op right_value.v_##t2_name;      \
-    }                                                                                    \
+    PRODUCE_RESULT_VALUE_1(t1, t2, t_result, t1_name, t2_name, t_result_name, op)        \
     if (types_match(t2, t1)) {                                                           \
       value_.type = t_result;                                                            \
-      value_.v_##t_result_name = left_value.v_##t2_name op right_value.v_##t1_name;      \
+      value_.has_value_flags_ = 1;                                                       \
+      value_.v_##t_result_name =                                                         \
+        (left_value.negative? -left_value.v_##t2_name : left_value.v_##t2_name) op       \
+        (right_value.negative? -right_value.v_##t1_name : right_value.v_##t1_name);      \
     }                                                                                    \
+
+#define PRODUCE_STRING_OP_RESULT(op)                            \
+    value_.type = BOOL;                                         \
+    value_.has_value_flags_ = 1;                                \
+    value_.v_bool = left_value.v_str op right_value.v_str;      \
 
 NodeValue OperatorNode::Evaluate() {
   SANITY_CHECK(valid_, "Invalid node");
@@ -322,7 +343,7 @@ NodeValue OperatorNode::Evaluate() {
       PRODUCE_RESULT_VALUE_2(INT64, CHAR, BOOL, int64, char, bool, ==)
       PRODUCE_RESULT_VALUE_2(INT64, BOOL, BOOL, int64, bool, bool, ==)
       PRODUCE_RESULT_VALUE_1(DOUBLE, DOUBLE, BOOL, double, double, bool, ==)
-      PRODUCE_RESULT_VALUE_1(STRING, STRING, BOOL, str, str, bool, ==)
+      PRODUCE_STRING_OP_RESULT(==)
       PRODUCE_RESULT_VALUE_1(CHAR, CHAR, BOOL, char, char, bool, ==)
       break;
     case NONEQUAL:
@@ -331,7 +352,7 @@ NodeValue OperatorNode::Evaluate() {
       PRODUCE_RESULT_VALUE_2(INT64, CHAR, BOOL, int64, char, bool, !=)
       PRODUCE_RESULT_VALUE_2(INT64, BOOL, BOOL, int64, bool, bool, !=)
       PRODUCE_RESULT_VALUE_1(DOUBLE, DOUBLE, BOOL, double, double, bool, !=)
-      PRODUCE_RESULT_VALUE_1(STRING, STRING, BOOL, str, str, bool, !=)
+      PRODUCE_STRING_OP_RESULT(!=)
       PRODUCE_RESULT_VALUE_1(CHAR, CHAR, BOOL, char, char, bool, !=)
       break;
     case LT:
@@ -340,7 +361,7 @@ NodeValue OperatorNode::Evaluate() {
       PRODUCE_RESULT_VALUE_2(INT64, CHAR, BOOL, int64, char, bool, <)
       PRODUCE_RESULT_VALUE_2(INT64, BOOL, BOOL, int64, bool, bool, <)
       PRODUCE_RESULT_VALUE_1(DOUBLE, DOUBLE, BOOL, double, double, bool, <)
-      PRODUCE_RESULT_VALUE_1(STRING, STRING, BOOL, str, str, bool, <)
+      PRODUCE_STRING_OP_RESULT(<)
       PRODUCE_RESULT_VALUE_1(CHAR, CHAR, BOOL, char, char, bool, <)
       break;
     case GT:
@@ -349,7 +370,7 @@ NodeValue OperatorNode::Evaluate() {
       PRODUCE_RESULT_VALUE_2(INT64, CHAR, BOOL, int64, char, bool, >)
       PRODUCE_RESULT_VALUE_2(INT64, BOOL, BOOL, int64, bool, bool, >)
       PRODUCE_RESULT_VALUE_1(DOUBLE, DOUBLE, BOOL, double, double, bool, >)
-      PRODUCE_RESULT_VALUE_1(STRING, STRING, BOOL, str, str, bool, >)
+      PRODUCE_STRING_OP_RESULT(>)
       PRODUCE_RESULT_VALUE_1(CHAR, CHAR, BOOL, char, char, bool, >)
       break;
     case LE:
@@ -358,7 +379,7 @@ NodeValue OperatorNode::Evaluate() {
       PRODUCE_RESULT_VALUE_2(INT64, CHAR, BOOL, int64, char, bool, <=)
       PRODUCE_RESULT_VALUE_2(INT64, BOOL, BOOL, int64, bool, bool, <=)
       PRODUCE_RESULT_VALUE_1(DOUBLE, DOUBLE, BOOL, double, double, bool, <=)
-      PRODUCE_RESULT_VALUE_1(STRING, STRING, BOOL, str, str, bool, <=)
+      PRODUCE_STRING_OP_RESULT(<=)
       PRODUCE_RESULT_VALUE_1(CHAR, CHAR, BOOL, char, char, bool, <=)
       break;
     case GE:
@@ -367,7 +388,7 @@ NodeValue OperatorNode::Evaluate() {
       PRODUCE_RESULT_VALUE_2(INT64, CHAR, BOOL, int64, char, bool, >=)
       PRODUCE_RESULT_VALUE_2(INT64, BOOL, BOOL, int64, bool, bool, >=)
       PRODUCE_RESULT_VALUE_1(DOUBLE, DOUBLE, BOOL, double, double, bool, >=)
-      PRODUCE_RESULT_VALUE_1(STRING, STRING, BOOL, str, str, bool, >=)
+      PRODUCE_STRING_OP_RESULT(>=)
       PRODUCE_RESULT_VALUE_1(CHAR, CHAR, BOOL, char, char, bool, >=)
       break;
     default:
@@ -375,6 +396,8 @@ NodeValue OperatorNode::Evaluate() {
       break;
   }
 
+  SANITY_CHECK(value_.has_value(),
+               "Node value is not computed. Missing some type operation?");
   return value_;
 }
 

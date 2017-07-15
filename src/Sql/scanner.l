@@ -4,9 +4,9 @@
 
 #include "Strings/Convert.h"
 #include "Strings/Utils.h"
-#include "Sql/scanner.h"
-#include "Sql/interpreter.h"
-#include "Sql/parser.hpp"
+#include "Query/Interpreter.h"
+#include "Sql/scanner.hh"
+#include "Sql/parser.hh"
 #include "Sql/location.hh"
 
 // Original yyterminate() macro returns int. Since we're using Bison 3

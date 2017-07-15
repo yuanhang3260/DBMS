@@ -1,25 +1,25 @@
-#include "interpreter.h"
-
 #include <sstream>
 
-namespace Sql {
+#include "Query/Interpreter.h"
+
+namespace Query {
 
 Interpreter::Interpreter() :
   m_scanner(*this),
   m_parser(m_scanner, *this),
   m_location(0) {}
 
-int Interpreter::parse() {
+bool Interpreter::parse() {
   m_location = 0;
-  return m_parser.parse();
+  return m_parser.parse() == 0;
 }
 
-int Interpreter::parse(const std::string& str) {
+bool Interpreter::parse(const std::string& str) {
   std::stringstream ss;
   ss << str;
   switchInputStream(&ss);
   m_location = 0;
-  return m_parser.parse();
+  return m_parser.parse() == 0;
 }
 
 void Interpreter::clear() {
@@ -44,4 +44,4 @@ unsigned int Interpreter::location() const {
   return m_location;
 }
 
-}  // namespace Sql
+}  // namespace Query

@@ -6,14 +6,14 @@ HYLIB=../../../HyLib/libhy.a
 DBMSLIB=../../libDBMS.a
 
 all:
-	flex -o scanner.cpp scanner.l
-	bison -o parser.cpp parser.y
-	$(CC) $(CFLAGS) $(IFLAGS) main.cpp scanner.cpp parser.cpp interpreter.cpp $(DBMSLIB) $(HYLIB) -o a.out
+	flex -o scanner.cc scanner.l
+	bison -o parser.cc parser.y
+	$(CC) $(CFLAGS) $(IFLAGS) main.cc scanner.cc parser.cc ../Query/Interpreter.cc $(DBMSLIB) $(HYLIB) -o a.out
 
 clean:
 	rm -rf a.out
 
 superclean:
-	rm -rf scanner.cpp
-	rm -rf parser.cpp parser.hpp location.hh position.hh stack.hh
+	rm -rf scanner.cc
+	rm -rf parser.cc parser.hh location.hh position.hh stack.hh
 	rm -rf a.out
