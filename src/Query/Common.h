@@ -32,6 +32,7 @@ enum OperatorType {
 };
 
 std::string OpTypeStr(OperatorType value_type);
+OperatorType StrToOp(const std::string& str);
 
 }  // namespace Query
 

@@ -51,6 +51,9 @@ int main(int argc, char **argv) {
   printf("Node is valid ? %s\n", node->valid() ? "Yes" : "No");
   if (!node->valid()) {
     printf("%s\n", node->error_msg().c_str());
+  } else {
+    auto value = node->Evaluate();
+    std::cout << value.AsString() << std::endl;
   }
 
   std::cout << "Parse complete. Result = " << res << std::endl;

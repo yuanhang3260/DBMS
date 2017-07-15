@@ -1,3 +1,4 @@
+#include "Base/MacroUtils.h"
 #include "Strings/Split.h"
 #include "Strings/Utils.h"
 
@@ -221,10 +222,160 @@ ValueType OperatorNode::DeriveResultValueType(ValueType t1, ValueType t2) {
       } else {
         return UNKNOWN_VALUE_TYPE;
       }
+    case EQUAL:
+    case NONEQUAL:
+    case LT:
+    case GT:
+    case LE:
+    case GE:
+      if (types_match(INT64, INT64) ||
+          types_match(INT64, DOUBLE) ||
+          types_match(INT64, CHAR) ||
+          types_match(INT64, BOOL) ||
+          types_match(DOUBLE, DOUBLE) ||
+          types_match(STRING, STRING) ||
+          types_match(CHAR, CHAR)) {
+        return BOOL;
+      } else {
+        return UNKNOWN_VALUE_TYPE;
+      }
     default:
       return UNKNOWN_VALUE_TYPE;
   }
   return UNKNOWN_VALUE_TYPE;
+}
+
+// This is silly, but I can't find a better way to eliminate duplicated code.
+#define PRODUCE_RESULT_VALUE_1(t1, t2, t_result, t1_name, t2_name, t_result_name, op)    \
+    if (types_match(t1, t2)) {                                                           \
+      value_.type = t_result;                                                            \
+      value_.v_##t_result_name = left_value.v_##t1_name op right_value.v_##t2_name;      \
+    }                                                                                    \
+
+#define PRODUCE_RESULT_VALUE_2(t1, t2, t_result, t1_name, t2_name, t_result_name, op)    \
+    if (types_match(t1, t2)) {                                                           \
+      value_.type = t_result;                                                            \
+      value_.v_##t_result_name = left_value.v_##t1_name op right_value.v_##t2_name;      \
+    }                                                                                    \
+    if (types_match(t2, t1)) {                                                           \
+      value_.type = t_result;                                                            \
+      value_.v_##t_result_name = left_value.v_##t2_name op right_value.v_##t1_name;      \
+    }                                                                                    \
+
+NodeValue OperatorNode::Evaluate() {
+  SANITY_CHECK(valid_, "Invalid node");
+  SANITY_CHECK(left_ && right_, "left/right child missing for OperatorNode");
+
+  NodeValue left_value = left_->Evaluate();
+  NodeValue right_value = right_->Evaluate();
+  SANITY_CHECK(left_value.type != UNKNOWN_VALUE_TYPE &&
+               right_value.type != UNKNOWN_VALUE_TYPE,
+               "Invalid child node value");
+
+  auto types_match = [&] (ValueType type_1, ValueType type_2) {
+    if (left_value.type == type_1 && right_value.type == type_2) {
+      return true;
+    }
+    return false;
+  };
+
+  // Enjoy.
+  switch (op_) {
+    case ADD:
+      // Example of this macro expansion:
+      //
+      // if (types_match(INT64, INT64)) {
+      //   value_.type = INT64;
+      //   value_.v_int64 = left_value.v_int64 + right_value.v_int64;
+      // }
+      PRODUCE_RESULT_VALUE_1(INT64, INT64, INT64, int64, int64, int64, +)
+      PRODUCE_RESULT_VALUE_2(INT64, DOUBLE, DOUBLE, int64, double, double, +)
+      PRODUCE_RESULT_VALUE_2(INT64, CHAR, CHAR, int64, char, char, +)
+      PRODUCE_RESULT_VALUE_2(INT64, BOOL, BOOL, int64, bool, bool, +)
+      PRODUCE_RESULT_VALUE_1(DOUBLE, DOUBLE, DOUBLE, double, double, double, +)
+      PRODUCE_RESULT_VALUE_1(CHAR, CHAR, CHAR, char, char, char, +)
+      break;
+    case SUB:
+      PRODUCE_RESULT_VALUE_1(INT64, INT64, INT64, int64, int64, int64, -)
+      PRODUCE_RESULT_VALUE_2(INT64, DOUBLE, DOUBLE, int64, double, double, -)
+      PRODUCE_RESULT_VALUE_2(INT64, CHAR, CHAR, int64, char, char, -)
+      PRODUCE_RESULT_VALUE_2(INT64, BOOL, BOOL, int64, bool, bool, -)
+      PRODUCE_RESULT_VALUE_1(DOUBLE, DOUBLE, DOUBLE, double, double, double, -)
+      PRODUCE_RESULT_VALUE_1(CHAR, CHAR, CHAR, char, char, char, -)
+      break;
+    case MUL:
+      PRODUCE_RESULT_VALUE_1(INT64, INT64, INT64, int64, int64, int64, *)
+      PRODUCE_RESULT_VALUE_2(INT64, DOUBLE, DOUBLE, int64, double, double, *)
+      PRODUCE_RESULT_VALUE_1(DOUBLE, DOUBLE, DOUBLE, double, double, double, *)
+      break;
+    case DIV:
+      PRODUCE_RESULT_VALUE_1(INT64, INT64, INT64, int64, int64, int64, /)
+      PRODUCE_RESULT_VALUE_2(INT64, DOUBLE, DOUBLE, int64, double, double, /)
+      PRODUCE_RESULT_VALUE_1(DOUBLE, DOUBLE, DOUBLE, double, double, double, /)
+      break;
+    case MOD:
+      PRODUCE_RESULT_VALUE_1(INT64, INT64, INT64, int64, int64, int64, %)
+      break;
+    case EQUAL:
+      PRODUCE_RESULT_VALUE_1(INT64, INT64, BOOL, int64, int64, bool, ==)
+      PRODUCE_RESULT_VALUE_2(INT64, DOUBLE, BOOL, int64, double, bool, ==)
+      PRODUCE_RESULT_VALUE_2(INT64, CHAR, BOOL, int64, char, bool, ==)
+      PRODUCE_RESULT_VALUE_2(INT64, BOOL, BOOL, int64, bool, bool, ==)
+      PRODUCE_RESULT_VALUE_1(DOUBLE, DOUBLE, BOOL, double, double, bool, ==)
+      PRODUCE_RESULT_VALUE_1(STRING, STRING, BOOL, str, str, bool, ==)
+      PRODUCE_RESULT_VALUE_1(CHAR, CHAR, BOOL, char, char, bool, ==)
+      break;
+    case NONEQUAL:
+      PRODUCE_RESULT_VALUE_1(INT64, INT64, BOOL, int64, int64, bool, !=)
+      PRODUCE_RESULT_VALUE_2(INT64, DOUBLE, BOOL, int64, double, bool, !=)
+      PRODUCE_RESULT_VALUE_2(INT64, CHAR, BOOL, int64, char, bool, !=)
+      PRODUCE_RESULT_VALUE_2(INT64, BOOL, BOOL, int64, bool, bool, !=)
+      PRODUCE_RESULT_VALUE_1(DOUBLE, DOUBLE, BOOL, double, double, bool, !=)
+      PRODUCE_RESULT_VALUE_1(STRING, STRING, BOOL, str, str, bool, !=)
+      PRODUCE_RESULT_VALUE_1(CHAR, CHAR, BOOL, char, char, bool, !=)
+      break;
+    case LT:
+      PRODUCE_RESULT_VALUE_1(INT64, INT64, BOOL, int64, int64, bool, <)
+      PRODUCE_RESULT_VALUE_2(INT64, DOUBLE, BOOL, int64, double, bool, <)
+      PRODUCE_RESULT_VALUE_2(INT64, CHAR, BOOL, int64, char, bool, <)
+      PRODUCE_RESULT_VALUE_2(INT64, BOOL, BOOL, int64, bool, bool, <)
+      PRODUCE_RESULT_VALUE_1(DOUBLE, DOUBLE, BOOL, double, double, bool, <)
+      PRODUCE_RESULT_VALUE_1(STRING, STRING, BOOL, str, str, bool, <)
+      PRODUCE_RESULT_VALUE_1(CHAR, CHAR, BOOL, char, char, bool, <)
+      break;
+    case GT:
+      PRODUCE_RESULT_VALUE_1(INT64, INT64, BOOL, int64, int64, bool, >)
+      PRODUCE_RESULT_VALUE_2(INT64, DOUBLE, BOOL, int64, double, bool, >)
+      PRODUCE_RESULT_VALUE_2(INT64, CHAR, BOOL, int64, char, bool, >)
+      PRODUCE_RESULT_VALUE_2(INT64, BOOL, BOOL, int64, bool, bool, >)
+      PRODUCE_RESULT_VALUE_1(DOUBLE, DOUBLE, BOOL, double, double, bool, >)
+      PRODUCE_RESULT_VALUE_1(STRING, STRING, BOOL, str, str, bool, >)
+      PRODUCE_RESULT_VALUE_1(CHAR, CHAR, BOOL, char, char, bool, >)
+      break;
+    case LE:
+      PRODUCE_RESULT_VALUE_1(INT64, INT64, BOOL, int64, int64, bool, <=)
+      PRODUCE_RESULT_VALUE_2(INT64, DOUBLE, BOOL, int64, double, bool, <=)
+      PRODUCE_RESULT_VALUE_2(INT64, CHAR, BOOL, int64, char, bool, <=)
+      PRODUCE_RESULT_VALUE_2(INT64, BOOL, BOOL, int64, bool, bool, <=)
+      PRODUCE_RESULT_VALUE_1(DOUBLE, DOUBLE, BOOL, double, double, bool, <=)
+      PRODUCE_RESULT_VALUE_1(STRING, STRING, BOOL, str, str, bool, <=)
+      PRODUCE_RESULT_VALUE_1(CHAR, CHAR, BOOL, char, char, bool, <=)
+      break;
+    case GE:
+      PRODUCE_RESULT_VALUE_1(INT64, INT64, BOOL, int64, int64, bool, >=)
+      PRODUCE_RESULT_VALUE_2(INT64, DOUBLE, BOOL, int64, double, bool, >=)
+      PRODUCE_RESULT_VALUE_2(INT64, CHAR, BOOL, int64, char, bool, >=)
+      PRODUCE_RESULT_VALUE_2(INT64, BOOL, BOOL, int64, bool, bool, >=)
+      PRODUCE_RESULT_VALUE_1(DOUBLE, DOUBLE, BOOL, double, double, bool, >=)
+      PRODUCE_RESULT_VALUE_1(STRING, STRING, BOOL, str, str, bool, >=)
+      PRODUCE_RESULT_VALUE_1(CHAR, CHAR, BOOL, char, char, bool, >=)
+      break;
+    default:
+      LogFATAL("Invalid operator");
+      break;
+  }
+
+  return value_;
 }
 
 }  // namespace Query

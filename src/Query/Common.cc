@@ -50,4 +50,42 @@ std::string OpTypeStr(OperatorType value_type) {
   return "UNKNOWN_OPERATOR";
 }
 
+OperatorType StrToOp(const std::string& str) {
+  if (str == "+") {
+    return ADD;
+  }
+  if (str == "-") {
+    return SUB;
+  }
+  if (str == "*") {
+    return MUL;
+  }
+  if (str == "/") {
+    return DIV;
+  }
+  if (str == "%%") {
+    return MOD;
+  }
+  if (str == "=") {
+    return EQUAL;
+  }
+  if (str == "!=") {
+    return NONEQUAL;
+  }
+  if (str == "<") {
+    return LT;
+  }
+  if (str == ">") {
+    return GT;
+  }
+  if (str == "<=") {
+    return LE;
+  }
+  if (str == ">=") {
+    return GE;
+  }
+
+  return UNKNOWN_OPERATOR;
+}
+
 }  // namespace Query

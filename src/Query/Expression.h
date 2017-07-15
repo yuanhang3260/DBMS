@@ -21,6 +21,8 @@ struct NodeValue {
   ValueType type = UNKNOWN_VALUE_TYPE;
   bool negative = false;
 
+  byte has_value_flags_ = 0;
+
   NodeValue() : type(UNKNOWN_VALUE_TYPE) {}
   NodeValue(ValueType type_arg) : type(type_arg) {}
 
@@ -68,12 +70,15 @@ class ExprTreeNode {
   void set_value_type(ValueType value_type) { value_.type = value_type; }
 
   // Careful! Usually this can only be applied to ConstValueNode and ColumnNode.
-  void set_negative() { value_.negative = true; }
+  void set_negative(bool neg) { value_.negative = neg; }
 
   virtual void Print() const {}
 
   bool valid() const { return valid_; }
   std::string error_msg() const { return error_msg_; }
+
+  // TODO: It should take table schemas and records.
+  virtual NodeValue Evaluate() = 0;
 
  protected:
   NodeValue value_;
@@ -95,6 +100,8 @@ class ConstValueNode : public ExprTreeNode {
   Type type() const override { return ExprTreeNode::CONST_VALUE; }
 
   void Print() const override;
+
+  NodeValue Evaluate() override { return value_; }
 };
 
 
@@ -107,11 +114,13 @@ class ColumnNode : public ExprTreeNode {
 
   // TODO: Init Column node. It takes table schema and try to get the value
   // type.
-  // void Init()
+  // void Init();
 
   Type type() const override { return ExprTreeNode::TABLE_COLUMN; }
 
   void Print() const override;
+
+  NodeValue Evaluate() override { return value_; }
 
  private:
   std::string table_;
@@ -129,6 +138,8 @@ class OperatorNode : public ExprTreeNode {
 
   void Print() const override;
 
+  NodeValue Evaluate() override;
+
  private:
   // Init() does a lot of work:
   //   1. Check binary operator must have two children nodes.
@@ -138,8 +149,7 @@ class OperatorNode : public ExprTreeNode {
   //   4. Set valid and error msg for this node, based on above checks.
   bool Init();
 
-  ValueType DeriveResultValueType(ValueType t1,
-                                        ValueType t2);
+  ValueType DeriveResultValueType(ValueType t1, ValueType t2);
 
   OperatorType op_;
 };

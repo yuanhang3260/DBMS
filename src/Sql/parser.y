@@ -118,13 +118,13 @@ using namespace Sql;
 
 %start expr
 
-%left ADD SUB;
-%left MUL DIV MOD;
-%left UMINUS
-%left COMPARATOR1 COMPARATOR2
 %left OR;
 %left AND;
 %left NOT;
+%left COMPARATOR1 COMPARATOR2
+%left ADD SUB;
+%left MUL DIV MOD;
+%left UMINUS
 
 %%
 
@@ -166,33 +166,47 @@ expr: expr ADD expr {
         driver.node_ = $$;
       }
     | expr SUB expr {
+        std::cout << '-' << std::endl;
         $$ = std::shared_ptr<Query::ExprTreeNode>(
                 new Query::OperatorNode(Query::SUB, $1, $3));
-        std::cout << '-' << std::endl;
+        driver.node_ = $$;
       }
     | expr MUL expr {
+        std::cout << '*' << std::endl;
         $$ = std::shared_ptr<Query::ExprTreeNode>(
                 new Query::OperatorNode(Query::MUL, $1, $3));
-        std::cout << '*' << std::endl;
+        driver.node_ = $$;
       }
     | expr DIV expr {
+        std::cout << '/' << std::endl;
         $$ = std::shared_ptr<Query::ExprTreeNode>(
                 new Query::OperatorNode(Query::DIV, $1, $3));
-        std::cout << '/' << std::endl;
+        driver.node_ = $$;
       }
     | expr MOD expr {
+        std::cout << '%' << std::endl;
         $$ = std::shared_ptr<Query::ExprTreeNode>(
                 new Query::OperatorNode(Query::MOD, $1, $3));
-        std::cout << '%' << std::endl;
+        driver.node_ = $$;
       }
     | SUB expr %prec UMINUS {
         // '-' as negative sign.
-        $2->set_negative();
-        $$ = $2;
         std::cout << "negative" << std::endl;
+        $2->set_negative(true);
+        $$ = $2;
+        driver.node_ = $$;
       }
     | expr COMPARATOR1 expr {
-
+        std::cout << $2 << std::endl;
+        $$ = std::shared_ptr<Query::ExprTreeNode>(
+                new Query::OperatorNode(Query::StrToOp($2), $1, $3));
+        driver.node_ = $$;
+      }
+    | expr COMPARATOR2 expr {
+        std::cout << $2 << std::endl;
+        $$ = std::shared_ptr<Query::ExprTreeNode>(
+                new Query::OperatorNode(Query::StrToOp($2), $1, $3));
+        driver.node_ = $$;
       }
     | expr AND expr {
 
@@ -205,6 +219,7 @@ expr: expr ADD expr {
       }
     | LEFTPAR expr RIGHTPAR {
       $$ = $2;
+      driver.node_ = $$;
     }
     ;
 
