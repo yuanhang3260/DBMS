@@ -358,7 +358,7 @@ void TableField::set_type(TableField::Type type) {
 }
 
 void TableField::clear_type() {
-  type_ = TableField::INTEGER;
+  type_ = TableField::UNKNOWN_TYPE;
   has_bits_[0] &= (~0x8);
 }
 
@@ -876,12 +876,14 @@ std::string GetProtoContent() {
 "\n"
 "message TableField {\n"
 "  enum Type {\n"
-"    INTEGER,\n"
-"    LLONG,\n"
+"    UNKNOWN_TYPE,\n"
+"    INT,\n"
+"    LONGINT,\n"
 "    DOUBLE,\n"
-"    BOOL,\n"
+"    CHAR,\n"
 "    STRING,\n"
-"    CHARARR,\n"
+"    BOOL,\n"
+"    CHARARRAY,\n"
 "  }\n"
 "\n"
 "  optional string name = 1;\n"

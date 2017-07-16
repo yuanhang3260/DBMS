@@ -5,6 +5,11 @@
 
 namespace Query {
 
+// We use a different representation of value type enum other than
+// DB::TableField::Type. This enum is specific for Sql query parser/evaluator.
+//
+// All integer types are treated as INT64, both string and char_array types are
+// treated as STRING type.
 enum ValueType {
   UNKNOWN_VALUE_TYPE,
   INT64,

@@ -45,12 +45,12 @@ class RecordTest: public UnitTest {
     field = schema.add_fields();
     field->set_name("age");
     field->set_index(1);
-    field->set_type(DB::TableField::INTEGER);
+    field->set_type(DB::TableField::INT);
     // Add long int type
     field = schema.add_fields();
     field->set_name("money");
     field->set_index(2);
-    field->set_type(DB::TableField::LLONG);
+    field->set_type(DB::TableField::LONGINT);
     // Add double type
     field = schema.add_fields();
     field->set_name("weight");
@@ -65,7 +65,7 @@ class RecordTest: public UnitTest {
     field = schema.add_fields();
     field->set_name("signature");
     field->set_index(5);
-    field->set_type(DB::TableField::CHARARR);
+    field->set_type(DB::TableField::CHARARRAY);
     field->set_size(20);
   }
 

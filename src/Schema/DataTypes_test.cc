@@ -89,6 +89,16 @@ class DataTypesTest: public UnitTest {
     }
   }
 
+  void Test_CharField() {
+    std::cout << __FUNCTION__ << std::endl;
+    AssertTrue(CharField('a') < CharField('b'));
+    AssertTrue(CharField('a') <= CharField('a'));
+    AssertTrue(CharField('c') > CharField('b'));
+    AssertTrue(CharField('c') >= CharField('b'));
+    AssertTrue(CharField('c') != CharField('d'));
+    AssertTrue(CharField('c') == CharField('c'));
+  }
+
   void Test_StringField() {
     std::cout << __FUNCTION__ << std::endl;
     AssertTrue(StringField("ab") < StringField("ac"));
@@ -137,6 +147,7 @@ int main() {
   test.Test_IntField();
   test.Test_LongIntField();
   test.Test_DoubleField();
+  test.Test_CharField();
   test.Test_StringField();
   test.Test_CharArrayField();
   test.teardown();

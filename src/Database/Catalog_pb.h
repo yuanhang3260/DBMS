@@ -17,12 +17,14 @@ namespace DB {
 class TableField: public ::proto::Message {
  public:
   enum Type {
-    INTEGER,
-    LLONG,
+    UNKNOWN_TYPE,
+    INT,
+    LONGINT,
     DOUBLE,
-    BOOL,
+    CHAR,
     STRING,
-    CHARARR,
+    BOOL,
+    CHARARRAY,
   };
 
   // constructors and destructor //
@@ -80,7 +82,7 @@ class TableField: public ::proto::Message {
   // message fields
   std::string name_ = "";
   int index_ = 0;
-  TableField::Type type_ = TableField::INTEGER;
+  TableField::Type type_ = TableField::UNKNOWN_TYPE;
   int size_ = 0;
 
   // InitAsDefaultInstance()

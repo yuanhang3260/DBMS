@@ -9,15 +9,8 @@
 
 namespace Schema {
 
-enum FieldType {
-  INT,
-  LONGINT,
-  DOUBLE,
-  BOOL,
-  STRING,
-  CHARARRAY,
-  UNKWON,
-};
+typedef DB::TableField::Type FieldType;
+std::string FieldTypeStr(FieldType type);
 
 class Field {
  public:
@@ -31,8 +24,6 @@ class Field {
   virtual std::string AsString() const = 0;
 
   virtual void reset() = 0;
-
-  static std::string FieldTypeAsString(FieldType type);
 
   bool MatchesSchemaType(DB::TableField::Type type) const;
 

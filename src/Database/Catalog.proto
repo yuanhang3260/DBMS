@@ -2,12 +2,14 @@ package DB;
 
 message TableField {
   enum Type {
-    INTEGER,
-    LLONG,
+    UNKNOWN_TYPE,
+    INT,
+    LONGINT,
     DOUBLE,
-    BOOL,
+    CHAR,
     STRING,
-    CHARARR,
+    BOOL,
+    CHARARRAY,
   }
 
   optional string name = 1;

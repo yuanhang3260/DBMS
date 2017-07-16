@@ -159,7 +159,9 @@ clean:
 	rm -rf $(OBJ_DIR)/Schema/*.o
 	rm -rf $(OBJ_DIR)/Database/*.o
 	rm -rf $(OBJ_DIR)/Query/*.o
+	rm -rf $(OBJ_DIR)/Sql/*.o
 	rm -rf $(SQL_DIR)/scanner.cc
-	rm -rf $(SQL_DIR)/parser.cc $(SQL_DIR)/parser.hh $(SQL_DIR)/location.hh $(SQL_DIR)/position.hh $(SQL_DIR)/stack.hh
+	rm -rf $(SQL_DIR)/parser.cc $(SQL_DIR)/parser.hh
+	rm -rf $(SQL_DIR)/location.hh $(SQL_DIR)/position.hh $(SQL_DIR)/stack.hh
 	rm -rf test/*.out
 	rm -rf data/*

@@ -39,12 +39,12 @@ class MergeSortTest: public UnitTest {
     field = schema_.add_fields();
     field->set_name("age");
     field->set_index(2);
-    field->set_type(DB::TableField::INTEGER);
+    field->set_type(DB::TableField::INT);
     // Add char array type
     field = schema_.add_fields();
     field->set_name("signature");
     field->set_index(3);
-    field->set_type(DB::TableField::CHARARR);
+    field->set_type(DB::TableField::CHARARRAY);
     field->set_size(20);
   }
 

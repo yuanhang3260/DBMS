@@ -35,7 +35,7 @@ class DatabaseTest: public UnitTest {
     field = table->add_fields();
     field->set_name("age");
     field->set_index(1);
-    field->set_type(DB::TableField::INTEGER);
+    field->set_type(DB::TableField::INT);
   }
 
   bool CreateCatalogFile() {

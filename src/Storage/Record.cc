@@ -53,12 +53,13 @@ void RecordBase::Print() const {
 void RecordBase::PrintImpl() const {
   std::cout << "Record: | ";
   for (auto& field: fields_) {
-    if (field->type() == Schema::STRING || field->type() == Schema::CHARARRAY) {
-      std::cout << Schema::Field::FieldTypeAsString(field->type()) << ": "
+    if (field->type() == Schema::FieldType::STRING ||
+        field->type() == Schema::FieldType::CHARARRAY) {
+      std::cout << Schema::FieldTypeStr(field->type()) << ": "
                 << "\"" << field->AsString() << "\" | ";
     }
     else {
-      std::cout << Schema::Field::FieldTypeAsString(field->type()) << ": "
+      std::cout << Schema::FieldTypeStr(field->type()) << ": "
                 << field->AsString() << " | ";
     }
   }
@@ -207,22 +208,25 @@ int RecordBase::CompareSchemaFields(const Schema::Field* field1,
     LogFATAL("Comparing different types of schema fields!");
   }
 
-  if (type == Schema::INT) {
+  if (type == Schema::FieldType::INT) {
     COMPARE_FIELDS_WITH_TYPE(Schema::IntField, field1, field2);
   }
-  if (type == Schema::LONGINT) {
+  if (type == Schema::FieldType::LONGINT) {
     COMPARE_FIELDS_WITH_TYPE(Schema::LongIntField, field1, field2);
   }
-  if (type == Schema::DOUBLE) {
+  if (type == Schema::FieldType::DOUBLE) {
     COMPARE_FIELDS_WITH_TYPE(Schema::DoubleField, field1, field2);
   }
-  if (type == Schema::BOOL) {
+  if (type == Schema::FieldType::BOOL) {
     COMPARE_FIELDS_WITH_TYPE(Schema::BoolField, field1, field2);
   }
-  if (type == Schema::STRING) {
+  if (type == Schema::FieldType::CHAR) {
+    COMPARE_FIELDS_WITH_TYPE(Schema::CharField, field1, field2);
+  }
+  if (type == Schema::FieldType::STRING) {
     COMPARE_FIELDS_WITH_TYPE(Schema::StringField, field1, field2);
   }
-  if (type == Schema::CHARARRAY) {
+  if (type == Schema::FieldType::CHARARRAY) {
     COMPARE_FIELDS_WITH_TYPE(Schema::CharArrayField, field1, field2);
   }
 
@@ -298,22 +302,25 @@ bool RecordBase::InitRecordFields(const DB::TableInfo& schema,
   clear();
   for (int index: indexes) {
     auto type = schema.fields(index).type();
-    if (type == DB::TableField::INTEGER) {
+    if (type == Schema::FieldType::INT) {
       AddField(new Schema::IntField());
     }
-    if (type == DB::TableField::LLONG) {
+    if (type == Schema::FieldType::LONGINT) {
       AddField(new Schema::LongIntField());
     }
-    if (type == DB::TableField::DOUBLE) {
+    if (type == Schema::FieldType::DOUBLE) {
       AddField(new Schema::DoubleField());
     }
-    if (type == DB::TableField::BOOL) {
+    if (type == Schema::FieldType::BOOL) {
       AddField(new Schema::BoolField());
     }
-    if (type == DB::TableField::STRING) {
+    if (type == Schema::FieldType::CHAR) {
+      AddField(new Schema::CharField());
+    }
+    if (type == Schema::FieldType::STRING) {
       AddField(new Schema::StringField());
     }
-    if (type == DB::TableField::CHARARR) {
+    if (type == Schema::FieldType::CHARARRAY) {
       AddField(new Schema::CharArrayField(schema.fields(index).size()));
     }
   }

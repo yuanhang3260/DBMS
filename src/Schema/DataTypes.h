@@ -19,7 +19,7 @@ class IntField: public Field {
   IntField(int value) : value_(value) {}
 
   DEFINE_ACCESSOR(value, int);
-  FieldType type() const override { return INT; }
+  FieldType type() const override { return FieldType::INT; }
   int length() const override { return 4; }
 
   // Comparable
@@ -79,7 +79,7 @@ class LongIntField: public Field {
   LongIntField(int64 value) : value_(value) {}
 
   DEFINE_ACCESSOR(value, int64);
-  FieldType type() const override { return LONGINT; }
+  FieldType type() const override { return FieldType::LONGINT; }
   int length() const override { return 8; }
 
   // Comparable
@@ -139,7 +139,7 @@ class DoubleField: public Field {
   DoubleField(double value) : value_(value) {}
 
   DEFINE_ACCESSOR(value, double);
-  FieldType type() const override { return DOUBLE; }
+  FieldType type() const override { return FieldType::DOUBLE; }
   int length() const override { return 8; }
 
   // Comparable
@@ -199,7 +199,7 @@ class BoolField: public Field {
   BoolField(bool value) : value_(value) {}
 
   DEFINE_ACCESSOR(value, bool);
-  FieldType type() const override { return BOOL; }
+  FieldType type() const override { return FieldType::BOOL; }
   int length() const override { return 1; }
 
   // Comparable
@@ -227,7 +227,7 @@ class BoolField: public Field {
     return value_ != other.value();
   }
 
-  std::string AsString() const override { return std::to_string(value_); }
+  std::string AsString() const override { return value_? "True" : "False"; }
 
   // Dump to memory
   int DumpToMem(byte* buf) const override {
@@ -253,6 +253,66 @@ class BoolField: public Field {
 };
 
 
+class CharField: public Field {
+ public:
+  CharField() = default;
+  CharField(char c) : value_(c) {}
+
+  DEFINE_ACCESSOR(value, char);
+  FieldType type() const override { return FieldType::CHAR; }
+  int length() const override { return 1; }
+
+  // Comparable
+  bool operator<(const CharField& other) const {
+    return value_ < other.value();
+  }
+
+  bool operator<=(const CharField& other) const {
+    return value_ <= other.value();
+  }
+
+  bool operator>(const CharField& other) const {
+    return value_ > other.value();
+  }
+
+  bool operator>=(const CharField& other) const {
+    return value_ >= other.value();
+  }
+
+  bool operator==(const CharField& other) const {
+    return value_ == other.value();
+  }
+
+  bool operator!=(const CharField& other) const {
+    return value_ != other.value();
+  }
+
+  // Dump to memory
+  int DumpToMem(byte* buf) const override {
+    if (!buf) {
+      return -1;
+    }
+    memcpy(buf, &value_, sizeof(value_));
+    return sizeof(value_);
+  }
+
+  int LoadFromMem(const byte* buf) override {
+    if (!buf) {
+      return -1;
+    }
+    memcpy(&value_, buf, sizeof(value_));
+    return sizeof(value_);
+  }
+
+  std::string AsString() const override { return std::string(1, value_); }
+
+  void reset() override { value_ = 0; }
+
+ private:
+  char value_ = 0;
+};
+
+
 class StringField: public Field {
  public:
   StringField() = default;
@@ -260,7 +320,7 @@ class StringField: public Field {
   StringField(const char* buf, int size) : value_(buf, size) {}
 
   DEFINE_ACCESSOR(value, std::string);
-  FieldType type() const override { return STRING; }
+  FieldType type() const override { return FieldType::STRING; }
   int length() const override { return value_.length() + 1; }
 
   // Comparable
@@ -294,7 +354,7 @@ class CharArrayField: public Field {
 
   bool SetData(const char* src, int length);
 
-  FieldType type() const override { return CHARARRAY; }
+  FieldType type() const override { return FieldType::CHARARRAY; }
   int length() const override {
     return length_limit_;
   }

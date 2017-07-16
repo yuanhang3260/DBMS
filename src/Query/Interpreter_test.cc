@@ -37,12 +37,12 @@ class InterpreterTest: public UnitTest {
     field = schema_.add_fields();
     field->set_name("age");
     field->set_index(1);
-    field->set_type(DB::TableField::INTEGER);
+    field->set_type(DB::TableField::INT);
     // Add long int type
     field = schema_.add_fields();
     field->set_name("id");
     field->set_index(2);  // primary key
-    field->set_type(DB::TableField::LLONG);
+    field->set_type(DB::TableField::LONGINT);
     // Add double type
     field = schema_.add_fields();
     field->set_name("weight");
@@ -57,7 +57,7 @@ class InterpreterTest: public UnitTest {
     field = schema_.add_fields();
     field->set_name("signature");
     field->set_index(5);
-    field->set_type(DB::TableField::CHARARR);
+    field->set_type(DB::TableField::CHARARRAY);
     field->set_size(20);
   }
 
