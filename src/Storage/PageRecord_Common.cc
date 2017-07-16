@@ -14,7 +14,7 @@ namespace Storage {
 
 // **************************** PageLoadedRecord **************************** //
 bool PageLoadedRecord::GenerateRecordPrototype(
-         const DB::TableSchema& schema,
+         const DB::TableInfo& schema,
          const std::vector<int>& key_indexes,
          FileType file_type,
          PageType page_type) {

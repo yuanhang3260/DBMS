@@ -180,8 +180,8 @@ bool RecordBase::operator!=(const RecordBase& other) const {
 }
 
 #define COMPARE_FIELDS_WITH_TYPE(TYPE, FIELD1, FIELD2)  \
-  const TYPE& f1 = *reinterpret_cast<const TYPE*>(FIELD1);  \
-  const TYPE& f2 = *reinterpret_cast<const TYPE*>(FIELD2);  \
+  const TYPE& f1 = *dynamic_cast<const TYPE*>(FIELD1);  \
+  const TYPE& f2 = *dynamic_cast<const TYPE*>(FIELD2);  \
   if (f1 < f2) {                                      \
     return -1;                                        \
   }                                                   \
@@ -293,7 +293,7 @@ void RecordBase::clear() {
   fields_.clear();
 }
 
-bool RecordBase::InitRecordFields(const DB::TableSchema& schema,
+bool RecordBase::InitRecordFields(const DB::TableInfo& schema,
                                   const std::vector<int>& indexes) {
   clear();
   for (int index: indexes) {
@@ -321,7 +321,7 @@ bool RecordBase::InitRecordFields(const DB::TableSchema& schema,
 }
 
 // Check fields type match a schema.
-bool RecordBase::CheckFieldsType(const DB::TableSchema& schema,
+bool RecordBase::CheckFieldsType(const DB::TableInfo& schema,
                                  std::vector<int> key_indexes) const {
   if (fields_.size() != key_indexes.size()) {
     LogERROR("Index/TreeNode record has mismatchig number of fields - "
@@ -340,7 +340,7 @@ bool RecordBase::CheckFieldsType(const DB::TableSchema& schema,
   return true;
 }
 
-bool RecordBase::CheckFieldsType(const DB::TableSchema& schema) const {
+bool RecordBase::CheckFieldsType(const DB::TableInfo& schema) const {
   if ((int)fields_.size() != schema.fields_size()) {
     LogERROR("Data record has mismatchig number of fields with schema - "
              "schema has %d indexes, record has %d",

@@ -25,7 +25,7 @@ struct NodeValue {
   byte has_value_flags_ = 0;
 
   NodeValue() : type(UNKNOWN_VALUE_TYPE) {}
-  NodeValue(ValueType type_arg) : type(type_arg) {}
+  explicit NodeValue(ValueType type_arg) : type(type_arg) {}
 
   NodeValue static IntValue(int64 v);
   NodeValue static DoubleValue(double v);
@@ -76,7 +76,9 @@ class ExprTreeNode {
   virtual void Print() const {}
 
   bool valid() const { return valid_; }
+  void set_valid(bool valid) { valid_ = valid; }
   std::string error_msg() const { return error_msg_; }
+  void set_error_msg(const std::string error_msg) { error_msg_ = error_msg; }
 
   // TODO: It should take table schemas and records.
   virtual NodeValue Evaluate() = 0;
@@ -94,7 +96,7 @@ class ExprTreeNode {
 
 class ConstValueNode : public ExprTreeNode {
  public:
-  ConstValueNode(const NodeValue& value) {
+  explicit ConstValueNode(const NodeValue& value) {
     value_ = value;
   }
 

@@ -12,7 +12,7 @@
 namespace DB {
 
 Table::Table(const std::string& db_name, const std::string& name,
-             const TableSchema* schema) :
+             const TableInfo* schema) :
     db_name_(db_name),
     name_(name),
     schema_(schema) {

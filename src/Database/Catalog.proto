@@ -16,7 +16,7 @@ message TableField {
   optional int32 size = 4;  // Only meaningful for CharArray - length limit.
 }
 
-message TableSchema {
+message TableInfo {
   optional string name = 1;
   repeated TableField fields = 2;
 
@@ -27,5 +27,5 @@ message TableSchema {
 
 message DatabaseCatalog {
   optional string name = 1;
-  repeated TableSchema tables = 2;
+  repeated TableInfo tables = 2;
 }

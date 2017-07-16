@@ -54,7 +54,7 @@ class FlatRecordPage {
 struct MergeSortOptions {
   MergeSortOptions(const std::string& db_name_,
                    uint32 txn_id_,
-                   const DB::TableSchema* schema_,
+                   const DB::TableInfo* schema_,
                    const std::vector<int>& key_fields_,
                    const std::vector<int>& sort_fields_,
                    FileType file_type_,
@@ -69,7 +69,7 @@ struct MergeSortOptions {
 
   std::string db_name;
   uint32 txn_id;
-  const DB::TableSchema* schema;
+  const DB::TableInfo* schema;
   std::vector<int> key_fields;
   std::vector<int> sort_fields;
   FileType file_type;  // data or index record?

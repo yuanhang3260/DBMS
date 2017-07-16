@@ -80,7 +80,6 @@ std::string ExprTreeNode::NodeTypeStr(ExprTreeNode::Type node_type) {
 
 void ExprTreeNode::set_negative(bool neg) {
   if (value_.type == STRING || value_.type == UNKNOWN_VALUE_TYPE) {
-    LogERROR("Can use negative sign on type %s", ValueTypeStr(value_.type));
     return;
   }
   value_.negative = neg;
@@ -312,7 +311,7 @@ NodeValue OperatorNode::Evaluate() {
       PRODUCE_RESULT_VALUE_1(INT64, INT64, INT64, int64, int64, int64, +)
       PRODUCE_RESULT_VALUE_2(INT64, DOUBLE, DOUBLE, int64, double, double, +)
       PRODUCE_RESULT_VALUE_2(INT64, CHAR, CHAR, int64, char, char, +)
-      PRODUCE_RESULT_VALUE_2(INT64, BOOL, BOOL, int64, bool, bool, +)
+      PRODUCE_RESULT_VALUE_2(INT64, BOOL, INT64, int64, bool, int64, +)
       PRODUCE_RESULT_VALUE_1(DOUBLE, DOUBLE, DOUBLE, double, double, double, +)
       PRODUCE_RESULT_VALUE_1(CHAR, CHAR, CHAR, char, char, char, +)
       break;
@@ -320,7 +319,7 @@ NodeValue OperatorNode::Evaluate() {
       PRODUCE_RESULT_VALUE_1(INT64, INT64, INT64, int64, int64, int64, -)
       PRODUCE_RESULT_VALUE_2(INT64, DOUBLE, DOUBLE, int64, double, double, -)
       PRODUCE_RESULT_VALUE_2(INT64, CHAR, CHAR, int64, char, char, -)
-      PRODUCE_RESULT_VALUE_2(INT64, BOOL, BOOL, int64, bool, bool, -)
+      PRODUCE_RESULT_VALUE_2(INT64, BOOL, INT64, int64, bool, int64, -)
       PRODUCE_RESULT_VALUE_1(DOUBLE, DOUBLE, DOUBLE, double, double, double, -)
       PRODUCE_RESULT_VALUE_1(CHAR, CHAR, CHAR, char, char, char, -)
       break;

@@ -16,12 +16,8 @@ int main(int argc, char **argv) {
   }
 
   auto node = i.GetCurrentNode();
-  if (node) {
-    node->Print();
-  }
-
   if (!node->valid()) {
-    printf("Invalid node - %s\n", node->error_msg().c_str());
+    LogERROR("Invalid node - %s", node->error_msg().c_str());
   } else {
     auto value = node->Evaluate();
     std::cout << value.AsString() << std::endl;

@@ -3,7 +3,7 @@
 
 #include <memory>
 
-#include "Schema/DBTable_pb.h"
+#include "Database/Catalog_pb.h"
 #include "Storage/Record.h"
 #include "Storage/Common.h"
 #include "Storage/RecordPage.h"
@@ -31,7 +31,7 @@ class PageLoadedRecord {
   // Generate internal record type for this PageLoadedRecord. The internal
   // reocrd can be DataRecord, IndexRecord or TreeNodeRecord, depending on
   // the specified file_type and page_type.
-  bool GenerateRecordPrototype(const DB::TableSchema& schema,
+  bool GenerateRecordPrototype(const DB::TableInfo& schema,
                                const std::vector<int>& key_indexes,
                                FileType file_type,
                                PageType page_type);

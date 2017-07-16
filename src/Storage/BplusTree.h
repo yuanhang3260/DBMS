@@ -78,7 +78,7 @@ class BplusTree {
   DEFINE_ACCESSOR_ENUM(file_type, FileType);
   BplusTreeHeaderPage* meta() { return header_.get(); }
   RecordPage* root();
-  const DB::TableSchema& schema() const;
+  const DB::TableInfo& schema() const;
 
   // Load B+ tree from file.
   bool LoadTree();
@@ -173,7 +173,7 @@ class BplusTree {
   // Load root node from disk.
   bool LoadRootNode();
   // Load table schema from schema file, which is a serialized protocal buffer
-  // raw file. It saves message DB::TableSchema defined in Schema/DBTable.proto.
+  // raw file. It saves message DB::TableInfo defined in Schema/DBTable.proto.
   bool LoadSchema();
 
   // Verify an empty tree.

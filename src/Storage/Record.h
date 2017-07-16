@@ -103,13 +103,13 @@ class RecordBase {
   virtual void clear();
 
   // Init records fields with schema and key_indexes.
-  bool InitRecordFields(const DB::TableSchema& schema,
+  bool InitRecordFields(const DB::TableInfo& schema,
                         const std::vector<int>& indexes);
 
   // Check all fields type match a schema.
-  bool CheckFieldsType(const DB::TableSchema& schema,
+  bool CheckFieldsType(const DB::TableInfo& schema,
                        std::vector<int> key_indexes) const;
-  bool CheckFieldsType(const DB::TableSchema& schema) const;
+  bool CheckFieldsType(const DB::TableInfo& schema) const;
 
   // Parse from text of format as Print() method prints.
   bool ParseFromText(std::string str, int chararray_len_limit);

@@ -13,8 +13,8 @@ namespace {
 
 const ::proto::MessageDescriptor* TableField_descriptor_ = nullptr;
 const ::proto::MessageReflection* TableField_reflection_ = nullptr;
-const ::proto::MessageDescriptor* TableSchema_descriptor_ = nullptr;
-const ::proto::MessageReflection* TableSchema_reflection_ = nullptr;
+const ::proto::MessageDescriptor* TableInfo_descriptor_ = nullptr;
+const ::proto::MessageReflection* TableInfo_reflection_ = nullptr;
 const ::proto::MessageDescriptor* DatabaseCatalog_descriptor_ = nullptr;
 const ::proto::MessageReflection* DatabaseCatalog_reflection_ = nullptr;
 
@@ -27,9 +27,9 @@ void static_init_default_instances_home_hy_Desktop_Projects_DBMS_src_Database_Ca
     DB::TableField::default_instance_ = new DB::TableField();
     DB::TableField::default_instance_->InitAsDefaultInstance();
   }
-  if (DB::TableSchema::default_instance_ == nullptr) {
-    DB::TableSchema::default_instance_ = new DB::TableSchema();
-    DB::TableSchema::default_instance_->InitAsDefaultInstance();
+  if (DB::TableInfo::default_instance_ == nullptr) {
+    DB::TableInfo::default_instance_ = new DB::TableInfo();
+    DB::TableInfo::default_instance_->InitAsDefaultInstance();
   }
   if (DB::DatabaseCatalog::default_instance_ == nullptr) {
     DB::DatabaseCatalog::default_instance_ = new DB::DatabaseCatalog();
@@ -67,22 +67,22 @@ void static_init_home_hy_Desktop_Projects_DBMS_src_Database_Catalog() {
           PROTO_MESSAGE_FIELD_OFFSET(DB::TableField, has_bits_));
   ::proto::MessageFactory::RegisterGeneratedMessage(TableField_reflection_);
 
-  // static init for class TableSchema
-  static const int TableSchema_offsets_[3] = {
-    PROTO_MESSAGE_FIELD_OFFSET(DB::TableSchema, name_),
-    PROTO_MESSAGE_FIELD_OFFSET(DB::TableSchema, fields_),
-    PROTO_MESSAGE_FIELD_OFFSET(DB::TableSchema, primary_key_indexes_),
+  // static init for class TableInfo
+  static const int TableInfo_offsets_[3] = {
+    PROTO_MESSAGE_FIELD_OFFSET(DB::TableInfo, name_),
+    PROTO_MESSAGE_FIELD_OFFSET(DB::TableInfo, fields_),
+    PROTO_MESSAGE_FIELD_OFFSET(DB::TableInfo, primary_key_indexes_),
   };
-  TableSchema_descriptor_ = file_dscpt->FindMessageTypeByName("DB.TableSchema");
-  CHECK(TableSchema_descriptor_ != nullptr, 
-        "Can't find message descriptor for DB.TableSchema");
-  TableSchema_reflection_ = 
+  TableInfo_descriptor_ = file_dscpt->FindMessageTypeByName("DB.TableInfo");
+  CHECK(TableInfo_descriptor_ != nullptr, 
+        "Can't find message descriptor for DB.TableInfo");
+  TableInfo_reflection_ = 
       new ::proto::MessageReflection(
-          TableSchema_descriptor_,
-          DB::TableSchema::default_instance_,
-          TableSchema_offsets_,
-          PROTO_MESSAGE_FIELD_OFFSET(DB::TableSchema, has_bits_));
-  ::proto::MessageFactory::RegisterGeneratedMessage(TableSchema_reflection_);
+          TableInfo_descriptor_,
+          DB::TableInfo::default_instance_,
+          TableInfo_offsets_,
+          PROTO_MESSAGE_FIELD_OFFSET(DB::TableInfo, has_bits_));
+  ::proto::MessageFactory::RegisterGeneratedMessage(TableInfo_reflection_);
 
   // static init for class DatabaseCatalog
   static const int DatabaseCatalog_offsets_[2] = {
@@ -381,9 +381,9 @@ void TableField::clear_size() {
   has_bits_[0] &= (~0x10);
 }
 
-// ******************** TableSchema ******************** //
+// ******************** TableInfo ******************** //
 // constructor
-TableSchema::TableSchema() {
+TableInfo::TableInfo() {
   for (unsigned int i = 0; i < sizeof(has_bits_); i++) {
     has_bits_[i] = 0;
   }
@@ -391,33 +391,33 @@ TableSchema::TableSchema() {
 }
 
 // copy constructor
-TableSchema::TableSchema(const TableSchema& other) {
+TableInfo::TableInfo(const TableInfo& other) {
   CopyFrom(other);
 }
 
 // move constructor
-TableSchema::TableSchema(TableSchema&& other) {
+TableInfo::TableInfo(TableInfo&& other) {
   MoveFrom(std::move(other));
 }
 
 // copy assignment
-TableSchema& TableSchema::operator=(const TableSchema& other) {
+TableInfo& TableInfo::operator=(const TableInfo& other) {
   CopyFrom(other);
   return *this;
 }
 // move assignment
-TableSchema& TableSchema::operator=(TableSchema&& other) {
+TableInfo& TableInfo::operator=(TableInfo&& other) {
   MoveFrom(std::move(other));
   return *this;
 }
 
 // New()
-::proto::Message* TableSchema::New() const {
-  return reinterpret_cast<::proto::Message*>(new TableSchema());
+::proto::Message* TableInfo::New() const {
+  return reinterpret_cast<::proto::Message*>(new TableInfo());
 }
 
 // CopyFrom()
-void TableSchema::CopyFrom(const TableSchema& other) {
+void TableInfo::CopyFrom(const TableInfo& other) {
   name_ = other.name();
   for (const TableField* p: other.fields().GetElements()) {
     fields_.AddAllocated(new TableField(*p));
@@ -429,7 +429,7 @@ void TableSchema::CopyFrom(const TableSchema& other) {
 }
 
 // MoveFrom()
-void TableSchema::MoveFrom(TableSchema&& other) {
+void TableInfo::MoveFrom(TableInfo&& other) {
   for (unsigned int i = 0; i < sizeof(has_bits_); i++) {
     has_bits_[i] = other.has_bits_[i];
   }
@@ -442,7 +442,7 @@ void TableSchema::MoveFrom(TableSchema&& other) {
 }
 
 // Equals()
-bool TableSchema::Equals(const TableSchema& other) const {
+bool TableInfo::Equals(const TableInfo& other) const {
   for (unsigned int i = 0; i < sizeof(has_bits_); i++) {
     if (has_bits_[i] != other.has_bits_[i]) {
       return false;
@@ -465,19 +465,19 @@ bool TableSchema::Equals(const TableSchema& other) const {
 }
 
 // Serialize()
-::proto::SerializedMessage* TableSchema::Serialize() const {
-  return TableSchema_reflection_->Serialize(this);
+::proto::SerializedMessage* TableInfo::Serialize() const {
+  return TableInfo_reflection_->Serialize(this);
 }
 
 // DeSerialize()
-void TableSchema::DeSerialize(const char* buf, unsigned int size) {
-  TableSchema_reflection_->DeSerialize(this, buf, size);
+void TableInfo::DeSerialize(const char* buf, unsigned int size) {
+  TableInfo_reflection_->DeSerialize(this, buf, size);
 }
 
 // Print()
-void TableSchema::Print(int indent_num) const {
+void TableInfo::Print(int indent_num) const {
   PrintIndent(indent_num);
-  std::cout << "TableSchema " << "{" << std::endl;
+  std::cout << "TableInfo " << "{" << std::endl;
   if (has_name()) {
     PrintIndent(indent_num + 1);
     std::cout << "name: " << "\"" << name_ << "\"" << std::endl;
@@ -502,11 +502,11 @@ void TableSchema::Print(int indent_num) const {
 }
 
 // InitAsDefaultInstance()
-void TableSchema::InitAsDefaultInstance() {
+void TableInfo::InitAsDefaultInstance() {
 }
 
 // swapper
-void TableSchema::Swap(TableSchema* other) {
+void TableInfo::Swap(TableInfo* other) {
   // store has_bits
   char* buf = new char[2 * sizeof(has_bits_)];
   for (unsigned int i = 0; i < sizeof(has_bits_); i++) {
@@ -535,117 +535,117 @@ void TableSchema::Swap(TableSchema* other) {
 }
 
 // default_instance()
-const TableSchema& TableSchema::default_instance() {
+const TableInfo& TableInfo::default_instance() {
   if (default_instance_ == nullptr) {
     static_init_default_instances_home_hy_Desktop_Projects_DBMS_src_Database_Catalog();
   }
   return *default_instance_;
 }
 
-TableSchema* TableSchema::default_instance_ = nullptr;
+TableInfo* TableInfo::default_instance_ = nullptr;
 
-const ::proto::MessageDescriptor* TableSchema::GetDescriptor() const {
-  return TableSchema_descriptor_;
+const ::proto::MessageDescriptor* TableInfo::GetDescriptor() const {
+  return TableInfo_descriptor_;
 }
 
-const ::proto::MessageReflection* TableSchema::GetReflection() const {
-  return TableSchema_reflection_;
+const ::proto::MessageReflection* TableInfo::GetReflection() const {
+  return TableInfo_reflection_;
 }
 
 // destructor
-TableSchema::~TableSchema() {
+TableInfo::~TableInfo() {
 }
 
 // "name" = 1
-bool TableSchema::has_name() const {
+bool TableInfo::has_name() const {
   return (has_bits_[0] & 0x2) != 0;
 }
 
-const std::string& TableSchema::name() const {
+const std::string& TableInfo::name() const {
   return name_;
 }
 
-void TableSchema::set_name(const std::string& name) {
+void TableInfo::set_name(const std::string& name) {
   name_ = name;
   has_bits_[0] |= 0x2;
 }
 
-void TableSchema::set_name(const char* name) {
+void TableInfo::set_name(const char* name) {
   name_ = std::string(name);
   has_bits_[0] |= 0x2;
 }
 
-void TableSchema::set_name(const char* name, int size) {
+void TableInfo::set_name(const char* name, int size) {
   name_ = std::string(name, size);
   has_bits_[0] |= 0x2;
 }
 
-std::string TableSchema::mutable_name() {
+std::string TableInfo::mutable_name() {
   return name_;
 }
 
-void TableSchema::clear_name() {
+void TableInfo::clear_name() {
   name_ = "";
   has_bits_[0] &= (~0x2);
 }
 
 // "fields" = 2
-int TableSchema::fields_size() const {
+int TableInfo::fields_size() const {
   return fields_.size();
 }
 
-const TableField& TableSchema::fields(int index) const {
+const TableField& TableInfo::fields(int index) const {
   return fields_.Get(index);
 }
 
-TableField* TableSchema::add_fields() {
+TableField* TableInfo::add_fields() {
   return fields_.Add();
 }
 
-TableField* TableSchema::mutable_fields(int index) {
+TableField* TableInfo::mutable_fields(int index) {
   return fields_.GetMutable(index);
 }
 
-void TableSchema::clear_fields() {
+void TableInfo::clear_fields() {
   fields_.Clear();
 }
 
-const ::proto::RepeatedPtrField<TableField>& TableSchema::fields() const {
+const ::proto::RepeatedPtrField<TableField>& TableInfo::fields() const {
   return fields_;
 }
 
-::proto::RepeatedPtrField<TableField>& TableSchema::mutable_fields() {
+::proto::RepeatedPtrField<TableField>& TableInfo::mutable_fields() {
   return fields_;
 }
 
 // "primary_key_indexes" = 3
-int TableSchema::primary_key_indexes_size() const {
+int TableInfo::primary_key_indexes_size() const {
   return primary_key_indexes_.size();
 }
 
-int TableSchema::primary_key_indexes(int index) const {
+int TableInfo::primary_key_indexes(int index) const {
   return primary_key_indexes_.Get(index);
 }
 
-void TableSchema::set_primary_key_indexes(int index, int value) {
+void TableInfo::set_primary_key_indexes(int index, int value) {
   if ((int)primary_key_indexes_.size() > index) {
     primary_key_indexes_.Set(index, value);
   }
 }
 
-void TableSchema::add_primary_key_indexes(int value) {
+void TableInfo::add_primary_key_indexes(int value) {
    primary_key_indexes_.Add(value);
 }
 
-void TableSchema::clear_primary_key_indexes() {
+void TableInfo::clear_primary_key_indexes() {
   primary_key_indexes_ .Clear();
 }
 
-const ::proto::RepeatedField<int>& TableSchema::primary_key_indexes() const {
+const ::proto::RepeatedField<int>& TableInfo::primary_key_indexes() const {
   return primary_key_indexes_;
 }
 
-::proto::RepeatedField<int>& TableSchema::mutable_primary_key_indexes() {
+::proto::RepeatedField<int>& TableInfo::mutable_primary_key_indexes() {
   return primary_key_indexes_;
 }
 
@@ -687,8 +687,8 @@ DatabaseCatalog& DatabaseCatalog::operator=(DatabaseCatalog&& other) {
 // CopyFrom()
 void DatabaseCatalog::CopyFrom(const DatabaseCatalog& other) {
   name_ = other.name();
-  for (const TableSchema* p: other.tables().GetElements()) {
-    tables_.AddAllocated(new TableSchema(*p));
+  for (const TableInfo* p: other.tables().GetElements()) {
+    tables_.AddAllocated(new TableInfo(*p));
   }
   for (unsigned int i = 0; i < sizeof(has_bits_); i++) {
     has_bits_[i] = other.has_bits_[i];
@@ -771,7 +771,7 @@ void DatabaseCatalog::Swap(DatabaseCatalog* other) {
   other->mutable_name() = std::move(name_);
   name_ = std::move(name_tmp__);
 
-  ::proto::RepeatedPtrField<TableSchema> tables_tmp__ = std::move(other->mutable_tables());
+  ::proto::RepeatedPtrField<TableInfo> tables_tmp__ = std::move(other->mutable_tables());
   other->mutable_tables() = std::move(tables_);
   tables_ = std::move(tables_tmp__);
 
@@ -843,15 +843,15 @@ int DatabaseCatalog::tables_size() const {
   return tables_.size();
 }
 
-const TableSchema& DatabaseCatalog::tables(int index) const {
+const TableInfo& DatabaseCatalog::tables(int index) const {
   return tables_.Get(index);
 }
 
-TableSchema* DatabaseCatalog::add_tables() {
+TableInfo* DatabaseCatalog::add_tables() {
   return tables_.Add();
 }
 
-TableSchema* DatabaseCatalog::mutable_tables(int index) {
+TableInfo* DatabaseCatalog::mutable_tables(int index) {
   return tables_.GetMutable(index);
 }
 
@@ -859,11 +859,11 @@ void DatabaseCatalog::clear_tables() {
   tables_.Clear();
 }
 
-const ::proto::RepeatedPtrField<TableSchema>& DatabaseCatalog::tables() const {
+const ::proto::RepeatedPtrField<TableInfo>& DatabaseCatalog::tables() const {
   return tables_;
 }
 
-::proto::RepeatedPtrField<TableSchema>& DatabaseCatalog::mutable_tables() {
+::proto::RepeatedPtrField<TableInfo>& DatabaseCatalog::mutable_tables() {
   return tables_;
 }
 
@@ -890,7 +890,7 @@ std::string GetProtoContent() {
 "  optional int32 size = 4;  // Only meaningful for CharArray - length limit.\n"
 "}\n"
 "\n"
-"message TableSchema {\n"
+"message TableInfo {\n"
 "  optional string name = 1;\n"
 "  repeated TableField fields = 2;\n"
 "\n"
@@ -901,7 +901,7 @@ std::string GetProtoContent() {
 "\n"
 "message DatabaseCatalog {\n"
 "  optional string name = 1;\n"
-"  repeated TableSchema tables = 2;\n"
+"  repeated TableInfo tables = 2;\n"
 "}\n"
 "\n"
 ;

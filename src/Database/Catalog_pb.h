@@ -92,24 +92,24 @@ class TableField: public ::proto::Message {
   friend void ::static_init_default_instances_home_hy_Desktop_Projects_DBMS_src_Database_Catalog();
 };
 
-class TableSchema: public ::proto::Message {
+class TableInfo: public ::proto::Message {
  public:
   // constructors and destructor //
-  TableSchema();
-  ~TableSchema();
-  TableSchema(const TableSchema& other);  // copy constructor
-  TableSchema(TableSchema&& other);  // move constructor
-  TableSchema& operator=(const TableSchema& other); // copy assignment
-  TableSchema& operator=(TableSchema&& other);  // move assignment
-  void Swap(TableSchema* other);  // Swap
+  TableInfo();
+  ~TableInfo();
+  TableInfo(const TableInfo& other);  // copy constructor
+  TableInfo(TableInfo&& other);  // move constructor
+  TableInfo& operator=(const TableInfo& other); // copy assignment
+  TableInfo& operator=(TableInfo&& other);  // move assignment
+  void Swap(TableInfo* other);  // Swap
   ::proto::Message* New() const override;  // New()
-  void CopyFrom(const TableSchema& other);  // CopyFrom()
-  void MoveFrom(TableSchema&& other);  // MoveFrom()
-  bool Equals(const TableSchema& other) const;  // Compare
+  void CopyFrom(const TableInfo& other);  // CopyFrom()
+  void MoveFrom(TableInfo&& other);  // MoveFrom()
+  bool Equals(const TableInfo& other) const;  // Compare
   // Serialize() and DeSerialize().
   ::proto::SerializedMessage* Serialize() const override;
   void DeSerialize(const char* buf, unsigned int size) override;
-  static const TableSchema& default_instance();
+  static const TableInfo& default_instance();
   const ::proto::MessageDescriptor* GetDescriptor() const override;
   const ::proto::MessageReflection* GetReflection() const override;
   void Print(int indent_num=0) const override;
@@ -154,7 +154,7 @@ class TableSchema: public ::proto::Message {
   // InitAsDefaultInstance()
   void InitAsDefaultInstance() override;
   // default instance
-  static TableSchema* default_instance_;
+  static TableInfo* default_instance_;
 
   friend void ::static_init_home_hy_Desktop_Projects_DBMS_src_Database_Catalog();
   friend void ::static_init_default_instances_home_hy_Desktop_Projects_DBMS_src_Database_Catalog();
@@ -195,19 +195,19 @@ class DatabaseCatalog: public ::proto::Message {
 
   // "tables" = 2
   int tables_size() const;
-  const TableSchema& tables(int index) const;
-  TableSchema* add_tables();
-  TableSchema* mutable_tables(int index);
+  const TableInfo& tables(int index) const;
+  TableInfo* add_tables();
+  TableInfo* mutable_tables(int index);
   void clear_tables();
-  const ::proto::RepeatedPtrField<TableSchema>& tables() const;
-  ::proto::RepeatedPtrField<TableSchema>& mutable_tables();
+  const ::proto::RepeatedPtrField<TableInfo>& tables() const;
+  ::proto::RepeatedPtrField<TableInfo>& mutable_tables();
 
  private:
   // has bits
   char has_bits_[1];
   // message fields
   std::string name_ = "";
-  ::proto::RepeatedPtrField<TableSchema> tables_;
+  ::proto::RepeatedPtrField<TableInfo> tables_;
 
   // InitAsDefaultInstance()
   void InitAsDefaultInstance() override;

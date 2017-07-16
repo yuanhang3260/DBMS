@@ -27,7 +27,7 @@ const int kNumRecordsSource = 1000;
 class BplusTreeTest: public UnitTest {
  private:
   std::vector<int> key_indexes_;
-  DB::TableSchema schema_;
+  DB::TableInfo schema_;
   DB::Table* table_;
   std::map<int, std::shared_ptr<DataRecord>> record_resource_;
 

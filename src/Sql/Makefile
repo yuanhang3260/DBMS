@@ -1,3 +1,4 @@
+MAKE=make
 CC=g++ -std=c++11
 CFLAGS=-Wall -Werror -O2 -g
 IFLAGS=-I../ -I../Public/ -I../../../ProtoBuf/src/
@@ -5,10 +6,13 @@ IFLAGS=-I../ -I../Public/ -I../../../ProtoBuf/src/
 HYLIB=../../../HyLib/libhy.a
 DBMSLIB=../../libDBMS.a
 
-all:
-	flex -o scanner.cc scanner.l
-	bison -o parser.cc parser.y
+DBMS_DIR=../../
+
+all: dbms
 	$(CC) $(CFLAGS) $(IFLAGS) main.cc scanner.cc parser.cc ../Query/Interpreter.cc $(DBMSLIB) $(HYLIB) -o a.out
+
+dbms:
+	+$(MAKE) -C $(DBMS_DIR)
 
 clean:
 	rm -rf a.out

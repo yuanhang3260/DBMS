@@ -18,7 +18,7 @@ class RecordTest: public UnitTest {
   std::map<int, std::shared_ptr<IndexRecord>> indexrecord_resource;
   std::map<int, std::shared_ptr<TreeNodeRecord>> treenoderecord_resource;
   const int kNumRecordsSource = 1000;
-  DB::TableSchema schema;
+  DB::TableInfo schema;
   std::vector<int> key_indexes = std::vector<int>{1, 0};
 
  public:

@@ -19,7 +19,7 @@ class InterpreterTest: public UnitTest {
  private:
   std::shared_ptr<RecordBase> data_record_;
   std::shared_ptr<RecordBase> index_record_;
-  DB::TableSchema schema_;
+  DB::TableInfo schema_;
   std::vector<int> key_fields_ = std::vector<int>{0, 2, 3};
 
   Interpreter interpreter_;

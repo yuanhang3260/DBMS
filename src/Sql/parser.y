@@ -18,6 +18,7 @@
 #include <stdint.h>
 
 #include "Base/BaseTypes.h"
+#include "Strings/Utils.h"
 
 #include "Query/Expression.h"
 
@@ -75,7 +76,9 @@ static Sql::Parser::symbol_type yylex(Sql::Scanner &scanner,
 // x and y are same as in above static function
 // #define yylex(scanner, driver) scanner.get_next_token()
 
-using namespace Sql;
+#define ABORT_PARSING  \
+    driver.node_.reset();  \
+    YYABORT;  \
 }
 
 %lex-param { Sql::Scanner &scanner }
@@ -170,8 +173,10 @@ expr: expr ADD expr {
         }
         $$ = std::shared_ptr<Query::ExprTreeNode>(
                 new Query::OperatorNode(Query::ADD, $1, $3));
-        // TODO: Check the OperatorNode is valid (Init() returns success);
         driver.node_ = $$;
+        if (!$$->valid()) {
+          YYABORT;
+        }
       }
     | expr SUB expr {
         if (driver.debug()) {
@@ -180,6 +185,9 @@ expr: expr ADD expr {
         $$ = std::shared_ptr<Query::ExprTreeNode>(
                 new Query::OperatorNode(Query::SUB, $1, $3));
         driver.node_ = $$;
+        if (!$$->valid()) {
+          YYABORT;
+        }
       }
     | expr MUL expr {
         if (driver.debug()) {
@@ -188,6 +196,9 @@ expr: expr ADD expr {
         $$ = std::shared_ptr<Query::ExprTreeNode>(
                 new Query::OperatorNode(Query::MUL, $1, $3));
         driver.node_ = $$;
+        if (!$$->valid()) {
+          YYABORT;
+        }
       }
     | expr DIV expr {
         if (driver.debug()) {
@@ -196,6 +207,9 @@ expr: expr ADD expr {
         $$ = std::shared_ptr<Query::ExprTreeNode>(
                 new Query::OperatorNode(Query::DIV, $1, $3));
         driver.node_ = $$;
+        if (!$$->valid()) {
+          YYABORT;
+        }
       }
     | expr MOD expr {
         if (driver.debug()) {
@@ -204,19 +218,39 @@ expr: expr ADD expr {
         $$ = std::shared_ptr<Query::ExprTreeNode>(
                 new Query::OperatorNode(Query::MOD, $1, $3));
         driver.node_ = $$;
+        if (!$$->valid()) {
+          YYABORT;
+        }
       }
     | SUB expr %prec UMINUS {
         // '-' as negative sign.
-        //
-        // TODO: It should only be applied to ConstValueNode and ColumnNode,
-        // and not meaningful STRING type. Add a check here and return syntax
-        // error.
         if (driver.debug()) {
           std::cout << "negative" << std::endl;
+        }
+
+        // Check node type. It can't be LOGICAL NODE.
+        if ($2->type() != Query::ExprTreeNode::CONST_VALUE &&
+            $2->type() != Query::ExprTreeNode::TABLE_COLUMN &&
+            $2->type() != Query::ExprTreeNode::OPERATOR) {
+          $2->set_valid(false);
+          $2->set_error_msg(Strings::StrCat(
+              "Parse error - Can't apply negative sign on node ",
+              Query::ExprTreeNode::NodeTypeStr($2->type())));
+        }
+        // Check node value type. STRING type is not acceptable.
+        if ($2->value().type == Query::STRING ||
+            $2->value().type == Query::UNKNOWN_VALUE_TYPE) {
+          $2->set_valid(false);
+          $2->set_error_msg(Strings::StrCat(
+              "Can use negative sign on type ",
+              Query::ValueTypeStr($2->value().type).c_str()));
         }
         $2->set_negative(true);
         $$ = $2;
         driver.node_ = $$;
+        if (!$$->valid()) {
+          YYABORT;
+        }
       }
     | expr COMPARATOR1 expr {
         if (driver.debug()) {
@@ -225,6 +259,9 @@ expr: expr ADD expr {
         $$ = std::shared_ptr<Query::ExprTreeNode>(
                 new Query::OperatorNode(Query::StrToOp($2), $1, $3));
         driver.node_ = $$;
+        if (!$$->valid()) {
+          YYABORT;
+        }
       }
     | expr COMPARATOR2 expr {
         if (driver.debug()) {
@@ -233,6 +270,9 @@ expr: expr ADD expr {
         $$ = std::shared_ptr<Query::ExprTreeNode>(
                 new Query::OperatorNode(Query::StrToOp($2), $1, $3));
         driver.node_ = $$;
+        if (!$$->valid()) {
+          YYABORT;
+        }
       }
     | expr AND expr {
 

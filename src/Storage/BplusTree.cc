@@ -300,7 +300,7 @@ RecordPage* BplusTree::root() {
   return nullptr;
 }
 
-const DB::TableSchema& BplusTree::schema() const {
+const DB::TableInfo& BplusTree::schema() const {
   return table_->schema();
 }
 

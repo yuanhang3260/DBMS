@@ -17,7 +17,7 @@ const int kNumRecordsSource = 10000;
 class MergeSortTest: public UnitTest {
  private:
   std::vector<std::shared_ptr<RecordBase>> record_resource_;
-  DB::TableSchema schema_;
+  DB::TableInfo schema_;
   std::vector<int> key_fields_ = std::vector<int>{0, 2, 3};
   std::unique_ptr<MergeSorter> sorter_;
 

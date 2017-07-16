@@ -19,12 +19,12 @@ class Table {
  public:
   Table() = default;
   Table(const std::string& db_name, const std::string& name,
-        const TableSchema* schema);
+        const TableInfo* schema);
 
   DEFINE_ACCESSOR(name, std::string);
   DEFINE_ACCESSOR(idata_indexes, std::vector<int>);
 
-  const DB::TableSchema& schema() const { return *schema_; }
+  const DB::TableInfo& schema() const { return *schema_; }
 
   std::string BplusTreeFileName(Storage::FileType file_type,
                                 std::vector<int> key_indexes);
@@ -69,7 +69,7 @@ class Table {
 
   std::string db_name_;
   std::string name_;
-  const DB::TableSchema* schema_;
+  const DB::TableInfo* schema_;
 
   // indexes of INDEX_DATA file.
   std::vector<int> idata_indexes_;

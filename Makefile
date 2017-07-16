@@ -19,6 +19,7 @@ OBJ_DIR=lib
 SQL_DIR = src/Sql
 
 OBJ = $(OBJ_DIR)/Database/Catalog_pb.o  \
+			$(OBJ_DIR)/Database/CatalogManager.o  \
       $(OBJ_DIR)/Database/Database.o  \
       $(OBJ_DIR)/Database/Table.o  \
       $(OBJ_DIR)/Database/Operation.o  \
@@ -66,14 +67,12 @@ TESTEXE = test/RecordPage_test.out  \
             $(OBJ_DIR)/Query  \
             $(OBJ_DIR)/Sql  \
 
-all: pre_build flexbison library
+all: pre_build sql_parser library
 
 pre_build:
-	mkdir -p data
-	mkdir -p test
-	mkdir -p $(LIB_DIRS)
+	mkdir -p data test $(LIB_DIRS)
 
-flexbison:
+sql_parser: $(SQL_DIR)/scanner.l $(SQL_DIR)/parser.y
 	flex -o $(SQL_DIR)/scanner.cc $(SQL_DIR)/scanner.l
 	bison -o $(SQL_DIR)/parser.cc $(SQL_DIR)/parser.y
 
