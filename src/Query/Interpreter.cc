@@ -4,10 +4,11 @@
 
 namespace Query {
 
-Interpreter::Interpreter() :
+Interpreter::Interpreter(DB::CatalogManager* catalog_m) :
   m_scanner(*this),
   m_parser(m_scanner, *this),
-  m_location(0) {}
+  m_location(0),
+  catalog_m_(catalog_m) {}
 
 bool Interpreter::parse() {
   m_location = 0;

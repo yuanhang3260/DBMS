@@ -18,6 +18,8 @@ enum RecordType {
   TREENODE_RECORD,
 };
 
+std::string RecordTypeStr(RecordType record_type);
+
 class RecordID {
  public:
   RecordID() = default;

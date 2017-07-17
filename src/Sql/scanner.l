@@ -57,7 +57,7 @@ OR          (OR|or)
 NOT         (NOT|not)
 
 /* Indentifier can be database name, table name or column name */
-IDENTIFIER  ([a-z0-9_]+(\.[a-z0-9_]+)*)
+IDENTIFIER  ([a-zA-Z0-9_]+(\.[a-z0-9_]+)*)
 
 /* Sql keywords */
 SELECT      (SELECT|select)

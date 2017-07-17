@@ -3,6 +3,8 @@
 
 #include <string>
 
+#include "Schema/SchemaType.h"
+
 namespace Query {
 
 // We use a different representation of value type enum other than
@@ -20,6 +22,10 @@ enum ValueType {
 };
 
 std::string ValueTypeStr(ValueType value_type);
+
+// Convert a schema field type to value type.
+ValueType FromSchemaType(Schema::FieldType field_type);
+
 
 enum OperatorType {
   UNKNOWN_OPERATOR,

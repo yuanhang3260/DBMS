@@ -50,6 +50,26 @@ std::string OpTypeStr(OperatorType value_type) {
   return "UNKNOWN_OPERATOR";
 }
 
+ValueType FromSchemaType(Schema::FieldType field_type) {
+  switch (field_type) {
+    case Schema::FieldType::INT:
+    case Schema::FieldType::LONGINT:
+      return INT64;
+    case Schema::FieldType::DOUBLE:
+      return DOUBLE;
+    case Schema::FieldType::BOOL:
+      return BOOL;
+    case Schema::FieldType::CHAR:
+      return CHAR;
+    case Schema::FieldType::STRING:
+    case Schema::FieldType::CHARARRAY:
+      return STRING;
+    default:
+      return UNKNOWN_VALUE_TYPE;
+  }
+  return UNKNOWN_VALUE_TYPE;
+}
+
 OperatorType StrToOp(const std::string& str) {
   if (str == "+") {
     return ADD;

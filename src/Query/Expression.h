@@ -6,8 +6,10 @@
 
 #include "Base/BaseTypes.h"
 
+#include "Database/CatalogManager.h"
 #include "Query/Common.h"
 #include "Schema/SchemaType.h"
+#include "Storage/Record.h"
 
 namespace Query {
 
@@ -34,6 +36,23 @@ struct NodeValue {
   NodeValue static BoolValue(bool v);
 
   std::string AsString() const;
+};
+
+struct EvaluateArgs {
+  EvaluateArgs(DB::CatalogManager* catalog_m_,
+               const Storage::RecordBase& record_,
+               Storage::RecordType record_type_,
+               const std::vector<int> field_indexes_) :
+      catalog_m(catalog_m_),
+      record(record_),
+      record_type(record_type_),
+      field_indexes(field_indexes_) {}
+
+  DB::CatalogManager* catalog_m;
+  const Storage::RecordBase& record;
+  Storage::RecordType record_type;
+  // If record is a index record, we need to know the index nubmers.
+  const std::vector<int> field_indexes; 
 };
 
 class ExprTreeNode {
@@ -70,7 +89,7 @@ class ExprTreeNode {
   const NodeValue& value() { return value_; }
   void set_value_type(ValueType value_type) { value_.type = value_type; }
 
-  // Careful! Usually this can only be applied to ConstValueNode and ColumnNode.
+  // Careful! This can only be applied to ConstValueNode and ColumnNode.
   void set_negative(bool neg);
 
   virtual void Print() const {}
@@ -80,8 +99,7 @@ class ExprTreeNode {
   std::string error_msg() const { return error_msg_; }
   void set_error_msg(const std::string error_msg) { error_msg_ = error_msg; }
 
-  // TODO: It should take table schemas and records.
-  virtual NodeValue Evaluate() = 0;
+  virtual NodeValue Evaluate(const EvaluateArgs& arg) = 0;
 
  protected:
   NodeValue value_;
@@ -104,30 +122,29 @@ class ConstValueNode : public ExprTreeNode {
 
   void Print() const override;
 
-  NodeValue Evaluate() override { return value_; }
+  NodeValue Evaluate(const EvaluateArgs& arg) override { return value_; }
 };
 
 
 class ColumnNode : public ExprTreeNode {
  public:
-  ColumnNode(const std::string& table, const std::string& column) :
-      table_(table),
-      column_(column) {}
-  ColumnNode(const std::string& name);
-
-  // TODO: Init Column node. It takes table schema and try to get the value
-  // type.
-  // void Init();
+  ColumnNode(const std::string& table, const std::string& column,
+             DB::CatalogManager* catalog_m);
+  ColumnNode(const std::string& name, DB::CatalogManager* catalog_m);
 
   Type type() const override { return ExprTreeNode::TABLE_COLUMN; }
 
   void Print() const override;
 
-  NodeValue Evaluate() override { return value_; }
+  NodeValue Evaluate(const EvaluateArgs& arg) override;
 
  private:
-  std::string table_;
-  std::string column_;
+  bool Init(DB::CatalogManager* catalog_m);
+
+  std::string table_name_;
+  std::string column_name_;
+  int32 field_index_ = -1;
+  Schema::FieldType field_type_ = Schema::FieldType::UNKNOWN_TYPE;
 };
 
 
@@ -141,7 +158,7 @@ class OperatorNode : public ExprTreeNode {
 
   void Print() const override;
 
-  NodeValue Evaluate() override;
+  NodeValue Evaluate(const EvaluateArgs& arg) override;
 
  private:
   // Init() does a lot of work:

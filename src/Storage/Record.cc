@@ -13,6 +13,20 @@
 
 namespace Storage {
 
+std::string RecordTypeStr(RecordType record_type) {
+  switch (record_type) {
+    case INDEX_RECORD:
+      return "INDEX_RECORD";
+    case DATA_RECORD:
+      return "DATA_RECORD";
+    case TREENODE_RECORD:
+      return "TREENODE_RECORD";
+    case UNKNOWN_RECORDTYPE:
+      return "UNKNOWN_RECORD_TYPE";
+  }
+  return "UNKNOWN_RECORDTYPE";
+}
+
 // ****************************** RecordID ********************************** //
 int RecordID::DumpToMem(byte* buf) const {
   if (!buf) {

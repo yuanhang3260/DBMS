@@ -6,9 +6,7 @@
 namespace DB {
 
 // ************************* CatalogManager ********************************* //
-CatalogManager::CatalogManager(DatabaseCatalog* catalog) : catalog_(catalog) {
-  Init();
-}
+CatalogManager::CatalogManager(DatabaseCatalog* catalog) : catalog_(catalog) {}
 
 bool CatalogManager::Init() {
   // Table name --> TableInfo map
@@ -41,14 +39,12 @@ CatalogManager::FindTableByName(const std::string& table_name) {
 }
 
 // ************************* TableInfoManager ******************************* //
-TableInfoManager::TableInfoManager(TableInfo* table) : table_info_(table) {
-  Init();
-}
+TableInfoManager::TableInfoManager(TableInfo* table) : table_info_(table) {}
 
 bool TableInfoManager::Init() {
   for (auto& field : table_info_->mutable_fields()) {
     if (fields_.find(field.name()) != fields_.end()) {
-      LogERROR("Duplicated field %s", field.name().c_str());
+      LogERROR("Duplicated field: %s", field.name().c_str());
       return false;
     }
 
@@ -99,8 +95,7 @@ std::vector<int32> TableInfoManager::primary_key_indexes() const {
 
 
 // ************************* TableFieldManager ****************************** //
-TableFieldManager::TableFieldManager(TableField* field) : field_(field) {
-}
+TableFieldManager::TableFieldManager(TableField* field) : field_(field) {}
 
 bool TableFieldManager::Init() { return true;}
 

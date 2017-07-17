@@ -162,8 +162,15 @@ expr: INTEGER {
         driver.node_ = $$;
       }
     | IDENTIFIER {
-        $$ = std::shared_ptr<Query::ExprTreeNode>(new Query::ColumnNode($1));
+        if (driver.debug()) {
+          std::cout << "Identifier: " << $1 << std::endl;
+        }
+        $$ = std::shared_ptr<Query::ExprTreeNode>(
+            new Query::ColumnNode($1, driver.catalog_m_));
         driver.node_ = $$;
+        if (!$$->valid()) {
+          YYABORT;
+        }
       }
     ;
 

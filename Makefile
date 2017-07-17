@@ -67,7 +67,7 @@ TESTEXE = test/RecordPage_test.out  \
             $(OBJ_DIR)/Query  \
             $(OBJ_DIR)/Sql  \
 
-all: pre_build sql_parser library
+all: pre_build library
 
 pre_build:
 	mkdir -p data test $(LIB_DIRS)
@@ -76,7 +76,7 @@ sql_parser: $(SQL_DIR)/scanner.l $(SQL_DIR)/parser.y
 	flex -o $(SQL_DIR)/scanner.cc $(SQL_DIR)/scanner.l
 	bison -o $(SQL_DIR)/parser.cc $(SQL_DIR)/parser.y
 
-library: $(OBJ)
+library: sql_parser $(OBJ)
 	ar cr libDBMS.a $(OBJ)
 
 test: $(TESTEXE)
