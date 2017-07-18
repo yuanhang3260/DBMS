@@ -5,11 +5,12 @@ IFLAGS=-I../ -I../Public/ -I../../../ProtoBuf/src/
 
 HYLIB=../../../HyLib/libhy.a
 DBMSLIB=../../libDBMS.a
+ProtoBufLib=../../../ProtoBuf/libfull.a
 
 DBMS_DIR=../../
 
 all: dbms
-	$(CC) $(CFLAGS) $(IFLAGS) main.cc scanner.cc parser.cc ../Query/Interpreter.cc $(DBMSLIB) $(HYLIB) -o a.out
+	$(CC) $(CFLAGS) $(IFLAGS) main.cc scanner.cc parser.cc ../Query/Interpreter.cc $(DBMSLIB) $(ProtoBufLib) $(HYLIB) -o a.out
 
 dbms:
 	+$(MAKE) -C $(DBMS_DIR)

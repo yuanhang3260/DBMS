@@ -251,12 +251,24 @@ class InterpreterTest: public UnitTest {
     std::cout << node->value().AsString() << std::endl;
     printf("\n");
 
+    expr = "Puppy.age < 7 AND NOT Puppy.adult";
+    std::cout << expr << std::endl;
+    AssertTrue(interpreter_->parse(expr));
+    node = interpreter_->GetCurrentNode();
+    AssertTrue(node->valid());
+
+    node->Evaluate(evalute_args);
+    AssertEqual(node->value().type, BOOL);
+    AssertTrue(node->value().v_bool);
+    std::cout << node->value().AsString() << std::endl;
+    printf("\n");
+
     // Test evaluation with index record.
     EvaluateArgs evalute_args2(catalog_m_.get(),
                                *index_record_, Storage::INDEX_RECORD,
                                key_fields_);
 
-    expr = "Puppy.id + 3 <= 5";
+    expr = "Puppy.id + 3 < 6";
     std::cout << expr << std::endl;
     AssertTrue(interpreter_->parse(expr));
     node = interpreter_->GetCurrentNode();
@@ -288,8 +300,8 @@ int main() {
   Query::InterpreterTest test;
   test.setup();
 
-  // test.Test_EvaluateConst();
-  // test.Test_ColumnNodeExpr();
+  //test.Test_EvaluateConst();
+  //test.Test_ColumnNodeExpr();
   test.Test_EvaluateSingleExpr();
 
   test.teardown();

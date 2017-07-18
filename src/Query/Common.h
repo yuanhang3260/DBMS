@@ -40,6 +40,9 @@ enum OperatorType {
   GT,  // >
   LE,  // <=
   GE,  // >=
+  AND,
+  OR,
+  NOT,
 };
 
 std::string OpTypeStr(OperatorType value_type);

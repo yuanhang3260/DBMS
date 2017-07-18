@@ -282,13 +282,37 @@ expr: expr ADD expr {
         }
       }
     | expr AND expr {
-
+        if (driver.debug()) {
+          std::cout << "AND" << std::endl;
+        }
+        $$ = std::shared_ptr<Query::ExprTreeNode>(
+                new Query::OperatorNode(Query::AND, $1, $3));
+        driver.node_ = $$;
+        if (!$$->valid()) {
+          YYABORT;
+        }
       }
     | expr OR expr {
-
+        if (driver.debug()) {
+          std::cout << "OR" << std::endl;
+        }
+        $$ = std::shared_ptr<Query::ExprTreeNode>(
+                new Query::OperatorNode(Query::OR, $1, $3));
+        driver.node_ = $$;
+        if (!$$->valid()) {
+          YYABORT;
+        }
       }
     | NOT expr {
-
+        if (driver.debug()) {
+          std::cout << "NOT" << std::endl;
+        }
+        $$ = std::shared_ptr<Query::ExprTreeNode>(
+                new Query::OperatorNode(Query::NOT, $2, nullptr));
+        driver.node_ = $$;
+        if (!$$->valid()) {
+          YYABORT;
+        }
       }
     | LEFTPAR expr RIGHTPAR {
       $$ = $2;

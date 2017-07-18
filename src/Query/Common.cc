@@ -44,6 +44,12 @@ std::string OpTypeStr(OperatorType value_type) {
       return "<=";
     case GE:
       return ">=";
+    case AND:
+      return "AND";
+    case OR:
+      return "OR";
+    case NOT:
+      return "NOT";
     case UNKNOWN_OPERATOR:
       return "UNKNOWN_OPERATOR";
   }

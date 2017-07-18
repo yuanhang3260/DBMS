@@ -62,7 +62,6 @@ class ExprTreeNode {
     CONST_VALUE,    // const value
     TABLE_COLUMN,   // table column indentifier.
     OPERATOR,       // e.g. person.age > 18;
-    LOGICAL,        // e.g. expr AND|OR exprt, NOT expr
   };
 
   ExprTreeNode() {}

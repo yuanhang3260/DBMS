@@ -2,10 +2,12 @@
 
 #include "Query/Interpreter.h"
 
-using namespace Sql;
-
 int main(int argc, char **argv) {
-  Query::Interpreter i;
+  // This evaluator only works for const values.
+  Storage::DataRecord record;
+  Query::EvaluateArgs evalute_args(nullptr, record, Storage::DATA_RECORD, {});
+
+  Query::Interpreter i(nullptr);
   i.set_debug(true);
 
   bool success = false;
@@ -19,7 +21,7 @@ int main(int argc, char **argv) {
   if (!node->valid()) {
     LogERROR("Invalid node - %s", node->error_msg().c_str());
   } else {
-    auto value = node->Evaluate();
+    auto value = node->Evaluate(evalute_args);
     std::cout << value.AsString() << std::endl;
   }
 

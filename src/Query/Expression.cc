@@ -70,8 +70,6 @@ std::string ExprTreeNode::NodeTypeStr(ExprTreeNode::Type node_type) {
       return "TABLE_COLUMN";
     case OPERATOR:
       return "OPERATOR";
-    case LOGICAL:
-      return "LOGICAL";
     case UNKNOWN_NODE_TYPE:
       return "UNKNOWN_NODE_TYPE";
   }
@@ -145,6 +143,7 @@ bool ColumnNode::Init(DB::CatalogManager* catalog_m) {
 }
 
 NodeValue ColumnNode::Evaluate(const EvaluateArgs& arg) {
+  // Make sure Init() has run successfully.
   SANITY_CHECK(valid_, "Invalid ColumnNode");
 
   SANITY_CHECK(field_index_ >= 0, "field index is not initialized");
@@ -166,7 +165,7 @@ NodeValue ColumnNode::Evaluate(const EvaluateArgs& arg) {
     }
     // Check if the field is in the index record. This should be assured by
     // the expression evaluator system. It should never pass in index records
-    // that don't contain all table column fields this expression requires.
+    // that don't contain all table column fields that the expression requires.
     SANITY_CHECK(pos > 0, Strings::StrCat("Can't find required field index ",
                                           std::to_string(field_index_),
                                           " for this index record"));
@@ -289,11 +288,17 @@ void OperatorNode::Print() const {
 
 bool OperatorNode::Init() {
   // Check left and right children exist.
-  if (!left_ || !right_) {
+  if (op_ != NOT && (!left_ || !right_)) {
     error_msg_ = Strings::StrCat((!left_) ? "left " : "",
                                  (!right_) ? "right " : "",
                                  "operand missing for opeartor ",
                                  OpTypeStr(op_));
+    valid_ = false;
+    return false;
+  }
+
+  if (op_ == NOT && !left_) {
+    error_msg_ = Strings::StrCat("operand missing for opeartor NOT");
     valid_ = false;
     return false;
   }
@@ -336,14 +341,21 @@ bool OperatorNode::Init() {
 
   // Check left and right children value type and try to derive result value
   // type. If failed, set error msg.
-  ValueType result_type = DeriveResultValueType(left_->value().type,
-                                                      right_->value().type);
+  ValueType left_value_type = left_? left_->value().type : UNKNOWN_VALUE_TYPE;
+  ValueType right_value_type =right_? right_->value().type : UNKNOWN_VALUE_TYPE;
+  ValueType result_type = DeriveResultValueType(left_value_type,
+                                                right_value_type);
   if (result_type == UNKNOWN_VALUE_TYPE) {
     valid_ = false;
-    error_msg_ = Strings::StrCat("Invalid operation: ",
-                                 ValueTypeStr(left_->value().type), " ",
-                                 OpTypeStr(op_), " ",
-                                 ValueTypeStr(right_->value().type));
+    if (op_ != NOT) {
+      error_msg_ = Strings::StrCat("Invalid operation: ",
+                                   ValueTypeStr(left_->value().type), " ",
+                                   OpTypeStr(op_), " ",
+                                   ValueTypeStr(right_->value().type));
+    } else {
+      error_msg_ = Strings::StrCat("Invalid operation: NOT ",
+                                   ValueTypeStr(left_->value().type));
+    }
     return false;
   }
   set_value_type(result_type);
@@ -414,6 +426,15 @@ ValueType OperatorNode::DeriveResultValueType(ValueType t1, ValueType t2) {
       } else {
         return UNKNOWN_VALUE_TYPE;
       }
+    case AND:
+    case OR:
+      if (types_match(BOOL, BOOL)) {
+        return BOOL;
+      }
+    case NOT:
+      if (t1 == BOOL) {
+        return BOOL;
+      }
     default:
       return UNKNOWN_VALUE_TYPE;
   }
@@ -426,8 +447,8 @@ ValueType OperatorNode::DeriveResultValueType(ValueType t1, ValueType t2) {
       value_.type = t_result;                                                            \
       value_.has_value_flags_ = 1;                                                       \
       value_.v_##t_result_name =                                                         \
-        (left_value.negative? -left_value.v_##t1_name : left_value.v_##t1_name) op       \
-        (right_value.negative? -right_value.v_##t2_name : right_value.v_##t2_name);      \
+        ((left_value.negative? -left_value.v_##t1_name : left_value.v_##t1_name) op      \
+         (right_value.negative? -right_value.v_##t2_name : right_value.v_##t2_name));    \
     }                                                                                    \
 
 #define PRODUCE_RESULT_VALUE_2(t1, t2, t_result, t1_name, t2_name, t_result_name, op)    \
@@ -436,24 +457,22 @@ ValueType OperatorNode::DeriveResultValueType(ValueType t1, ValueType t2) {
       value_.type = t_result;                                                            \
       value_.has_value_flags_ = 1;                                                       \
       value_.v_##t_result_name =                                                         \
-        (left_value.negative? -left_value.v_##t2_name : left_value.v_##t2_name) op       \
-        (right_value.negative? -right_value.v_##t1_name : right_value.v_##t1_name);      \
+        ((left_value.negative? -left_value.v_##t2_name : left_value.v_##t2_name) op      \
+         (right_value.negative? -right_value.v_##t1_name : right_value.v_##t1_name));    \
     }                                                                                    \
 
 #define PRODUCE_STRING_OP_RESULT(op)                            \
-    value_.type = BOOL;                                         \
-    value_.has_value_flags_ = 1;                                \
-    value_.v_bool = left_value.v_str op right_value.v_str;      \
+    if (types_match(STRING, STRING)) {                          \
+      value_.type = BOOL;                                       \
+      value_.has_value_flags_ = 1;                              \
+      value_.v_bool = left_value.v_str op right_value.v_str;    \
+    }                                                           \
 
 NodeValue OperatorNode::Evaluate(const EvaluateArgs& arg) {
   SANITY_CHECK(valid_, "Invalid OperatorNode");
-  SANITY_CHECK(left_ && right_, "left/right child missing for OperatorNode");
 
-  NodeValue left_value = left_->Evaluate(arg);
-  NodeValue right_value = right_->Evaluate(arg);
-  SANITY_CHECK(left_value.type != UNKNOWN_VALUE_TYPE &&
-               right_value.type != UNKNOWN_VALUE_TYPE,
-               "Invalid child node value");
+  NodeValue left_value = left_? left_->Evaluate(arg) : NodeValue();
+  NodeValue right_value = right_? right_->Evaluate(arg) : NodeValue();
 
   auto types_match = [&] (ValueType type_1, ValueType type_2) {
     if (left_value.type == type_1 && right_value.type == type_2) {
@@ -552,6 +571,19 @@ NodeValue OperatorNode::Evaluate(const EvaluateArgs& arg) {
       PRODUCE_RESULT_VALUE_1(DOUBLE, DOUBLE, BOOL, double, double, bool, >=)
       PRODUCE_STRING_OP_RESULT(>=)
       PRODUCE_RESULT_VALUE_1(CHAR, CHAR, BOOL, char, char, bool, >=)
+      break;
+    case AND:
+      PRODUCE_RESULT_VALUE_1(BOOL, BOOL, BOOL, bool, bool, bool, &&)
+      break;
+    case OR:
+      PRODUCE_RESULT_VALUE_1(BOOL, BOOL, BOOL, bool, bool, bool, ||)
+      break;
+    case NOT:
+      if (left_value.type == BOOL) {
+        value_.type = BOOL;
+        value_.has_value_flags_ = 1;
+        value_.v_bool = !left_value.v_bool;
+      }
       break;
     default:
       LogFATAL("Invalid operator");
