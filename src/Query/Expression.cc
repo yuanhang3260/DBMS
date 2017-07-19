@@ -98,10 +98,17 @@ ColumnNode::ColumnNode(const std::string& table, const std::string& column,
   Init(catalog_m);
 }
 
-ColumnNode::ColumnNode(const std::string& name, DB::CatalogManager* catalog_m) {
-  // TODO: Default table name should be set in FROM statement. 
+ColumnNode::ColumnNode(const std::string& name, DB::CatalogManager* catalog_m,
+                       const std::string& default_table) {
   auto re = Strings::Split(name, ".");
   if (re.size() == 1) {
+    if (default_table.empty()) {
+      valid_ = false;
+      error_msg_ = Strings::StrCat("Ambiguous column \"", name, "\"",
+                                   ", table name needed.");
+      return;
+    }
+    table_name_ = default_table;
     column_name_ = re.at(0);
   } else if (re.size() == 2) {
     table_name_ = re.at(0);
@@ -119,18 +126,22 @@ void ColumnNode::Print() const {
 }
 
 bool ColumnNode::Init(DB::CatalogManager* catalog_m) {
+  if (!valid_) {
+    return false;
+  }
+
   auto table_m_ = catalog_m->FindTableByName(table_name_);
   if (table_m_ == nullptr) {
     valid_ = false;
-    error_msg_ = Strings::StrCat("Couldn't find table ", table_name_);
+    error_msg_ = Strings::StrCat("Couldn't find table \"", table_name_, "\"");
     return false;
   }
 
   auto field_m = table_m_->FindFieldByName(column_name_);
   if (field_m == nullptr) {
     valid_ = false;
-    error_msg_ = Strings::StrCat("Couldn't find column ", column_name_,
-                                 " in table ", table_name_);
+    error_msg_ = Strings::StrCat("Couldn't find column \"", column_name_,
+                                 "\" in table \"", table_name_, "\"");
     return false;
   }
 
@@ -142,13 +153,15 @@ bool ColumnNode::Init(DB::CatalogManager* catalog_m) {
   return true;
 }
 
-NodeValue ColumnNode::Evaluate(const EvaluateArgs& arg) {
+NodeValue ColumnNode::Evaluate(const EvaluateArgs& arg) const {
   // Make sure Init() has run successfully.
   SANITY_CHECK(valid_, "Invalid ColumnNode");
 
   SANITY_CHECK(field_index_ >= 0, "field index is not initialized");
   SANITY_CHECK(field_type_ != Schema::FieldType::UNKNOWN_TYPE,
                "field type is not initialized");
+
+  NodeValue value = value_;
 
   // Find the field from record.
   const auto& fields = arg.record.fields();
@@ -184,93 +197,93 @@ NodeValue ColumnNode::Evaluate(const EvaluateArgs& arg) {
                                    Schema::FieldTypeStr(field->type())));
       // This check is optional - just want to make sure FromSchemaType()
       // works correctly.
-      SANITY_CHECK(value_.type == INT64,
+      SANITY_CHECK(value.type == INT64,
                    Strings::StrCat("Field type INT mismatch with "
                                    "ColumnNode value type ",
                                    ValueTypeStr(value_.type)));
-      value_.v_int64 = dynamic_cast<const Schema::IntField*>(field)->value();
-      if (value_.negative) {
-        value_.v_int64 = -value_.v_int64;
+      value.v_int64 = dynamic_cast<const Schema::IntField*>(field)->value();
+      if (value.negative) {
+        value.v_int64 = -value.v_int64;
       }
       break;
     case Schema::FieldType::LONGINT:
       SANITY_CHECK(field->type() == Schema::FieldType::LONGINT,
                    Strings::StrCat("Field type LONGINT mismatch with actual: ",
                                    Schema::FieldTypeStr(field->type())));
-      SANITY_CHECK(value_.type == INT64,
+      SANITY_CHECK(value.type == INT64,
                    Strings::StrCat("Field type LONGINT mismatch with "
                                    "ColumnNode value type ",
-                                   ValueTypeStr(value_.type)));
-      value_.v_int64 =dynamic_cast<const Schema::LongIntField*>(field)->value();
-      if (value_.negative) {
-        value_.v_int64 = -value_.v_int64;
+                                   ValueTypeStr(value.type)));
+      value.v_int64 =dynamic_cast<const Schema::LongIntField*>(field)->value();
+      if (value.negative) {
+        value.v_int64 = -value.v_int64;
       }
       break;
     case Schema::FieldType::DOUBLE:
       SANITY_CHECK(field->type() == Schema::FieldType::DOUBLE,
                    Strings::StrCat("Field type DOUBLE mismatch with actual: ",
                                    Schema::FieldTypeStr(field->type())));
-      SANITY_CHECK(value_.type == DOUBLE,
+      SANITY_CHECK(value.type == DOUBLE,
                    Strings::StrCat("Field type DOUBLE mismatch with "
                                    "ColumnNode value type ",
-                                   ValueTypeStr(value_.type)));
-      value_.v_double =dynamic_cast<const Schema::DoubleField*>(field)->value();
-      if (value_.negative) {
-        value_.v_double = -value_.v_double;
+                                   ValueTypeStr(value.type)));
+      value.v_double =dynamic_cast<const Schema::DoubleField*>(field)->value();
+      if (value.negative) {
+        value.v_double = -value.v_double;
       }
       break;
     case Schema::FieldType::CHAR:
       SANITY_CHECK(field->type() == Schema::FieldType::CHAR,
                    Strings::StrCat("Field type CHAR mismatch with actual: ",
                                    Schema::FieldTypeStr(field->type())));
-      SANITY_CHECK(value_.type == CHAR,
+      SANITY_CHECK(value.type == CHAR,
                    Strings::StrCat("Field type CHAR mismatch with "
                                    "ColumnNode value type ",
-                                   ValueTypeStr(value_.type)));
-      value_.v_char = dynamic_cast<const Schema::CharField*>(field)->value();
-      if (value_.negative) {
-        value_.v_char = -value_.v_char;
+                                   ValueTypeStr(value.type)));
+      value.v_char = dynamic_cast<const Schema::CharField*>(field)->value();
+      if (value.negative) {
+        value.v_char = -value.v_char;
       }
       break;
     case Schema::FieldType::BOOL:
       SANITY_CHECK(field->type() == Schema::FieldType::BOOL,
                    Strings::StrCat("Field type BOOL mismatch with actual: ",
                                    Schema::FieldTypeStr(field->type())));
-      SANITY_CHECK(value_.type == BOOL,
+      SANITY_CHECK(value.type == BOOL,
                    Strings::StrCat("Field type BOOL mismatch with "
                                    "ColumnNode value type ",
-                                   ValueTypeStr(value_.type)));
-      value_.v_bool = dynamic_cast<const Schema::BoolField*>(field)->value();
-      if (value_.negative) {
-        value_.v_bool = -value_.v_bool;
+                                   ValueTypeStr(value.type)));
+      value.v_bool = dynamic_cast<const Schema::BoolField*>(field)->value();
+      if (value.negative) {
+        value.v_bool = -value.v_bool;
       }
       break;
     case Schema::FieldType::STRING:
       SANITY_CHECK(field->type() == Schema::FieldType::STRING,
                    Strings::StrCat("Field type STRING mismatch with actual: ",
                                    Schema::FieldTypeStr(field->type())));
-      SANITY_CHECK(value_.type == STRING,
+      SANITY_CHECK(value.type == STRING,
                    Strings::StrCat("Field type STRING mismatch with "
                                    "ColumnNode value type ",
-                                   ValueTypeStr(value_.type)));
-      value_.v_str = dynamic_cast<const Schema::StringField*>(field)->value();
+                                   ValueTypeStr(value.type)));
+      value.v_str = dynamic_cast<const Schema::StringField*>(field)->value();
       break;
     case Schema::FieldType::CHARARRAY:
       SANITY_CHECK(field->type() == Schema::FieldType::CHARARRAY,
                    Strings::StrCat("Field type CHARARRAY mismatch with actual:",
                                    " ", Schema::FieldTypeStr(field->type())));
-      SANITY_CHECK(value_.type == STRING,
+      SANITY_CHECK(value.type == STRING,
                    Strings::StrCat("Field type CHARARRAY mismatch with "
                                    "ColumnNode value type ",
-                                   ValueTypeStr(value_.type)));
-      value_.v_str =
+                                   ValueTypeStr(value.type)));
+      value.v_str =
           dynamic_cast<const Schema::CharArrayField*>(field)->AsString();
       break;
     default:
       break;
   }
 
-  return value_;
+  return value;
 }
 
 // *************************** OperatorNode ********************************* //
@@ -444,9 +457,9 @@ ValueType OperatorNode::DeriveResultValueType(ValueType t1, ValueType t2) {
 // This is silly, but I can't find a better way to eliminate duplicated code.
 #define PRODUCE_RESULT_VALUE_1(t1, t2, t_result, t1_name, t2_name, t_result_name, op)    \
     if (types_match(t1, t2)) {                                                           \
-      value_.type = t_result;                                                            \
-      value_.has_value_flags_ = 1;                                                       \
-      value_.v_##t_result_name =                                                         \
+      value.type = t_result;                                                             \
+      value.has_value_flags_ = 1;                                                        \
+      value.v_##t_result_name =                                                          \
         ((left_value.negative? -left_value.v_##t1_name : left_value.v_##t1_name) op      \
          (right_value.negative? -right_value.v_##t2_name : right_value.v_##t2_name));    \
     }                                                                                    \
@@ -454,25 +467,26 @@ ValueType OperatorNode::DeriveResultValueType(ValueType t1, ValueType t2) {
 #define PRODUCE_RESULT_VALUE_2(t1, t2, t_result, t1_name, t2_name, t_result_name, op)    \
     PRODUCE_RESULT_VALUE_1(t1, t2, t_result, t1_name, t2_name, t_result_name, op)        \
     if (types_match(t2, t1)) {                                                           \
-      value_.type = t_result;                                                            \
-      value_.has_value_flags_ = 1;                                                       \
-      value_.v_##t_result_name =                                                         \
+      value.type = t_result;                                                             \
+      value.has_value_flags_ = 1;                                                        \
+      value.v_##t_result_name =                                                          \
         ((left_value.negative? -left_value.v_##t2_name : left_value.v_##t2_name) op      \
          (right_value.negative? -right_value.v_##t1_name : right_value.v_##t1_name));    \
     }                                                                                    \
 
 #define PRODUCE_STRING_OP_RESULT(op)                            \
     if (types_match(STRING, STRING)) {                          \
-      value_.type = BOOL;                                       \
-      value_.has_value_flags_ = 1;                              \
-      value_.v_bool = left_value.v_str op right_value.v_str;    \
+      value.type = BOOL;                                        \
+      value.has_value_flags_ = 1;                               \
+      value.v_bool = left_value.v_str op right_value.v_str;     \
     }                                                           \
 
-NodeValue OperatorNode::Evaluate(const EvaluateArgs& arg) {
+NodeValue OperatorNode::Evaluate(const EvaluateArgs& arg) const {
   SANITY_CHECK(valid_, "Invalid OperatorNode");
 
   NodeValue left_value = left_? left_->Evaluate(arg) : NodeValue();
   NodeValue right_value = right_? right_->Evaluate(arg) : NodeValue();
+  NodeValue value = value_;
 
   auto types_match = [&] (ValueType type_1, ValueType type_2) {
     if (left_value.type == type_1 && right_value.type == type_2) {
@@ -487,8 +501,9 @@ NodeValue OperatorNode::Evaluate(const EvaluateArgs& arg) {
       // Example of this macro expansion:
       //
       // if (types_match(INT64, INT64)) {
-      //   value_.type = INT64;
-      //   value_.v_int64 = left_value.v_int64 + right_value.v_int64;
+      //   value.type = INT64;
+      //   value.has_value_flags_ = 1;
+      //   value.v_int64 = left_value.v_int64 + right_value.v_int64;
       // }
       PRODUCE_RESULT_VALUE_1(INT64, INT64, INT64, int64, int64, int64, +)
       PRODUCE_RESULT_VALUE_2(INT64, DOUBLE, DOUBLE, int64, double, double, +)
@@ -580,9 +595,9 @@ NodeValue OperatorNode::Evaluate(const EvaluateArgs& arg) {
       break;
     case NOT:
       if (left_value.type == BOOL) {
-        value_.type = BOOL;
-        value_.has_value_flags_ = 1;
-        value_.v_bool = !left_value.v_bool;
+        value.type = BOOL;
+        value.has_value_flags_ = 1;
+        value.v_bool = !left_value.v_bool;
       }
       break;
     default:
@@ -590,9 +605,9 @@ NodeValue OperatorNode::Evaluate(const EvaluateArgs& arg) {
       break;
   }
 
-  SANITY_CHECK(value_.has_value(),
+  SANITY_CHECK(value.has_value(),
                "Node value is not computed. Missing some type operation?");
-  return value_;
+  return value;
 }
 
 }  // namespace Query

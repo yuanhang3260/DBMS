@@ -30,10 +30,11 @@ class InterpreterTest: public UnitTest {
  public:
   void InitCatalog() {
     catalog_.set_name(kDBName);
-    auto table_info = catalog_.add_tables();
 
-    // Create a table.
+    // Create a table Puppy.
+    auto table_info = catalog_.add_tables();
     table_info->set_name(kTableName);
+
     // Add string type
     DB::TableField* field = table_info->add_fields();
     field->set_name("name");
@@ -65,6 +66,21 @@ class InterpreterTest: public UnitTest {
     field->set_index(5);
     field->set_type(DB::TableField::CHARARRAY);
     field->set_size(20);
+
+    // Create a table Host.
+    table_info = catalog_.add_tables();
+    table_info->set_name("Host");
+
+    // Add string type
+    field = table_info->add_fields();
+    field->set_name("name");
+    field->set_index(0);
+    field->set_type(DB::TableField::STRING);
+    // Add long int type
+    field = table_info->add_fields();
+    field->set_name("id");
+    field->set_index(1);  // primary key
+    field->set_type(DB::TableField::LONGINT);
 
     catalog_m_ = std::make_shared<DB::CatalogManager>(&catalog_);
     AssertTrue(catalog_m_->Init());
@@ -115,10 +131,10 @@ class InterpreterTest: public UnitTest {
     AssertTrue(interpreter_->parse(expr));
     auto node = interpreter_->GetCurrentNode();
     AssertTrue(node->valid());
-    node->Evaluate(evalute_args);
-    AssertEqual(node->value().type, BOOL);
-    AssertFalse(node->value().v_bool);
-    std::cout << node->value().AsString() << std::endl;
+    auto result = node->Evaluate(evalute_args);
+    AssertEqual(result.type, BOOL);
+    AssertFalse(result.v_bool);
+    std::cout << result.AsString() << std::endl;
     printf("\n");
 
     expr = "1 + 2 * -3";
@@ -126,10 +142,10 @@ class InterpreterTest: public UnitTest {
     AssertTrue(interpreter_->parse(expr));
     node = interpreter_->GetCurrentNode();
     AssertTrue(node->valid());
-    node->Evaluate(evalute_args);
-    AssertEqual(node->value().type, INT64);
-    AssertEqual(-5, node->value().v_int64);
-    std::cout << node->value().AsString() << std::endl;
+    result = node->Evaluate(evalute_args);
+    AssertEqual(result.type, INT64);
+    AssertEqual(-5, result.v_int64);
+    std::cout << result.AsString() << std::endl;
     printf("\n");
 
     expr = "(-1.5 + 3 )* 2";
@@ -137,10 +153,10 @@ class InterpreterTest: public UnitTest {
     AssertTrue(interpreter_->parse(expr));
     node = interpreter_->GetCurrentNode();
     AssertTrue(node->valid());
-    node->Evaluate(evalute_args);
-    AssertEqual(node->value().type, DOUBLE);
-    AssertFloatEqual(3.0, node->value().v_double);
-    std::cout << node->value().AsString() << std::endl;
+    result = node->Evaluate(evalute_args);
+    AssertEqual(result.type, DOUBLE);
+    AssertFloatEqual(3.0, result.v_double);
+    std::cout << result.AsString() << std::endl;
     printf("\n");
 
     expr = "1 + 2 * -3 - 4/0.5 <= 8.0";
@@ -148,10 +164,10 @@ class InterpreterTest: public UnitTest {
     AssertTrue(interpreter_->parse(expr));
     node = interpreter_->GetCurrentNode();
     AssertTrue(node->valid());
-    node->Evaluate(evalute_args);
-    AssertEqual(node->value().type, BOOL);
-    AssertTrue(node->value().v_bool);
-    std::cout << node->value().AsString() << std::endl;
+    result = node->Evaluate(evalute_args);
+    AssertEqual(result.type, BOOL);
+    AssertTrue(result.v_bool);
+    std::cout << result.AsString() << std::endl;
     printf("\n");
   }
 
@@ -221,10 +237,10 @@ class InterpreterTest: public UnitTest {
     auto node = interpreter_->GetCurrentNode();
     AssertTrue(node->valid());
 
-    node->Evaluate(evalute_args);
-    AssertEqual(node->value().type, DOUBLE);
-    AssertFloatEqual(node->value().v_double, 0.5);
-    std::cout << node->value().AsString() << std::endl;
+    auto result = node->Evaluate(evalute_args);
+    AssertEqual(result.type, DOUBLE);
+    AssertFloatEqual(result.v_double, 0.5);
+    std::cout << result.AsString() << std::endl;
     printf("\n");
 
     expr = "Puppy.name = \"snoopy\"";
@@ -233,10 +249,10 @@ class InterpreterTest: public UnitTest {
     node = interpreter_->GetCurrentNode();
     AssertTrue(node->valid());
 
-    node->Evaluate(evalute_args);
-    AssertEqual(node->value().type, BOOL);
-    AssertTrue(node->value().v_bool);
-    std::cout << node->value().AsString() << std::endl;
+    result = node->Evaluate(evalute_args);
+    AssertEqual(result.type, BOOL);
+    AssertTrue(result.v_bool);
+    std::cout << result.AsString() << std::endl;
     printf("\n");
 
     expr = "Puppy.signature != \"smart dog :)\"";
@@ -245,10 +261,10 @@ class InterpreterTest: public UnitTest {
     node = interpreter_->GetCurrentNode();
     AssertTrue(node->valid());
 
-    node->Evaluate(evalute_args);
-    AssertEqual(node->value().type, BOOL);
-    AssertTrue(node->value().v_bool);
-    std::cout << node->value().AsString() << std::endl;
+    result = node->Evaluate(evalute_args);
+    AssertEqual(result.type, BOOL);
+    AssertTrue(result.v_bool);
+    std::cout << result.AsString() << std::endl;
     printf("\n");
 
     expr = "Puppy.age < 7 AND NOT Puppy.adult";
@@ -257,10 +273,10 @@ class InterpreterTest: public UnitTest {
     node = interpreter_->GetCurrentNode();
     AssertTrue(node->valid());
 
-    node->Evaluate(evalute_args);
-    AssertEqual(node->value().type, BOOL);
-    AssertTrue(node->value().v_bool);
-    std::cout << node->value().AsString() << std::endl;
+    result = node->Evaluate(evalute_args);
+    AssertEqual(result.type, BOOL);
+    AssertTrue(result.v_bool);
+    std::cout << result.AsString() << std::endl;
     printf("\n");
 
     // Test evaluation with index record.
@@ -274,10 +290,10 @@ class InterpreterTest: public UnitTest {
     node = interpreter_->GetCurrentNode();
     AssertTrue(node->valid());
 
-    node->Evaluate(evalute_args2);
-    AssertEqual(node->value().type, BOOL);
-    AssertTrue(node->value().v_bool);
-    std::cout << node->value().AsString() << std::endl;
+    result = node->Evaluate(evalute_args2);
+    AssertEqual(result.type, BOOL);
+    AssertTrue(result.v_bool);
+    std::cout << result.AsString() << std::endl;
     printf("\n");
 
     expr = "-Puppy.weight";
@@ -286,10 +302,39 @@ class InterpreterTest: public UnitTest {
     node = interpreter_->GetCurrentNode();
     AssertTrue(node->valid());
 
-    node->Evaluate(evalute_args2);
-    AssertEqual(node->value().type, DOUBLE);
-    AssertFloatEqual(node->value().v_double, -0.5);
-    std::cout << node->value().AsString() << std::endl;
+    result = node->Evaluate(evalute_args2);
+    AssertEqual(result.type, DOUBLE);
+    AssertFloatEqual(result.v_double, -0.5);
+    std::cout << result.AsString() << std::endl;
+    printf("\n");
+  }
+
+  void Test_SelectQuery() {
+    std::string expr;
+
+    expr = "SELECT Puppy.name, age FROM Puppy WHERE Puppy.weight > 0.3";
+    std::cout << expr << std::endl;
+    AssertTrue(interpreter_->parse(expr));
+    auto node = interpreter_->GetCurrentNode();
+    AssertTrue(node->valid());
+    interpreter_->reset();
+    printf("\n");
+
+    expr = "SELECT age FROM Puppy WHERE name = \"snoopy\"";
+    std::cout << expr << std::endl;
+    AssertTrue(interpreter_->parse(expr));
+    node = interpreter_->GetCurrentNode();
+    AssertTrue(node->valid());
+    interpreter_->reset();
+    printf("\n");
+
+    expr = "SELECT age FROM Puppy, Host WHERE name = \"hy\"";
+    std::cout << expr << std::endl;
+    AssertFalse(interpreter_->parse(expr));
+    node = interpreter_->GetCurrentNode();
+    AssertFalse(node->valid());
+    std::cout << node->error_msg() << std::endl;
+    interpreter_->reset();
     printf("\n");
   }
 };
@@ -302,7 +347,8 @@ int main() {
 
   //test.Test_EvaluateConst();
   //test.Test_ColumnNodeExpr();
-  test.Test_EvaluateSingleExpr();
+  //test.Test_EvaluateSingleExpr();
+  test.Test_SelectQuery();
 
   test.teardown();
 

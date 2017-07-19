@@ -5,6 +5,7 @@
 #include <string>
 
 #include "Base/BaseTypes.h"
+#include "Base/MacroUtils.h"
 
 #include "Database/CatalogManager.h"
 #include "Query/Common.h"
@@ -98,7 +99,7 @@ class ExprTreeNode {
   std::string error_msg() const { return error_msg_; }
   void set_error_msg(const std::string error_msg) { error_msg_ = error_msg; }
 
-  virtual NodeValue Evaluate(const EvaluateArgs& arg) = 0;
+  virtual NodeValue Evaluate(const EvaluateArgs& arg) const = 0;
 
  protected:
   NodeValue value_;
@@ -121,7 +122,7 @@ class ConstValueNode : public ExprTreeNode {
 
   void Print() const override;
 
-  NodeValue Evaluate(const EvaluateArgs& arg) override { return value_; }
+  NodeValue Evaluate(const EvaluateArgs& arg) const override { return value_; }
 };
 
 
@@ -129,13 +130,17 @@ class ColumnNode : public ExprTreeNode {
  public:
   ColumnNode(const std::string& table, const std::string& column,
              DB::CatalogManager* catalog_m);
-  ColumnNode(const std::string& name, DB::CatalogManager* catalog_m);
+  ColumnNode(const std::string& name,
+             DB::CatalogManager* catalog_m,
+             const std::string& default_table);
 
   Type type() const override { return ExprTreeNode::TABLE_COLUMN; }
+  DEFINE_ACCESSOR(table_name, std::string);
+  DEFINE_ACCESSOR(column_name, std::string);
 
   void Print() const override;
 
-  NodeValue Evaluate(const EvaluateArgs& arg) override;
+  NodeValue Evaluate(const EvaluateArgs& arg) const override;
 
  private:
   bool Init(DB::CatalogManager* catalog_m);
@@ -157,10 +162,11 @@ class OperatorNode : public ExprTreeNode {
 
   void Print() const override;
 
-  NodeValue Evaluate(const EvaluateArgs& arg) override;
+  NodeValue Evaluate(const EvaluateArgs& arg) const override;
 
  private:
-  // Init() does a lot of work:
+  // Init() does a lot of work to make sure the node is valid:
+  //
   //   1. Check binary operator must have two children nodes.
   //   2. Check children node type must be CONST_VALUE/TABLE_COLUMN/OPERATOR.
   //   3. Check children node value type and make sure they are meaningful for

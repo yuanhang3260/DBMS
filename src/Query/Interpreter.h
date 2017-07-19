@@ -36,6 +36,11 @@ class Interpreter {
   void switchInputStream(std::istream *is);
 
   std::shared_ptr<Query::ExprTreeNode> GetCurrentNode() { return node_; }
+  const std::vector<std::string>& table_list() const { return table_list_; }
+  const std::vector<std::string>& column_list() const { return column_list_; }
+
+  void AddTable(const std::string& table);
+  void AddColumn(const std::string& column);
 
   //This is needed so that Scanner and Parser can call some
   //methods that we want to keep hidden from the end user.
@@ -44,6 +49,7 @@ class Interpreter {
 
   bool debug() const { return debug_; }
   void set_debug(bool d) { debug_ = d; }
+  void reset();
 
  private:
   // Used internally by Scanner YY_USER_ACTION to update location indicator
@@ -59,6 +65,8 @@ class Interpreter {
   DB::CatalogManager* catalog_m_ = nullptr;
 
   std::shared_ptr<Query::ExprTreeNode> node_;
+  std::vector<std::string> table_list_;
+  std::vector<std::string> column_list_;
   bool debug_ = false;
 };
 

@@ -124,8 +124,9 @@ static Sql::Parser::symbol_type yylex(Sql::Scanner &scanner,
 
 %type<std::shared_ptr<Query::ExprTreeNode>> expr;
 
-%start expr
+%start query
 
+%left SELECT FROM WHERE
 %left OR;
 %left AND;
 %left NOT;
@@ -163,10 +164,14 @@ expr: INTEGER {
       }
     | IDENTIFIER {
         if (driver.debug()) {
-          std::cout << "Identifier: " << $1 << std::endl;
+          std::cout << "Column value: " << $1 << std::endl;
+        }
+        std::string default_table;
+        if (driver.table_list().size() == 1) {
+          default_table = driver.table_list().at(0);
         }
         $$ = std::shared_ptr<Query::ExprTreeNode>(
-            new Query::ColumnNode($1, driver.catalog_m_));
+            new Query::ColumnNode($1, driver.catalog_m_, default_table));
         driver.node_ = $$;
         if (!$$->valid()) {
           YYABORT;
@@ -319,6 +324,63 @@ expr: expr ADD expr {
       driver.node_ = $$;
     }
     ;
+
+// Query
+query: expr { /* For interpreter testing. DBMS should reject this "query". */ }
+    | select_query { /* nill */ }
+
+table_list: IDENTIFIER {
+      driver.AddTable($1);
+    }
+    | table_list COMMA IDENTIFIER  {
+      driver.AddTable($3);
+    }
+
+column_target: IDENTIFIER {
+      driver.AddColumn($1);
+    }
+    | MUL {
+      // I know this is wired. Here the * is a wildcard, not multiply symbol.
+      driver.AddColumn("*");
+    }
+
+column_list: column_target {
+      
+    }
+    | column_list COMMA column_target {
+
+    }
+
+// **************************** SELECT query ******************************** //
+select_query: select_stmt from_stmt opt_where_stmt {
+      if (driver.debug()) {
+        std::cout << "Query SELECT" << std::endl;
+      }
+    }
+
+// SELECT statement.
+select_stmt: SELECT column_list {
+      if (driver.debug()) {
+        std::cout << "SELECT - " << Strings::Join(driver.column_list(), ", ")
+                  << std::endl;
+      }
+    }
+
+// FROM statement.
+from_stmt: FROM table_list {
+      if (driver.debug()) {
+        std::cout << "FROM - " << Strings::Join(driver.table_list(), ", ")
+                  << std::endl;
+      }
+    }
+
+// WHERE statement.
+opt_where_stmt: { /* nill */ }
+    | WHERE expr {
+      if (driver.debug()) {
+        std::cout << "WHERE stmt parsed" << std::endl;
+      }
+    }
 
 %%
 
