@@ -128,7 +128,7 @@ class InterpreterTest: public UnitTest {
 
     expr = "1 != 1.0\n";
     std::cout << expr << std::endl;
-    AssertTrue(interpreter_->parse(expr));
+    AssertTrue(interpreter_->Parse(expr));
     auto node = interpreter_->GetCurrentNode();
     AssertTrue(node->valid());
     auto result = node->Evaluate(evalute_args);
@@ -139,7 +139,7 @@ class InterpreterTest: public UnitTest {
 
     expr = "1 + 2 * -3";
     std::cout << expr << std::endl;
-    AssertTrue(interpreter_->parse(expr));
+    AssertTrue(interpreter_->Parse(expr));
     node = interpreter_->GetCurrentNode();
     AssertTrue(node->valid());
     result = node->Evaluate(evalute_args);
@@ -150,7 +150,7 @@ class InterpreterTest: public UnitTest {
 
     expr = "(-1.5 + 3 )* 2";
     std::cout << expr << std::endl;
-    AssertTrue(interpreter_->parse(expr));
+    AssertTrue(interpreter_->Parse(expr));
     node = interpreter_->GetCurrentNode();
     AssertTrue(node->valid());
     result = node->Evaluate(evalute_args);
@@ -161,7 +161,7 @@ class InterpreterTest: public UnitTest {
 
     expr = "1 + 2 * -3 - 4/0.5 <= 8.0";
     std::cout << expr << std::endl;
-    AssertTrue(interpreter_->parse(expr));
+    AssertTrue(interpreter_->Parse(expr));
     node = interpreter_->GetCurrentNode();
     AssertTrue(node->valid());
     result = node->Evaluate(evalute_args);
@@ -176,7 +176,7 @@ class InterpreterTest: public UnitTest {
 
     expr = "Puppy.name";
     std::cout << expr << std::endl;
-    AssertTrue(interpreter_->parse(expr));
+    AssertTrue(interpreter_->Parse(expr));
     auto node = interpreter_->GetCurrentNode();
     AssertTrue(node->valid());
     AssertEqual(node->value().type, STRING);
@@ -184,7 +184,7 @@ class InterpreterTest: public UnitTest {
 
     expr = "Puppy.age";
     std::cout << expr << std::endl;
-    AssertTrue(interpreter_->parse(expr));
+    AssertTrue(interpreter_->Parse(expr));
     node = interpreter_->GetCurrentNode();
     AssertTrue(node->valid());
     AssertEqual(node->value().type, INT64);
@@ -192,7 +192,7 @@ class InterpreterTest: public UnitTest {
 
     expr = "Puppy.xx";
     std::cout << expr << std::endl;
-    AssertFalse(interpreter_->parse(expr));
+    AssertFalse(interpreter_->Parse(expr));
     node = interpreter_->GetCurrentNode();
     AssertFalse(node->valid());
     std::cout << "Error msg - " << node->error_msg() << std::endl;
@@ -200,7 +200,7 @@ class InterpreterTest: public UnitTest {
 
     expr = "Puppy.id = 1";
     std::cout << expr << std::endl;
-    AssertTrue(interpreter_->parse(expr));
+    AssertTrue(interpreter_->Parse(expr));
     node = interpreter_->GetCurrentNode();
     AssertTrue(node->valid());
     AssertEqual(node->value().type, BOOL);
@@ -208,7 +208,7 @@ class InterpreterTest: public UnitTest {
 
     expr = "-Puppy.weight + 30.0 > 50";
     std::cout << expr << std::endl;
-    AssertTrue(interpreter_->parse(expr));
+    AssertTrue(interpreter_->Parse(expr));
     node = interpreter_->GetCurrentNode();
     AssertTrue(node->valid());
     AssertEqual(node->type(), ExprTreeNode::OPERATOR);
@@ -217,7 +217,7 @@ class InterpreterTest: public UnitTest {
 
     expr = "Puppy.signature + 3 = 6";
     std::cout << expr << std::endl;
-    AssertFalse(interpreter_->parse(expr));
+    AssertFalse(interpreter_->Parse(expr));
     node = interpreter_->GetCurrentNode();
     AssertFalse(node->valid());
     std::cout << "Error msg - " << node->error_msg() << std::endl;
@@ -233,7 +233,7 @@ class InterpreterTest: public UnitTest {
 
     expr = "Puppy.weight";
     std::cout << expr << std::endl;
-    AssertTrue(interpreter_->parse(expr));
+    AssertTrue(interpreter_->Parse(expr));
     auto node = interpreter_->GetCurrentNode();
     AssertTrue(node->valid());
 
@@ -245,7 +245,7 @@ class InterpreterTest: public UnitTest {
 
     expr = "Puppy.name = \"snoopy\"";
     std::cout << expr << std::endl;
-    AssertTrue(interpreter_->parse(expr));
+    AssertTrue(interpreter_->Parse(expr));
     node = interpreter_->GetCurrentNode();
     AssertTrue(node->valid());
 
@@ -257,7 +257,7 @@ class InterpreterTest: public UnitTest {
 
     expr = "Puppy.signature != \"smart dog :)\"";
     std::cout << expr << std::endl;
-    AssertTrue(interpreter_->parse(expr));
+    AssertTrue(interpreter_->Parse(expr));
     node = interpreter_->GetCurrentNode();
     AssertTrue(node->valid());
 
@@ -269,7 +269,7 @@ class InterpreterTest: public UnitTest {
 
     expr = "Puppy.age < 7 AND NOT Puppy.adult";
     std::cout << expr << std::endl;
-    AssertTrue(interpreter_->parse(expr));
+    AssertTrue(interpreter_->Parse(expr));
     node = interpreter_->GetCurrentNode();
     AssertTrue(node->valid());
 
@@ -286,7 +286,7 @@ class InterpreterTest: public UnitTest {
 
     expr = "Puppy.id + 3 < 6";
     std::cout << expr << std::endl;
-    AssertTrue(interpreter_->parse(expr));
+    AssertTrue(interpreter_->Parse(expr));
     node = interpreter_->GetCurrentNode();
     AssertTrue(node->valid());
 
@@ -298,7 +298,7 @@ class InterpreterTest: public UnitTest {
 
     expr = "-Puppy.weight";
     std::cout << expr << std::endl;
-    AssertTrue(interpreter_->parse(expr));
+    AssertTrue(interpreter_->Parse(expr));
     node = interpreter_->GetCurrentNode();
     AssertTrue(node->valid());
 
@@ -314,7 +314,7 @@ class InterpreterTest: public UnitTest {
 
     expr = "SELECT Puppy.name, age FROM Puppy WHERE Puppy.weight > 0.3";
     std::cout << expr << std::endl;
-    AssertTrue(interpreter_->parse(expr));
+    AssertTrue(interpreter_->Parse(expr));
     auto node = interpreter_->GetCurrentNode();
     AssertTrue(node->valid());
     interpreter_->reset();
@@ -322,7 +322,7 @@ class InterpreterTest: public UnitTest {
 
     expr = "SELECT * FROM Puppy WHERE name = \"snoopy\"";
     std::cout << expr << std::endl;
-    AssertTrue(interpreter_->parse(expr));
+    AssertTrue(interpreter_->Parse(expr));
     node = interpreter_->GetCurrentNode();
     AssertTrue(node->valid());
     interpreter_->reset();
@@ -330,7 +330,7 @@ class InterpreterTest: public UnitTest {
 
     expr = "SELECT age FROM Puppy, Host WHERE name = \"hy\"";
     std::cout << expr << std::endl;
-    AssertFalse(interpreter_->parse(expr));
+    AssertFalse(interpreter_->Parse(expr));
     node = interpreter_->GetCurrentNode();
     AssertFalse(node->valid());
     std::cout << node->error_msg() << std::endl;

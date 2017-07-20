@@ -12,9 +12,9 @@ int main(int argc, char **argv) {
 
   bool success = false;
   if (argc > 1) {
-    success = i.parse(argv[1]);
+    success = i.Parse(argv[1]);
   } else {
-    success = i.parse();
+    success = i.Parse();
   }
 
   auto node = i.GetCurrentNode();

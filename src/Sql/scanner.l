@@ -16,7 +16,7 @@
 
 // This will track current scanner location.
 // Action is called when length of the token is known.
-//#define YY_USER_ACTION m_driver.increaseLocation(yyleng);
+#define YY_USER_ACTION m_driver.IncreaseLocation(yyleng);
 
 // Location API is used, but the location is not initialized, 'cause I'm lazy.
 // When making a token with make_{something} method you can pass detailed

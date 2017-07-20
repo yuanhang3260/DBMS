@@ -371,16 +371,16 @@ select_query: select_stmt from_stmt opt_where_stmt {
 // SELECT statement.
 select_stmt: SELECT column_list {
       if (driver.debug()) {
-        std::cout << "SELECT - " << Strings::Join(driver.columns(), ", ")
-                  << std::endl;
+        // std::cout << "SELECT - " << Strings::Join(driver.columns(), ", ")
+        //           << std::endl;
       }
     }
 
 // FROM statement.
 from_stmt: FROM table_list {
       if (driver.debug()) {
-        std::cout << "FROM - " << Strings::Join(driver.tables(), ", ")
-                  << std::endl;
+        // std::cout << "FROM - " << Strings::Join(driver.tables(), ", ")
+        //           << std::endl;
       }
     }
 
@@ -394,11 +394,11 @@ opt_where_stmt: { /* nill */ }
 
 %%
 
-// Bison expects us to provide implementation - otherwise linker complains
+// Bison expects us to provide implementation - otherwise linker complains.
 void Sql::Parser::error(const location &loc , const std::string &message) {
-  // Location should be initialized inside scanner action, but is not in this example.
-  // Let's grab location directly from driver class.
-  // cout << "Error: " << message << endl << "Location: " << loc << endl;
+  // Location should be initialized inside scanner action, but is not in this
+  // example. Let's grab location directly from driver class.
+  //cout << "Error: " << message << endl << "Location: " << loc << endl;
   std::cout << "Error: " << message << endl << "Error location: "
             << driver.location() << endl;
 }

@@ -13,35 +13,27 @@ Interpreter::Interpreter(DB::CatalogManager* catalog_m) :
   m_location(0),
   catalog_m_(catalog_m) {}
 
-bool Interpreter::parse() {
+bool Interpreter::Parse() {
   m_location = 0;
   return m_parser.parse() == 0;
 }
 
-bool Interpreter::parse(const std::string& str) {
+bool Interpreter::Parse(const std::string& str) {
   std::stringstream ss;
   ss << str;
-  switchInputStream(&ss);
+  SwitchInputStream(&ss);
   m_location = 0;
   return m_parser.parse() == 0;
 }
 
-void Interpreter::clear() {
-  m_location = 0;
-}
-
-std::string Interpreter::str() const {
-  return "";
-}
-
-void Interpreter::switchInputStream(std::istream *is) {
+void Interpreter::SwitchInputStream(std::istream *is) {
   m_scanner.switch_streams(is, NULL);
 }
 
-void Interpreter::increaseLocation(unsigned int loc) {
+void Interpreter::IncreaseLocation(unsigned int loc) {
   m_location += loc;
-  std::cout << "increaseLocation(): " << loc
-            << ", total = " << m_location << std::endl;
+  // std::cout << "increaseLocation(): " << loc
+  //           << ", total = " << m_location << std::endl;
 }
 
 unsigned int Interpreter::location() const {
@@ -51,6 +43,7 @@ unsigned int Interpreter::location() const {
 void Interpreter::reset() {
   tables_.clear();
   columns_.clear();
+  columns_num_ = 0;
   node_.reset();
 }
 
@@ -63,17 +56,19 @@ void Interpreter::AddColumn(const std::string& name) {
   ParseTableColumn(name, &column);
 
   auto& table_columns = columns_[column.table_name];
-  if (table_columns.size() == 1 && *table_columns.begin() == "*") {
+  if (table_columns.size() == 1 &&
+      table_columns.begin()->first == "*") {
     return;
   }
 
   if (column.column_name == "*") {
     table_columns.clear();
-    table_columns.insert("*");
-  } else {
-    
-    table_columns.insert(column.column_name);
   }
+
+  ColumnRequest column_request;
+  column_request.column = column;
+  column_request.request_pos = ++columns_num_;
+  table_columns.emplace(column.column_name, column_request);
 
   return;
 }

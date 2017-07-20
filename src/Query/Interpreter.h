@@ -29,26 +29,22 @@ class Interpreter {
   explicit Interpreter(DB::CatalogManager* catalog_m);
 
   // Parse SQL query, return 0 in success.
-  bool parse();
-  bool parse(const std::string& str);
+  bool Parse();
+  bool Parse(const std::string& str);
 
-  std::string str() const;
-  void clear();
-
-  //Switch scanner input stream. Default is standard input (std::cin).
-  void switchInputStream(std::istream *is);
+  // Switch scanner input stream. Default is standard input (std::cin).
+  void SwitchInputStream(std::istream *is);
 
   std::shared_ptr<Query::ExprTreeNode> GetCurrentNode() { return node_; }
+
   const std::set<std::string>& tables() const { return tables_; }
-  const std::map<std::string, std::set<std::string>>&
-  columns() const { return columns_; }
 
   void AddTable(const std::string& table);
   void AddColumn(const std::string& column);
+  bool ParseTableColumn(const std::string& name, Column* column);
+
   bool TableIsValid(const std::string& table, std::string* error_msg) const;
   bool ColumnIsValid(const Column& column, std::string* error_msg) const;
-
-  bool ParseTableColumn(const std::string& name, Column* column);
 
   bool debug() const { return debug_; }
   void set_debug(bool d) { debug_ = d; }
@@ -56,7 +52,7 @@ class Interpreter {
 
  private:
   // Used internally by Scanner YY_USER_ACTION to update location indicator
-  void increaseLocation(unsigned int loc);
+  void IncreaseLocation(unsigned int loc);
 
   // Used to get last Scanner location. Used in error messages.
   unsigned int location() const;
@@ -68,8 +64,20 @@ class Interpreter {
   DB::CatalogManager* catalog_m_ = nullptr;
 
   std::shared_ptr<Query::ExprTreeNode> node_;
+  
   std::set<std::string> tables_;
-  std::map<std::string, std::set<std::string>> columns_;
+
+  uint32 columns_num_ = 0;
+  struct ColumnRequest {
+    Column column;
+    // This is the order of columns in the query. For example:
+    //
+    //   SELECT a, b, c, d FROM ...
+    //
+    // The 1st column is a, 2nd is b, etc.
+    uint32 request_pos;
+  };
+  std::map<std::string, std::map<std::string, ColumnRequest>> columns_;
 
   std::string error_msg_;
   bool debug_ = false;
