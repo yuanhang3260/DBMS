@@ -48,6 +48,15 @@ enum OperatorType {
 std::string OpTypeStr(OperatorType value_type);
 OperatorType StrToOp(const std::string& str);
 
+struct Column {
+  Column() = default;
+  Column(const std::string& table_name_, const std::string& column_name_):
+      table_name(table_name_), column_name(column_name_) {}
+
+  std::string table_name;
+  std::string column_name;
+};
+
 }  // namespace Query
 
 #endif  // QUERY_COMMON_

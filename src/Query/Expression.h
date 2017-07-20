@@ -128,15 +128,10 @@ class ConstValueNode : public ExprTreeNode {
 
 class ColumnNode : public ExprTreeNode {
  public:
-  ColumnNode(const std::string& table, const std::string& column,
-             DB::CatalogManager* catalog_m);
-  ColumnNode(const std::string& name,
-             DB::CatalogManager* catalog_m,
-             const std::string& default_table);
+  ColumnNode(const Column& column, DB::CatalogManager* catalog_m);
 
   Type type() const override { return ExprTreeNode::TABLE_COLUMN; }
-  DEFINE_ACCESSOR(table_name, std::string);
-  DEFINE_ACCESSOR(column_name, std::string);
+  
 
   void Print() const override;
 
@@ -145,8 +140,7 @@ class ColumnNode : public ExprTreeNode {
  private:
   bool Init(DB::CatalogManager* catalog_m);
 
-  std::string table_name_;
-  std::string column_name_;
+  Column column_;
   int32 field_index_ = -1;
   Schema::FieldType field_type_ = Schema::FieldType::UNKNOWN_TYPE;
 };

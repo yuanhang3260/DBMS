@@ -1,6 +1,9 @@
 #ifndef QUERY_INTERPRETER_H_
 #define QUERY_INTERPRETER_H_
 
+#include <map>
+#include <memory>
+#include <set>
 #include <vector>
 
 #include "Sql/parser.hh"
@@ -36,16 +39,16 @@ class Interpreter {
   void switchInputStream(std::istream *is);
 
   std::shared_ptr<Query::ExprTreeNode> GetCurrentNode() { return node_; }
-  const std::vector<std::string>& table_list() const { return table_list_; }
-  const std::vector<std::string>& column_list() const { return column_list_; }
+  const std::set<std::string>& tables() const { return tables_; }
+  const std::map<std::string, std::set<std::string>>&
+  columns() const { return columns_; }
 
   void AddTable(const std::string& table);
   void AddColumn(const std::string& column);
+  bool TableIsValid(const std::string& table, std::string* error_msg) const;
+  bool ColumnIsValid(const Column& column, std::string* error_msg) const;
 
-  //This is needed so that Scanner and Parser can call some
-  //methods that we want to keep hidden from the end user.
-  friend class Sql::Parser;
-  friend class Sql::Scanner;
+  bool ParseTableColumn(const std::string& name, Column* column);
 
   bool debug() const { return debug_; }
   void set_debug(bool d) { debug_ = d; }
@@ -65,9 +68,16 @@ class Interpreter {
   DB::CatalogManager* catalog_m_ = nullptr;
 
   std::shared_ptr<Query::ExprTreeNode> node_;
-  std::vector<std::string> table_list_;
-  std::vector<std::string> column_list_;
+  std::set<std::string> tables_;
+  std::map<std::string, std::set<std::string>> columns_;
+
+  std::string error_msg_;
   bool debug_ = false;
+
+  // This is needed so that Scanner and Parser can call some methods that we
+  // want to keep hidden from the end user.
+  friend class Sql::Parser;
+  friend class Sql::Scanner;
 };
 
 }  // namespace Query

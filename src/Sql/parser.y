@@ -166,12 +166,22 @@ expr: INTEGER {
         if (driver.debug()) {
           std::cout << "Column value: " << $1 << std::endl;
         }
-        std::string default_table;
-        if (driver.table_list().size() == 1) {
-          default_table = driver.table_list().at(0);
+        Query::Column column;
+        if (!driver.ParseTableColumn($1, &column)) {
+          $$ = nullptr;
+          driver.node_ = $$;
+          YYABORT;
+        }
+        // Use default table if table name not specified.
+        if (column.table_name.empty()) {
+          std::string default_table;
+          if (driver.tables().size() == 1) {
+            default_table = *driver.tables().begin();
+          }
+          column.table_name = default_table;
         }
         $$ = std::shared_ptr<Query::ExprTreeNode>(
-            new Query::ColumnNode($1, driver.catalog_m_, default_table));
+            new Query::ColumnNode(column, driver.catalog_m_));
         driver.node_ = $$;
         if (!$$->valid()) {
           YYABORT;
@@ -361,7 +371,7 @@ select_query: select_stmt from_stmt opt_where_stmt {
 // SELECT statement.
 select_stmt: SELECT column_list {
       if (driver.debug()) {
-        std::cout << "SELECT - " << Strings::Join(driver.column_list(), ", ")
+        std::cout << "SELECT - " << Strings::Join(driver.columns(), ", ")
                   << std::endl;
       }
     }
@@ -369,7 +379,7 @@ select_stmt: SELECT column_list {
 // FROM statement.
 from_stmt: FROM table_list {
       if (driver.debug()) {
-        std::cout << "FROM - " << Strings::Join(driver.table_list(), ", ")
+        std::cout << "FROM - " << Strings::Join(driver.tables(), ", ")
                   << std::endl;
       }
     }

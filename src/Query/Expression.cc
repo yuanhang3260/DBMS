@@ -91,38 +91,20 @@ void ConstValueNode::Print() const {
 
 
 // **************************** ColumnNode ********************************** //
-ColumnNode::ColumnNode(const std::string& table, const std::string& column,
-                       DB::CatalogManager* catalog_m) :
-      table_name_(table),
-      column_name_(column) {
-  Init(catalog_m);
-}
-
-ColumnNode::ColumnNode(const std::string& name, DB::CatalogManager* catalog_m,
-                       const std::string& default_table) {
-  auto re = Strings::Split(name, ".");
-  if (re.size() == 1) {
-    if (default_table.empty()) {
-      valid_ = false;
-      error_msg_ = Strings::StrCat("Ambiguous column \"", name, "\"",
-                                   ", table name needed.");
-      return;
-    }
-    table_name_ = default_table;
-    column_name_ = re.at(0);
-  } else if (re.size() == 2) {
-    table_name_ = re.at(0);
-    column_name_ = re.at(1);
-  } else {
-    LogERROR("Invalid column name %s", name.c_str());
+ColumnNode::ColumnNode(const Column& column, DB::CatalogManager* catalog_m) :
+      column_(column) {
+  if (column_.table_name.empty()) {
     valid_ = false;
+    error_msg_ = Strings::StrCat("Ambiguous column \"", column_.column_name,
+                                 "\", table name needed.");
+    return;
   }
-
   Init(catalog_m);
 }
 
 void ColumnNode::Print() const {
-  printf("column node (%s, %s)\n", table_name_.c_str(), column_name_.c_str());
+  printf("column node (%s, %s)\n",
+         column_.table_name.c_str(), column_.column_name.c_str());
 }
 
 bool ColumnNode::Init(DB::CatalogManager* catalog_m) {
@@ -130,18 +112,19 @@ bool ColumnNode::Init(DB::CatalogManager* catalog_m) {
     return false;
   }
 
-  auto table_m_ = catalog_m->FindTableByName(table_name_);
+  auto table_m_ = catalog_m->FindTableByName(column_.table_name);
   if (table_m_ == nullptr) {
     valid_ = false;
-    error_msg_ = Strings::StrCat("Couldn't find table \"", table_name_, "\"");
+    error_msg_ = Strings::StrCat("Couldn't find table \"",
+                                 column_.table_name, "\"");
     return false;
   }
 
-  auto field_m = table_m_->FindFieldByName(column_name_);
+  auto field_m = table_m_->FindFieldByName(column_.column_name);
   if (field_m == nullptr) {
     valid_ = false;
-    error_msg_ = Strings::StrCat("Couldn't find column \"", column_name_,
-                                 "\" in table \"", table_name_, "\"");
+    error_msg_ = Strings::StrCat("Couldn't find column \"", column_.column_name,
+                                 "\" in table \"", column_.table_name, "\"");
     return false;
   }
 

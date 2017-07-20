@@ -320,7 +320,7 @@ class InterpreterTest: public UnitTest {
     interpreter_->reset();
     printf("\n");
 
-    expr = "SELECT age FROM Puppy WHERE name = \"snoopy\"";
+    expr = "SELECT * FROM Puppy WHERE name = \"snoopy\"";
     std::cout << expr << std::endl;
     AssertTrue(interpreter_->parse(expr));
     node = interpreter_->GetCurrentNode();
