@@ -38,6 +38,15 @@ CatalogManager::FindTableByName(const std::string& table_name) {
   return it->second.get();
 }
 
+FieldInfoManager*
+CatalogManager::FindTableFieldByName(const Query::Column& column) {
+  auto table_m = FindTableByName(column.table_name);
+  if (table_m == nullptr) {
+    return nullptr;
+  }
+  return table_m->FindFieldByName(column.column_name);
+}
+
 // ************************* TableInfoManager ******************************* //
 TableInfoManager::TableInfoManager(TableInfo* table) : table_info_(table) {}
 
@@ -53,7 +62,7 @@ bool TableInfoManager::Init() {
       return false;
     }
 
-    auto field_manager = std::make_shared<TableFieldManager>(&field);
+    auto field_manager = std::make_shared<FieldInfoManager>(&field);
     if (!field_manager->Init()) {
       return false;
     }
@@ -68,7 +77,7 @@ std::string TableInfoManager::name() const {
   return table_info_->name();
 }
 
-TableFieldManager*
+FieldInfoManager*
 TableInfoManager::FindFieldByName(const std::string field_name) {
   auto it = fields_.find(field_name);
   if (it == fields_.end()) {
@@ -77,7 +86,7 @@ TableInfoManager::FindFieldByName(const std::string field_name) {
   return it->second.get();
 }
 
-TableFieldManager* TableInfoManager::FindFieldByIndex(uint32 index) {
+FieldInfoManager* TableInfoManager::FindFieldByIndex(uint32 index) {
   auto it = fields_by_index_.find(index);
   if (it == fields_by_index_.end()) {
     return nullptr;
@@ -94,24 +103,24 @@ std::vector<int32> TableInfoManager::primary_key_indexes() const {
 }
 
 
-// ************************* TableFieldManager ****************************** //
-TableFieldManager::TableFieldManager(TableField* field) : field_(field) {}
+// ************************* FieldInfoManager ****************************** //
+FieldInfoManager::FieldInfoManager(TableField* field) : field_(field) {}
 
-bool TableFieldManager::Init() { return true;}
+bool FieldInfoManager::Init() { return true;}
 
-std::string TableFieldManager::name() const {
+std::string FieldInfoManager::name() const {
   return field_->name();
 }
 
-int32 TableFieldManager::index() const {
+int32 FieldInfoManager::index() const {
   return field_->index();
 }
 
-TableField::Type TableFieldManager::type() const {
+TableField::Type FieldInfoManager::type() const {
   return field_->type();
 }
 
-int32 TableFieldManager::size() const {
+int32 FieldInfoManager::size() const {
   return field_->size();
 }
 

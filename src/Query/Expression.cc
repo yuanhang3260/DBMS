@@ -91,15 +91,15 @@ void ConstValueNode::Print() const {
 
 
 // **************************** ColumnNode ********************************** //
-ColumnNode::ColumnNode(const Column& column, DB::CatalogManager* catalog_m) :
-      column_(column) {
+ColumnNode::ColumnNode(const Column& column, const DB::TableField& field) :
+    column_(column) {
   if (column_.table_name.empty()) {
     valid_ = false;
     error_msg_ = Strings::StrCat("Ambiguous column \"", column_.column_name,
                                  "\", table name needed.");
     return;
   }
-  Init(catalog_m);
+  Init(field);
 }
 
 void ColumnNode::Print() const {
@@ -107,31 +107,15 @@ void ColumnNode::Print() const {
          column_.table_name.c_str(), column_.column_name.c_str());
 }
 
-bool ColumnNode::Init(DB::CatalogManager* catalog_m) {
+bool ColumnNode::Init(const DB::TableField& field) {
   if (!valid_) {
     return false;
   }
 
-  auto table_m_ = catalog_m->FindTableByName(column_.table_name);
-  if (table_m_ == nullptr) {
-    valid_ = false;
-    error_msg_ = Strings::StrCat("Couldn't find table \"",
-                                 column_.table_name, "\"");
-    return false;
-  }
-
-  auto field_m = table_m_->FindFieldByName(column_.column_name);
-  if (field_m == nullptr) {
-    valid_ = false;
-    error_msg_ = Strings::StrCat("Couldn't find column \"", column_.column_name,
-                                 "\" in table \"", column_.table_name, "\"");
-    return false;
-  }
-
   // Get value type of this ColumnNode, from the schema field type.
-  value_.type = FromSchemaType(field_m->type());
-  field_index_ = field_m->index();
-  field_type_ = field_m->type();
+  value_.type = FromSchemaType(field.type());
+  field_index_ = field.index();
+  field_type_ = field.type();
   valid_ = true;
   return true;
 }

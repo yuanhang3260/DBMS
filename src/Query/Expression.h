@@ -128,7 +128,7 @@ class ConstValueNode : public ExprTreeNode {
 
 class ColumnNode : public ExprTreeNode {
  public:
-  ColumnNode(const Column& column, DB::CatalogManager* catalog_m);
+  ColumnNode(const Column& column, const DB::TableField& field);
 
   Type type() const override { return ExprTreeNode::TABLE_COLUMN; }
   
@@ -138,7 +138,7 @@ class ColumnNode : public ExprTreeNode {
   NodeValue Evaluate(const EvaluateArgs& arg) const override;
 
  private:
-  bool Init(DB::CatalogManager* catalog_m);
+  bool Init(const DB::TableField& field);
 
   Column column_;
   int32 field_index_ = -1;

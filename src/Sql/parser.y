@@ -140,52 +140,51 @@ static Sql::Parser::symbol_type yylex(Sql::Scanner &scanner,
 expr: INTEGER {
         $$ = std::shared_ptr<Query::ExprTreeNode>(
             new Query::ConstValueNode(Query::NodeValue::IntValue($1)));
-        driver.node_ = $$;
+        driver.query_->SetExprNode($$);
       }
     | DOUBLE {
         $$ = std::shared_ptr<Query::ExprTreeNode>(
             new Query::ConstValueNode(Query::NodeValue::DoubleValue($1)));
-        driver.node_ = $$;
+        driver.query_->SetExprNode($$);
       }
     | STRING {
         $$ = std::shared_ptr<Query::ExprTreeNode>(
             new Query::ConstValueNode(Query::NodeValue::StringValue($1)));
-        driver.node_ = $$;
+        driver.query_->SetExprNode($$);
       }
     | CHAR {
         $$ = std::shared_ptr<Query::ExprTreeNode>(
             new Query::ConstValueNode(Query::NodeValue::CharValue($1)));
-        driver.node_ = $$;
+        driver.query_->SetExprNode($$);
       }
     | BOOL {
         $$ = std::shared_ptr<Query::ExprTreeNode>(
             new Query::ConstValueNode(Query::NodeValue::BoolValue($1)));
-        driver.node_ = $$;
+        driver.query_->SetExprNode($$);
       }
     | IDENTIFIER {
         if (driver.debug()) {
           std::cout << "Column value: " << $1 << std::endl;
         }
         Query::Column column;
-        if (!driver.ParseTableColumn($1, &column)) {
-          $$ = nullptr;
-          driver.node_ = $$;
+        if (!driver.query_->ParseTableColumn($1, &column)) {
           YYABORT;
         }
         // Use default table if table name not specified.
         if (column.table_name.empty()) {
-          std::string default_table;
-          if (driver.tables().size() == 1) {
-            default_table = *driver.tables().begin();
-          }
-          column.table_name = default_table;
+          column.table_name = driver.query_->DefaultTable();
         }
-        $$ = std::shared_ptr<Query::ExprTreeNode>(
-            new Query::ColumnNode(column, driver.catalog_m_));
-        driver.node_ = $$;
-        if (!$$->valid()) {
+        auto field_m = driver.query_->FindTableColumn(column);
+        if (field_m == nullptr) {
           YYABORT;
         }
+        $$ = std::shared_ptr<Query::ExprTreeNode>(
+            new Query::ColumnNode(column, field_m->field()));
+        if (!$$->valid()) {
+          driver.set_error_msg($$->error_msg());
+          YYABORT;
+        }
+        driver.query_->SetExprNode($$);
       }
     ;
 
@@ -195,10 +194,11 @@ expr: expr ADD expr {
         }
         $$ = std::shared_ptr<Query::ExprTreeNode>(
                 new Query::OperatorNode(Query::ADD, $1, $3));
-        driver.node_ = $$;
         if (!$$->valid()) {
+          driver.set_error_msg($$->error_msg());
           YYABORT;
         }
+        driver.query_->SetExprNode($$);
       }
     | expr SUB expr {
         if (driver.debug()) {
@@ -206,10 +206,11 @@ expr: expr ADD expr {
         }
         $$ = std::shared_ptr<Query::ExprTreeNode>(
                 new Query::OperatorNode(Query::SUB, $1, $3));
-        driver.node_ = $$;
         if (!$$->valid()) {
+          driver.set_error_msg($$->error_msg());
           YYABORT;
         }
+        driver.query_->SetExprNode($$);
       }
     | expr MUL expr {
         if (driver.debug()) {
@@ -217,10 +218,11 @@ expr: expr ADD expr {
         }
         $$ = std::shared_ptr<Query::ExprTreeNode>(
                 new Query::OperatorNode(Query::MUL, $1, $3));
-        driver.node_ = $$;
         if (!$$->valid()) {
+          driver.set_error_msg($$->error_msg());
           YYABORT;
         }
+        driver.query_->SetExprNode($$);
       }
     | expr DIV expr {
         if (driver.debug()) {
@@ -228,10 +230,11 @@ expr: expr ADD expr {
         }
         $$ = std::shared_ptr<Query::ExprTreeNode>(
                 new Query::OperatorNode(Query::DIV, $1, $3));
-        driver.node_ = $$;
         if (!$$->valid()) {
+          driver.set_error_msg($$->error_msg());
           YYABORT;
         }
+        driver.query_->SetExprNode($$);
       }
     | expr MOD expr {
         if (driver.debug()) {
@@ -239,10 +242,11 @@ expr: expr ADD expr {
         }
         $$ = std::shared_ptr<Query::ExprTreeNode>(
                 new Query::OperatorNode(Query::MOD, $1, $3));
-        driver.node_ = $$;
         if (!$$->valid()) {
+          driver.set_error_msg($$->error_msg());
           YYABORT;
         }
+        driver.query_->SetExprNode($$);
       }
     | SUB expr %prec UMINUS {
         // '-' as negative sign.
@@ -269,10 +273,11 @@ expr: expr ADD expr {
         }
         $2->set_negative(true);
         $$ = $2;
-        driver.node_ = $$;
         if (!$$->valid()) {
+          driver.set_error_msg($$->error_msg());
           YYABORT;
         }
+        driver.query_->SetExprNode($$);
       }
     | expr COMPARATOR1 expr {
         if (driver.debug()) {
@@ -280,10 +285,11 @@ expr: expr ADD expr {
         }
         $$ = std::shared_ptr<Query::ExprTreeNode>(
                 new Query::OperatorNode(Query::StrToOp($2), $1, $3));
-        driver.node_ = $$;
         if (!$$->valid()) {
+          driver.set_error_msg($$->error_msg());
           YYABORT;
         }
+        driver.query_->SetExprNode($$);
       }
     | expr COMPARATOR2 expr {
         if (driver.debug()) {
@@ -291,10 +297,11 @@ expr: expr ADD expr {
         }
         $$ = std::shared_ptr<Query::ExprTreeNode>(
                 new Query::OperatorNode(Query::StrToOp($2), $1, $3));
-        driver.node_ = $$;
         if (!$$->valid()) {
+          driver.set_error_msg($$->error_msg());
           YYABORT;
         }
+        driver.query_->SetExprNode($$);
       }
     | expr AND expr {
         if (driver.debug()) {
@@ -302,10 +309,11 @@ expr: expr ADD expr {
         }
         $$ = std::shared_ptr<Query::ExprTreeNode>(
                 new Query::OperatorNode(Query::AND, $1, $3));
-        driver.node_ = $$;
         if (!$$->valid()) {
+          driver.set_error_msg($$->error_msg());
           YYABORT;
         }
+        driver.query_->SetExprNode($$);
       }
     | expr OR expr {
         if (driver.debug()) {
@@ -313,10 +321,11 @@ expr: expr ADD expr {
         }
         $$ = std::shared_ptr<Query::ExprTreeNode>(
                 new Query::OperatorNode(Query::OR, $1, $3));
-        driver.node_ = $$;
         if (!$$->valid()) {
+          driver.set_error_msg($$->error_msg());
           YYABORT;
         }
+        driver.query_->SetExprNode($$);
       }
     | NOT expr {
         if (driver.debug()) {
@@ -324,14 +333,15 @@ expr: expr ADD expr {
         }
         $$ = std::shared_ptr<Query::ExprTreeNode>(
                 new Query::OperatorNode(Query::NOT, $2, nullptr));
-        driver.node_ = $$;
         if (!$$->valid()) {
+          driver.set_error_msg($$->error_msg());
           YYABORT;
         }
+        driver.query_->SetExprNode($$);
       }
     | LEFTPAR expr RIGHTPAR {
       $$ = $2;
-      driver.node_ = $$;
+      driver.query_->SetExprNode($$);
     }
     ;
 
@@ -340,18 +350,26 @@ query: expr { /* For interpreter testing. DBMS should reject this "query". */ }
     | select_query { /* nill */ }
 
 table_list: IDENTIFIER {
-      driver.AddTable($1);
+      if (!driver.query_->AddTable($1)) {
+        YYABORT;
+      }
     }
     | table_list COMMA IDENTIFIER  {
-      driver.AddTable($3);
+      if (!driver.query_->AddTable($3)) {
+        YYABORT;
+      }
     }
 
 column_target: IDENTIFIER {
-      driver.AddColumn($1);
+      if (!driver.query_->AddColumn($1)) {
+        YYABORT;
+      }
     }
     | MUL {
       // I know this is wired. Here the * is a wildcard, not multiply symbol.
-      driver.AddColumn("*");
+      if (!driver.query_->AddColumn("*")) {
+        YYABORT;
+      }
     }
 
 column_list: column_target {

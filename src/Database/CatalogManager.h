@@ -8,12 +8,13 @@
 
 #include "Base/MacroUtils.h"
 #include "Database/Catalog_pb.h"
+#include "Query/Common.h"
 
 // This file is a C++ view of Catalog proto.
 namespace DB {
 
 class TableInfoManager;
-class TableFieldManager;
+class FieldInfoManager;
 
 class CatalogManager {
  public:
@@ -27,6 +28,7 @@ class CatalogManager {
   std::string DBName() const;
 
   TableInfoManager* FindTableByName(const std::string& table_name);
+  FieldInfoManager* FindTableFieldByName(const Query::Column& table_field);
 
  private:
   DatabaseCatalog* catalog_;
@@ -47,21 +49,21 @@ class TableInfoManager {
   // Table name.
   std::string name() const;
 
-  TableFieldManager* FindFieldByName(const std::string field_name);
-  TableFieldManager* FindFieldByIndex(uint32 index);
+  FieldInfoManager* FindFieldByName(const std::string field_name);
+  FieldInfoManager* FindFieldByIndex(uint32 index);
 
   std::vector<int32> primary_key_indexes() const;
 
  private:
   TableInfo* table_info_;
 
-  std::map<std::string, std::shared_ptr<TableFieldManager>> fields_;
-  std::map<int32, TableFieldManager*> fields_by_index_;
+  std::map<std::string, std::shared_ptr<FieldInfoManager>> fields_;
+  std::map<int32, FieldInfoManager*> fields_by_index_;
 };
 
-class TableFieldManager {
+class FieldInfoManager {
  public:
-  explicit TableFieldManager(TableField* field);
+  explicit FieldInfoManager(TableField* field);
   bool Init();
 
   const TableField& field() const { return *field_; }

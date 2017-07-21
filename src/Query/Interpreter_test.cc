@@ -129,8 +129,8 @@ class InterpreterTest: public UnitTest {
     expr = "1 != 1.0\n";
     std::cout << expr << std::endl;
     AssertTrue(interpreter_->Parse(expr));
-    auto node = interpreter_->GetCurrentNode();
-    AssertTrue(node->valid());
+    auto node = interpreter_->shared_query()->GetExprNode();
+    AssertTrue(node && node->valid());
     auto result = node->Evaluate(evalute_args);
     AssertEqual(result.type, BOOL);
     AssertFalse(result.v_bool);
@@ -140,8 +140,8 @@ class InterpreterTest: public UnitTest {
     expr = "1 + 2 * -3";
     std::cout << expr << std::endl;
     AssertTrue(interpreter_->Parse(expr));
-    node = interpreter_->GetCurrentNode();
-    AssertTrue(node->valid());
+    node = interpreter_->shared_query()->GetExprNode();
+    AssertTrue(node && node->valid());
     result = node->Evaluate(evalute_args);
     AssertEqual(result.type, INT64);
     AssertEqual(-5, result.v_int64);
@@ -151,8 +151,8 @@ class InterpreterTest: public UnitTest {
     expr = "(-1.5 + 3 )* 2";
     std::cout << expr << std::endl;
     AssertTrue(interpreter_->Parse(expr));
-    node = interpreter_->GetCurrentNode();
-    AssertTrue(node->valid());
+    node = interpreter_->shared_query()->GetExprNode();
+    AssertTrue(node && node->valid());
     result = node->Evaluate(evalute_args);
     AssertEqual(result.type, DOUBLE);
     AssertFloatEqual(3.0, result.v_double);
@@ -162,8 +162,8 @@ class InterpreterTest: public UnitTest {
     expr = "1 + 2 * -3 - 4/0.5 <= 8.0";
     std::cout << expr << std::endl;
     AssertTrue(interpreter_->Parse(expr));
-    node = interpreter_->GetCurrentNode();
-    AssertTrue(node->valid());
+    node = interpreter_->shared_query()->GetExprNode();
+    AssertTrue(node && node->valid());
     result = node->Evaluate(evalute_args);
     AssertEqual(result.type, BOOL);
     AssertTrue(result.v_bool);
@@ -177,40 +177,38 @@ class InterpreterTest: public UnitTest {
     expr = "Puppy.name";
     std::cout << expr << std::endl;
     AssertTrue(interpreter_->Parse(expr));
-    auto node = interpreter_->GetCurrentNode();
-    AssertTrue(node->valid());
+    auto node = interpreter_->shared_query()->GetExprNode();
+    AssertTrue(node && node->valid());
     AssertEqual(node->value().type, STRING);
     printf("\n");
 
     expr = "Puppy.age";
     std::cout << expr << std::endl;
     AssertTrue(interpreter_->Parse(expr));
-    node = interpreter_->GetCurrentNode();
-    AssertTrue(node->valid());
+    node = interpreter_->shared_query()->GetExprNode();
+    AssertTrue(node && node->valid());
     AssertEqual(node->value().type, INT64);
     printf("\n");
 
     expr = "Puppy.xx";
     std::cout << expr << std::endl;
     AssertFalse(interpreter_->Parse(expr));
-    node = interpreter_->GetCurrentNode();
-    AssertFalse(node->valid());
-    std::cout << "Error msg - " << node->error_msg() << std::endl;
+    std::cout << interpreter_->error_msg() << std::endl;
     printf("\n");
 
     expr = "Puppy.id = 1";
     std::cout << expr << std::endl;
     AssertTrue(interpreter_->Parse(expr));
-    node = interpreter_->GetCurrentNode();
-    AssertTrue(node->valid());
+    node = interpreter_->shared_query()->GetExprNode();
+    AssertTrue(node && node->valid());
     AssertEqual(node->value().type, BOOL);
     printf("\n");
 
     expr = "-Puppy.weight + 30.0 > 50";
     std::cout << expr << std::endl;
     AssertTrue(interpreter_->Parse(expr));
-    node = interpreter_->GetCurrentNode();
-    AssertTrue(node->valid());
+    node = interpreter_->shared_query()->GetExprNode();
+    AssertTrue(node && node->valid());
     AssertEqual(node->type(), ExprTreeNode::OPERATOR);
     AssertEqual(node->value().type, BOOL);
     printf("\n");
@@ -218,9 +216,7 @@ class InterpreterTest: public UnitTest {
     expr = "Puppy.signature + 3 = 6";
     std::cout << expr << std::endl;
     AssertFalse(interpreter_->Parse(expr));
-    node = interpreter_->GetCurrentNode();
-    AssertFalse(node->valid());
-    std::cout << "Error msg - " << node->error_msg() << std::endl;
+    std::cout << interpreter_->error_msg() << std::endl;
     printf("\n");
   }
 
@@ -234,8 +230,8 @@ class InterpreterTest: public UnitTest {
     expr = "Puppy.weight";
     std::cout << expr << std::endl;
     AssertTrue(interpreter_->Parse(expr));
-    auto node = interpreter_->GetCurrentNode();
-    AssertTrue(node->valid());
+    auto node = interpreter_->shared_query()->GetExprNode();
+    AssertTrue(node && node->valid());
 
     auto result = node->Evaluate(evalute_args);
     AssertEqual(result.type, DOUBLE);
@@ -246,8 +242,8 @@ class InterpreterTest: public UnitTest {
     expr = "Puppy.name = \"snoopy\"";
     std::cout << expr << std::endl;
     AssertTrue(interpreter_->Parse(expr));
-    node = interpreter_->GetCurrentNode();
-    AssertTrue(node->valid());
+    node = interpreter_->shared_query()->GetExprNode();
+    AssertTrue(node && node->valid());
 
     result = node->Evaluate(evalute_args);
     AssertEqual(result.type, BOOL);
@@ -258,8 +254,8 @@ class InterpreterTest: public UnitTest {
     expr = "Puppy.signature != \"smart dog :)\"";
     std::cout << expr << std::endl;
     AssertTrue(interpreter_->Parse(expr));
-    node = interpreter_->GetCurrentNode();
-    AssertTrue(node->valid());
+    node = interpreter_->shared_query()->GetExprNode();
+    AssertTrue(node && node->valid());
 
     result = node->Evaluate(evalute_args);
     AssertEqual(result.type, BOOL);
@@ -270,8 +266,8 @@ class InterpreterTest: public UnitTest {
     expr = "Puppy.age < 7 AND NOT Puppy.adult";
     std::cout << expr << std::endl;
     AssertTrue(interpreter_->Parse(expr));
-    node = interpreter_->GetCurrentNode();
-    AssertTrue(node->valid());
+    node = interpreter_->shared_query()->GetExprNode();
+    AssertTrue(node && node->valid());
 
     result = node->Evaluate(evalute_args);
     AssertEqual(result.type, BOOL);
@@ -287,8 +283,8 @@ class InterpreterTest: public UnitTest {
     expr = "Puppy.id + 3 < 6";
     std::cout << expr << std::endl;
     AssertTrue(interpreter_->Parse(expr));
-    node = interpreter_->GetCurrentNode();
-    AssertTrue(node->valid());
+    node = interpreter_->shared_query()->GetExprNode();
+    AssertTrue(node && node->valid());
 
     result = node->Evaluate(evalute_args2);
     AssertEqual(result.type, BOOL);
@@ -299,8 +295,8 @@ class InterpreterTest: public UnitTest {
     expr = "-Puppy.weight";
     std::cout << expr << std::endl;
     AssertTrue(interpreter_->Parse(expr));
-    node = interpreter_->GetCurrentNode();
-    AssertTrue(node->valid());
+    node = interpreter_->shared_query()->GetExprNode();
+    AssertTrue(node && node->valid());
 
     result = node->Evaluate(evalute_args2);
     AssertEqual(result.type, DOUBLE);
@@ -315,25 +311,25 @@ class InterpreterTest: public UnitTest {
     expr = "SELECT Puppy.name, age FROM Puppy WHERE Puppy.weight > 0.3";
     std::cout << expr << std::endl;
     AssertTrue(interpreter_->Parse(expr));
-    auto node = interpreter_->GetCurrentNode();
-    AssertTrue(node->valid());
+    auto node = interpreter_->shared_query()->GetExprNode();
+    AssertTrue(node && node->valid());
     interpreter_->reset();
     printf("\n");
 
     expr = "SELECT * FROM Puppy WHERE name = \"snoopy\"";
     std::cout << expr << std::endl;
     AssertTrue(interpreter_->Parse(expr));
-    node = interpreter_->GetCurrentNode();
-    AssertTrue(node->valid());
+    node = interpreter_->shared_query()->GetExprNode();
+    AssertTrue(node && node->valid());
     interpreter_->reset();
     printf("\n");
 
     expr = "SELECT age FROM Puppy, Host WHERE name = \"hy\"";
     std::cout << expr << std::endl;
     AssertFalse(interpreter_->Parse(expr));
-    node = interpreter_->GetCurrentNode();
-    AssertFalse(node->valid());
-    std::cout << node->error_msg() << std::endl;
+    node = interpreter_->shared_query()->GetExprNode();
+    AssertFalse(node && node->valid());
+    std::cout << interpreter_->error_msg() << std::endl;
     interpreter_->reset();
     printf("\n");
   }
@@ -345,9 +341,9 @@ int main() {
   Query::InterpreterTest test;
   test.setup();
 
-  //test.Test_EvaluateConst();
-  //test.Test_ColumnNodeExpr();
-  //test.Test_EvaluateSingleExpr();
+  // test.Test_EvaluateConst();
+  // test.Test_ColumnNodeExpr();
+  // test.Test_EvaluateSingleExpr();
   test.Test_SelectQuery();
 
   test.teardown();
