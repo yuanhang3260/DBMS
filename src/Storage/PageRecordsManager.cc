@@ -170,18 +170,18 @@ const RecordBase& PageRecordsManager::record(uint32 index) const {
   return plrecords_.at(index).record();
 }
 
-RecordBase* PageRecordsManager::Record(uint32 index) {
+RecordBase* PageRecordsManager::mutable_record(uint32 index) {
   if (index >= plrecords_.size()) {
     return nullptr;
   }
   return plrecords_.at(index).mutable_record();
 }
 
-std::shared_ptr<RecordBase> PageRecordsManager::Shared_Record(uint32 index) {
+std::shared_ptr<RecordBase> PageRecordsManager::shared_record(uint32 index) {
   if (index >= plrecords_.size()) {
     return std::shared_ptr<RecordBase>();
   }
-  return plrecords_.at(index).Shared_Record();
+  return plrecords_.at(index).shared_record();
 }
 
 int PageRecordsManager::RecordSlotID(uint32 index) const {
@@ -325,7 +325,7 @@ void PageRecordsManager::GroupRecords(std::vector<RecordGroup>* rgroups) {
   // one record.
   if (page_->meta().page_type() == TREE_NODE) {
     for (uint32 i = 0; i < plrecords_.size(); i++) {
-      rgroups->push_back(RecordGroup(i, 1, Record(i)->size()));
+      rgroups->push_back(RecordGroup(i, 1, record(i).size()));
     }
     return;
   }
@@ -339,13 +339,13 @@ void PageRecordsManager::GroupRecords(std::vector<RecordGroup>* rgroups) {
     if (RecordBase::CompareRecordsBasedOnIndex(*crt_record, record(i),
                                                cmp_indexes) == 0) {
       num_records++;
-      size += Record(i)->size();
+      size += record(i).size();
     }
     else {
       rgroups->push_back(RecordGroup(crt_start, num_records, size));
       crt_start = i;
       num_records = 1;
-      size = Record(i)->size();
+      size = record(i).size();
       crt_record = &record(crt_start);
     }
   }
@@ -384,7 +384,7 @@ PageRecordsManager::InsertRecordAndSplitPage(
         LogFATAL("Insert new record to first page's overflow page failed");
       }
       result.emplace_back(page_);
-      result[0].record = plrecords_[0].Shared_Record();
+      result[0].record = plrecords_[0].shared_record();
       result[0].rid = RecordID(of_page->id(), slot_id);
       return result;
     }
@@ -395,7 +395,7 @@ PageRecordsManager::InsertRecordAndSplitPage(
     for (uint32 i = rgroups.at(re1.mid_index).start_index;
          i < plrecords_.size();
          i++) {
-      int new_slot_id = Record(i)->InsertToRecordPage(page);
+      int new_slot_id = record(i).InsertToRecordPage(page);
       CheckLogFATAL(new_slot_id >= 0, "Insert right half to new leave failed.");
       int slot_id = plrecords_.at(i).slot_id();
       if (slot_id < 0) {
@@ -405,7 +405,7 @@ PageRecordsManager::InsertRecordAndSplitPage(
       else {
         page_->DeleteRecord(slot_id);
         if (file_type_ == INDEX_DATA) {
-          rid_mutations->emplace_back(Shared_Record(i),
+          rid_mutations->emplace_back(shared_record(i),
                                       RecordID(page_->id(), slot_id),
                                       RecordID(page->id(), new_slot_id));
         }
@@ -425,10 +425,10 @@ PageRecordsManager::InsertRecordAndSplitPage(
     if (new_record_page >= 0) {
       BplusTree::ConnectLeaves(page_, page);
       result.emplace_back(page_);
-      result[0].record = plrecords_[0].Shared_Record();
+      result[0].record = plrecords_[0].shared_record();
       result.emplace_back(page);
       result[1].record =
-          plrecords_[rgroups.at(re1.mid_index).start_index].Shared_Record();
+          plrecords_[rgroups.at(re1.mid_index).start_index].shared_record();
       result[0].rid = rid;  // RecordID of the new record.
       return result;
     }
@@ -445,10 +445,10 @@ PageRecordsManager::InsertRecordAndSplitPage(
         }
         BplusTree::ConnectLeaves(of_page, page);
         result.emplace_back(page_);
-        result[0].record = plrecords_[0].Shared_Record();
+        result[0].record = plrecords_[0].shared_record();
         result.emplace_back(page);
         result[1].record =
-          plrecords_[rgroups.at(re1.mid_index).start_index].Shared_Record();
+          plrecords_[rgroups.at(re1.mid_index).start_index].shared_record();
         result[0].rid = RecordID(of_page->id(), slot_id);
         return result;
       }
@@ -460,7 +460,7 @@ PageRecordsManager::InsertRecordAndSplitPage(
         uint32 i = group.start_index;
         for (; i < group.start_index + group.num_records; i++) {
           // We insert the middle group of records to middle page (page 2).
-          int new_slot_id = Record(i)->InsertToRecordPage(tail_page);
+          int new_slot_id = record(i).InsertToRecordPage(tail_page);
           if (new_slot_id < 0) {
             // Append overflow page to middle page.
             tail_page = tree_->AppendOverflowPageTo(tail_page);
@@ -477,7 +477,7 @@ PageRecordsManager::InsertRecordAndSplitPage(
           else {
             page_->DeleteRecord(slot_id);
             if (file_type_ == INDEX_DATA) {
-              rid_mutations->emplace_back(Shared_Record(i),
+              rid_mutations->emplace_back(shared_record(i),
                                           RecordID(page_->id(), slot_id),
                                           RecordID(tail_page->id(),new_slot_id));
             }
@@ -494,11 +494,11 @@ PageRecordsManager::InsertRecordAndSplitPage(
         BplusTree::ConnectLeaves(page_, page2);
         BplusTree::ConnectLeaves(tail_page, page);
         result.emplace_back(page_);
-        result[0].record = plrecords_[0].Shared_Record();
+        result[0].record = plrecords_[0].shared_record();
         result.emplace_back(page2);
-        result[1].record = plrecords_[group.start_index].Shared_Record();
+        result[1].record = plrecords_[group.start_index].shared_record();
         result.emplace_back(page);
-        result[2].record = plrecords_[i].Shared_Record();
+        result[2].record = plrecords_[i].shared_record();
         result[0].rid = rid;
         return result;
       }
@@ -507,14 +507,14 @@ PageRecordsManager::InsertRecordAndSplitPage(
   else {  // Right half is larger.
     // Page 1
     result.emplace_back(page_);
-    result[0].record = plrecords_[0].Shared_Record();
+    result[0].record = plrecords_[0].shared_record();
 
     // Page 2 - Try inserting right half to it.
     auto group = rgroups.at(re1.mid_index);
     uint32 index = group.start_index;
     auto page2 = tree_->AllocateNewPage(TREE_LEAVE);
     result.emplace_back(page2);
-    result[1].record = plrecords_[index].Shared_Record();
+    result[1].record = plrecords_[index].shared_record();
 
     bool new_record_inserted = false;
     auto tail_page = page2;
@@ -536,7 +536,7 @@ PageRecordsManager::InsertRecordAndSplitPage(
       else {
         page_->DeleteRecord(slot_id);
         if (file_type_ == INDEX_DATA) {
-          rid_mutations->emplace_back(Shared_Record(index),
+          rid_mutations->emplace_back(shared_record(index),
                                       RecordID(page_->id(), slot_id),
                                       RecordID(tail_page->id(), new_slot_id));
         }
@@ -568,7 +568,7 @@ PageRecordsManager::InsertRecordAndSplitPage(
           else {
             page_->DeleteRecord(slot_id);
             if (file_type_ == INDEX_DATA) {
-              rid_mutations->emplace_back(Shared_Record(index),
+              rid_mutations->emplace_back(shared_record(index),
                                           RecordID(page_->id(), slot_id),
                                           RecordID(page2->id(), new_slot_id));
             }
@@ -594,7 +594,7 @@ PageRecordsManager::InsertRecordAndSplitPage(
         else {
           page_->DeleteRecord(slot_id);
           if (file_type_ == INDEX_DATA) {
-            rid_mutations->emplace_back(Shared_Record(index),
+            rid_mutations->emplace_back(shared_record(index),
                                         RecordID(page_->id(), slot_id),
                                         RecordID(page3->id(), new_slot_id));
           }
@@ -614,7 +614,7 @@ PageRecordsManager::InsertRecordAndSplitPage(
     if (page3) {
       BplusTree::ConnectLeaves(tail_page, page3);
       result.emplace_back(page3);
-      result[2].record = plrecords_[page3_start_index].Shared_Record();
+      result[2].record = plrecords_[page3_start_index].shared_record();
     }
   }
 

@@ -34,14 +34,14 @@ class PageRecordsManager {
   std::vector<PageLoadedRecord>& plrecords() { return plrecords_; }
 
   const RecordBase& record(uint32 index) const;
-  RecordBase* Record(uint32 index);
-  std::shared_ptr<RecordBase> Shared_Record(uint32 index);
+  RecordBase* mutable_record(uint32 index);
+  std::shared_ptr<RecordBase> shared_record(uint32 index);
 
   int RecordSlotID(uint32 index) const;
 
   template<class T>
   T* GetRecord(int index) {
-    return dynamic_cast<T*>(Record(index));
+    return dynamic_cast<T*>(mutable_record(index));
   }
 
   template<class T>

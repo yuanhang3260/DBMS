@@ -16,7 +16,7 @@ const char* const kTableName = "Puppy";
 const char* const kDBName = "testDB";
 }  // namespace
 
-class InterpreterTest: public UnitTest {
+class QueryTest: public UnitTest {
  private:
   std::shared_ptr<RecordBase> data_record_;
   std::shared_ptr<RecordBase> index_record_;
@@ -327,8 +327,6 @@ class InterpreterTest: public UnitTest {
     expr = "SELECT age FROM Puppy, Host WHERE name = \"hy\"";
     std::cout << expr << std::endl;
     AssertFalse(interpreter_->Parse(expr));
-    node = interpreter_->shared_query()->GetExprNode();
-    AssertFalse(node && node->valid());
     std::cout << interpreter_->error_msg() << std::endl;
     interpreter_->reset();
     printf("\n");
@@ -338,7 +336,7 @@ class InterpreterTest: public UnitTest {
 }  // namespace Storage
 
 int main() {
-  Query::InterpreterTest test;
+  Query::QueryTest test;
   test.setup();
 
   // test.Test_EvaluateConst();

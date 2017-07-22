@@ -49,7 +49,7 @@ TESTOBJ = $(OBJ_DIR)/Schema/DataTypes_test.o  \
 					$(OBJ_DIR)/Database/Database_test.o  \
 					$(OBJ_DIR)/Database/Table_test.o  \
 					$(OBJ_DIR)/Database/Operation_test.o  \
-					$(OBJ_DIR)/Query/Interpreter_test.o  \
+					$(OBJ_DIR)/Query/Query_test.o  \
 
 
 TESTEXE = test/RecordPage_test.out  \
@@ -60,7 +60,7 @@ TESTEXE = test/RecordPage_test.out  \
           test/Operation_test.out  \
           test/Database_test.out  \
           test/MergeSort_test.out  \
-          test/Interpreter_test.out  \
+          test/Query_test.out  \
 
  LIB_DIRS = $(OBJ_DIR)/Storage  \
             $(OBJ_DIR)/Database  \
@@ -77,7 +77,7 @@ sql_parser: $(SQL_DIR)/scanner.l $(SQL_DIR)/parser.y
 	flex -o $(SQL_DIR)/scanner.cc $(SQL_DIR)/scanner.l
 	bison -o $(SQL_DIR)/parser.cc $(SQL_DIR)/parser.y
 
-library: sql_parser $(OBJ)
+library: $(OBJ)
 	ar cr libDBMS.a $(OBJ)
 
 test: $(TESTEXE)
