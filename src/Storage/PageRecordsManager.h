@@ -119,6 +119,7 @@ class PageRecordsManager {
   RecordPage* page_ = nullptr;
 
   std::vector<PageLoadedRecord> plrecords_;
+  std::map<int32, PageLoadedRecord*> slot_plrecords_;
   const DB::TableInfo* schema_ = nullptr;
   std::vector<int> key_indexes_;
 

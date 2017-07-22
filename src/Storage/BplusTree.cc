@@ -1158,40 +1158,6 @@ std::shared_ptr<RecordBase> BplusTree::GetRecord(RecordID rid) {
   return plrecord.shared_record();
 }
 
-int BplusTree::SearchRecords(
-        const std::vector<std::shared_ptr<RecordBase>>& keys,
-        std::vector<std::shared_ptr<RecordBase>>* result) {
-  for (const auto& key : keys) {
-    SANITY_CHECK(CheckKeyFieldsType(*key),
-                 "Key fields type mismatch table schema of this B+ tree");
-  }
-
-  int total_matches = 0;
-  for (const auto& key : keys) {
-    int num_matches_this_key = SearchRecords(*key, result);
-    if (num_matches_this_key > 0) {
-      total_matches += num_matches_this_key;
-    }
-  }
-  return total_matches;
-}
-
-int BplusTree::SearchRecords(const RecordBase& key,
-                             std::vector<std::shared_ptr<RecordBase>>* result) {
-  SANITY_CHECK(CheckKeyFieldsType(key),
-               "Key fields type mismatch table schema of this B+ tree");
-
-  auto leave = SearchByKey(key);
-  if (!leave) {
-    LogERROR("Can't search to leave by this key");
-    return -1;
-  }
-
-  result->clear();
-  FetchResultsFromLeave(key, leave, result);
-  return result->size(); 
-}
-
 RecordPage* BplusTree::SearchByKey(const RecordBase& key) {
   RecordPage* crt_page = Page(header_->root_page());
   while (crt_page && crt_page->meta().page_type() == TREE_NODE) {
@@ -1208,10 +1174,43 @@ RecordPage* BplusTree::SearchByKey(const RecordBase& key) {
   return crt_page;
 }
 
+// int BplusTree::SearchRecords(
+//         const std::vector<std::shared_ptr<RecordBase>>& keys,
+//         std::vector<std::shared_ptr<RecordBase>>* result) {
+//   for (const auto& key : keys) {
+//     SANITY_CHECK(CheckKeyFieldsType(*key),
+//                  "Key fields type mismatch table schema of this B+ tree");
+//   }
+
+//   int total_matches = 0;
+//   for (const auto& key : keys) {
+//     int num_matches_this_key = SearchRecords(*key, result);
+//     if (num_matches_this_key > 0) {
+//       total_matches += num_matches_this_key;
+//     }
+//   }
+//   return total_matches;
+// }
+
+int BplusTree::SearchRecords(const RecordBase& key,
+                             std::vector<std::shared_ptr<RecordBase>>* result) {
+  SANITY_CHECK(CheckKeyFieldsType(key),
+               "Key fields type mismatch table schema of this B+ tree");
+
+  auto leave = SearchByKey(key);
+  if (!leave) {
+    LogERROR("Can't search to leave by this key");
+    return -1;
+  }
+
+  result->clear();
+  FetchResultsFromLeave(key, leave, result);
+  return result->size();
+}
+
 int BplusTree::FetchResultsFromLeave(
-         const RecordBase& key,
-         RecordPage* leave,
-         std::vector<std::shared_ptr<RecordBase>>* result) {
+       const RecordBase& key, RecordPage* leave,
+       std::vector<std::shared_ptr<RecordBase>>* result) {
   if (!leave || !result) {
     LogERROR("Nullptr input to FetchResultsFromLeave");
     return -1;
@@ -1243,6 +1242,59 @@ int BplusTree::FetchResultsFromLeave(
     else {
       break;
     }
+  }
+
+  return result->size();
+}
+
+int BplusTree::RangeSearchRecords(
+      const DB::RangeSearchOp& op,
+      std::vector<std::shared_ptr<RecordBase>>* result) {
+  SANITY_CHECK(op.left_key && CheckKeyFieldsType(*op.left_key),
+               "Left key fields type mismatch table schema of this B+ tree");
+
+  SANITY_CHECK(op.right_key && CheckKeyFieldsType(*op.right_key),
+               "Right key fields type mismatch table schema of this B+ tree");
+
+  auto leave = SearchByKey(*op.left_key);
+  if (!leave) {
+    LogERROR("Can't search to leave by this key");
+    return -1;
+  }
+
+  result->clear();
+
+  std::set<Storage::RecordID> rid_set;
+  bool end = false;
+  while (leave) {
+    PageRecordsManager prmanager(leave, schema(), key_indexes_,
+                                 file_type_, leave->meta().page_type());
+
+    // Fetch all matching records in this leave.
+    for (uint32 index = 0; index < prmanager.NumRecords(); index++) {
+      // Compare with left bound.
+      int re = prmanager.CompareRecordWithKey(prmanager.record(index),
+                                              *op.left_key);
+      bool left_match = (re > 0 && op.left_open) || (re >= 0 && !op.left_open);
+
+      // Compare with right bound.
+      re = prmanager.CompareRecordWithKey(prmanager.record(index),
+                                          *op.right_key);
+      bool right_match = (re < 0 && op.right_open) ||
+                         (re <= 0 && !op.right_open);
+      if (!right_match) {
+        end = true;
+        break;
+      }
+
+      if (left_match && right_match) {
+        result->push_back(prmanager.shared_record(index));
+      }
+    }
+    if (end) {
+      break;
+    }
+    leave = Page(leave->Meta()->next_page());
   }
 
   return result->size();
@@ -1541,11 +1593,11 @@ bool BplusTree::ReDistributeRecordsWithinTwoPages(
   }
   // No record is re-distributed.
   if (gindex == gindex_start) {
-    printf("No record moved\n");
+    //printf("No record moved\n");
     return true;
   }
 
-  printf("gindex = %d, gindex_start = %d\n", gindex, gindex_start);
+  //printf("gindex = %d, gindex_start = %d\n", gindex, gindex_start);
   if (move_direction > 0) {
     gindex++;
   }
@@ -1576,7 +1628,7 @@ bool BplusTree::MergeTwoNodes(
     return false;
   }
 
-  printf("merging %d and %d\n", page1->id(), page2->id());
+  //printf("merging %d and %d\n", page1->id(), page2->id());
 
   if (page1->meta().overflow_page() > 0 ||
       page2->meta().overflow_page() > 0) {
@@ -1691,7 +1743,7 @@ bool BplusTree::DeleteNodeFromTree(RecordPage* page, int slot_id_in_parent) {
     }
     // Min tree node record re-point to second leave if exists.
     if (result.next_child_id > 0) {
-      printf("next child id is moved to first %d\n", result.next_child_id);
+      //printf("next child id is moved to first %d\n", result.next_child_id);
       CheckLogFATAL(parent->DeleteRecord(result.next_slot),
                     "Failed to delete tree node record of second leave %d",
                     result.next_child_id);
@@ -1752,7 +1804,7 @@ bool BplusTree::ProcessNodeAfterRecordDeletion(
   // DeleteNodeFromTree() recursively.
   if (page->meta().num_records() == 0) {
     // Pass -1 to recursive calls so that page's parent will be looked up.
-    debug(0);
+    //debug(0);
     return DeleteNodeFromTree(page, -1);
   }
 
@@ -1762,14 +1814,14 @@ bool BplusTree::ProcessNodeAfterRecordDeletion(
   if (page->id() == header_->root_page()) {
     if (page->meta().num_records() > 1) {
       return true;
-      debug(1);
+      //debug(1);
     }
     if (header_->depth() <= 1) {
-      debug(10);
+      //debug(10);
       return true;
     }
 
-    debug(2);
+    //debug(2);
     header_->decrement_depth(1);
     int page_id = -1;
     PageRecordsManager prmanager(page, schema(), key_indexes_,
@@ -1793,7 +1845,7 @@ bool BplusTree::ProcessNodeAfterRecordDeletion(
   // Parse current page's parent and tries to find its siblings.
   // We prefer re-distribute records rather than merging, since merging might
   // propagate into upper nodes, and make nodes more occupied.
-  debug(3);
+  //debug(3);
   SearchTreeNodeResult result = LookUpTreeNodeInfoForPage(*page);
   CheckLogFATAL(result.slot >= 0, "Invalid slot id of page %d in parent");
 
@@ -1803,7 +1855,7 @@ bool BplusTree::ProcessNodeAfterRecordDeletion(
   if (result.next_child_id >= 0) {
     if (ReDistributeRecordsWithinTwoPages(page, Page(result.next_child_id),
                                           result.next_slot, rid_mutations)) {
-      debug(4);
+      //debug(4);
       if (page->meta().page_type() == TREE_LEAVE && delete_result) {
         delete_result->mutated_leaves.push_back(result.next_child_id);
       }
@@ -1813,7 +1865,7 @@ bool BplusTree::ProcessNodeAfterRecordDeletion(
   if (result.prev_child_id >= 0) {
     if (ReDistributeRecordsWithinTwoPages(Page(result.prev_child_id), page,
                                           result.slot, rid_mutations)) {
-      debug(5);
+      //debug(5);
       if (page->meta().page_type() == TREE_LEAVE && delete_result) {
         delete_result->mutated_leaves.push_back(result.prev_child_id);
       }
@@ -1823,7 +1875,7 @@ bool BplusTree::ProcessNodeAfterRecordDeletion(
   if (result.next_child_id >= 0) {
     if (MergeTwoNodes(page, Page(result.next_child_id),
                       result.next_slot, rid_mutations)) {
-      debug(6);
+      //debug(6);
       if (page->meta().page_type() == TREE_LEAVE && delete_result) {
         delete_result->mutated_leaves.push_back(result.next_child_id);
       }
@@ -1833,7 +1885,7 @@ bool BplusTree::ProcessNodeAfterRecordDeletion(
   if (result.prev_child_id >= 0) {
     if (MergeTwoNodes(Page(result.prev_child_id), page,
                       result.slot, rid_mutations)) {
-      debug(7);
+      //debug(7);
       return true;
     }
   }
@@ -1910,10 +1962,10 @@ bool BplusTree::Do_DeleteRecordByRecordID(
     auto page = Page(rid_deleted[group_start].old_rid.page_id());
     DB::DeleteResult crt_result;
     CheckLogFATAL(page, "Can't find data tree leave %d", page->id());
-    printf("-------------\n");
+    //printf("-------------\n");
     for (int j = group_start; j < group_end; j++) {
-      printf("deleting: ");
-      rid_deleted[j].old_rid.Print();
+      //printf("deleting: ");
+      //rid_deleted[j].old_rid.Print();
       crt_result.rid_deleted.emplace_back(GetRecord(rid_deleted[j].old_rid),
                                           rid_deleted[j].old_rid,
                                           RecordID());
@@ -1930,7 +1982,7 @@ bool BplusTree::Do_DeleteRecordByRecordID(
     //   m.Print();
     // }
     group_start = group_end;
-    printf("-------------\n");
+    //printf("-------------\n");
   }
 
   return true;

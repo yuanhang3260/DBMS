@@ -33,6 +33,7 @@ class Table {
   bool PreLoadData(std::vector<std::shared_ptr<Storage::RecordBase>>& records);
 
   Storage::BplusTree* Tree(Storage::FileType, std::vector<int> key_indexes);
+  Storage::BplusTree* DataTree();
 
   bool IsDataFileKey(const std::vector<int>& indexes) const;
   std::vector<int> DataTreeKey() const;
@@ -41,8 +42,13 @@ class Table {
 
   bool ValidateAllIndexRecords(int num_records);
 
-  bool UpdateIndexTrees(
-           std::vector<Storage::DataRecordRidMutation>& rid_mutations);
+  // Operations
+  int SearchRecords(const DB::SearchOp& op,
+                    std::vector<std::shared_ptr<Storage::RecordBase>>* result);
+
+  int RangeSearchRecords(
+      const DB::RangeSearchOp& op,
+      std::vector<std::shared_ptr<Storage::RecordBase>>* result);
 
   bool InsertRecord(const Storage::RecordBase& record);
 
@@ -51,10 +57,20 @@ class Table {
  private:
   bool BuildFieldIndexMap();
 
+  bool UpdateIndexTrees(
+           std::vector<Storage::DataRecordRidMutation>& rid_mutations);
+
+  Storage::DataRecord* CreateDataRecord();
+  Storage::IndexRecord* CreateIndexRecord(const std::vector<int>& key_indexes);
+
+  void FetchDataRecordsByRids(
+      const std::vector<std::shared_ptr<Storage::RecordBase>>& irecords,
+      std::vector<std::shared_ptr<Storage::RecordBase>>* drecords);
+
   // Given a sorted list of DataRecordRidMutation groups, we further group them
   // into leave groups - that is, group them based on the index B+ tree leave 
   // reside in. It's an optimization so that we batch update/delete rids records
-  // based on leaves. 
+  // based on leaves.
   class RidMutationLeaveGroup {
    public:
     RidMutationLeaveGroup(int start, int end, int id) :

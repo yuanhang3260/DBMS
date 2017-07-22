@@ -2,6 +2,7 @@
 #include <string.h>
 
 #include "Base/Log.h"
+#include "Base/MacroUtils.h"
 #include "Base/Utils.h"
 #include "Strings/Utils.h"
 
@@ -10,6 +11,15 @@
 #include "Storage/PageRecordsManager.h"
 
 namespace DB {
+
+namespace {
+
+using Storage::RecordBase;
+using Storage::DataRecord;
+using Storage::IndexRecord;
+using Storage::RecordID;
+
+}
 
 Table::Table(const std::string& db_name, const std::string& name,
              const TableInfo* schema) :
@@ -49,6 +59,10 @@ Storage::BplusTree* Table::Tree(Storage::FileType file_type,
   tree_map_.emplace(filename, tree);
 
   return nullptr;
+}
+
+Storage::BplusTree* Table::DataTree() {
+  return Tree(Storage::INDEX_DATA, idata_indexes_);
 }
 
 std::string Table::BplusTreeFileName(Storage::FileType file_type,
@@ -216,6 +230,64 @@ bool Table::PreLoadData(
   return true;
 }
 
+DataRecord* Table::CreateDataRecord() {
+  DataRecord* drecord = new DataRecord();
+  std::vector<int> indexes(schema().fields_size());
+  for (uint32 i = 0; i < indexes.size(); i++) {
+    indexes[i] = i;
+  }
+  drecord->InitRecordFields(schema(), indexes);
+  return drecord;
+}
+
+IndexRecord* Table::CreateIndexRecord(const std::vector<int>& key_indexes) {
+  IndexRecord* irecord = new IndexRecord();
+  irecord->InitRecordFields(schema(), key_indexes);
+  return irecord;
+}
+
+void Table::FetchDataRecordsByRids(
+    const std::vector<std::shared_ptr<RecordBase>>& irecords,
+    std::vector<std::shared_ptr<RecordBase>>* drecords) {
+  std::vector<RecordID> rids;
+  for (const auto& irecord : irecords) {
+    rids.push_back((dynamic_cast<const IndexRecord&>(*irecord)).rid());
+  }
+  std::sort(rids.begin(), rids.end());
+  for (const auto& rid : rids) {
+    DataRecord* drecord = CreateDataRecord();
+    SANITY_CHECK(drecord->LoadFromMem(DataTree()->Record(rid)) >= 0,
+                 "Load data record failed");
+    drecords->push_back(std::shared_ptr<RecordBase>(drecord));
+  }
+}
+
+int Table::SearchRecords(const DB::SearchOp& op,
+                         std::vector<std::shared_ptr<RecordBase>>* result) {
+  auto data_tree = DataTree();
+  if (IsDataFileKey(op.field_indexes)) {
+    return data_tree->SearchRecords(*op.key, result);
+  } else {
+    std::vector<std::shared_ptr<RecordBase>> irecords;
+    Tree(Storage::INDEX, op.field_indexes)->SearchRecords(*op.key, &irecords);
+    FetchDataRecordsByRids(irecords, result);
+  }
+  return result->size();
+}
+
+int Table::RangeSearchRecords(const DB::RangeSearchOp& op,
+                              std::vector<std::shared_ptr<RecordBase>>* result){
+  auto data_tree = DataTree();
+  if (IsDataFileKey(op.field_indexes)) {
+    return data_tree->RangeSearchRecords(op, result);
+  } else {
+    std::vector<std::shared_ptr<RecordBase>> irecords;
+    Tree(Storage::INDEX, op.field_indexes)->RangeSearchRecords(op, &irecords);
+    FetchDataRecordsByRids(irecords, result);
+  }
+  return result->size();
+}
+
 bool Table::ValidateAllIndexRecords(int num_records) {
   // Get the data tree.
   auto data_tree = Tree(Storage::INDEX_DATA, idata_indexes_);
@@ -303,7 +375,7 @@ bool Table::UpdateIndexTrees(
     if (IsDataFileKey(key_indexes)) {
       continue;
     }
-    // printf("************** Updating Rid for index tree %d ******************\n",
+    // printf("************** Updating Rid for index tree %d ****************\n",
     //        key_index[0]);
 
     // Index Tree.
@@ -378,7 +450,7 @@ int Table::DeleteRecord(const DeleteOp& op) {
 
   DeleteResult data_delete_result;
   int pre_index = -1;
-  if (op.op_cond == EQ) {
+  if (op.op_cond == Query::EQUAL) {
     if (IsDataFileKey({op.key_index})) {
       auto data_tree = Tree(Storage::INDEX_DATA, idata_indexes_);
       if (!data_tree) {

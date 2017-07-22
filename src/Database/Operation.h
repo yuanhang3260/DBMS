@@ -4,24 +4,31 @@
 #include <vector>
 #include <memory>
 
+#include "Query/Common.h"
 #include "Storage/Record.h"
 #include "Storage/PageRecord_Common.h"
 
 namespace DB {
 
-enum OpCondition {
-  EQ = 0,
-  LT = 1,  
-  GT = 2,
-  NE = 3,
-  BT = 4,  // Betwee two values
+struct SearchOp {
+  std::vector<int32> field_indexes;
+  std::shared_ptr<Storage::RecordBase> key;
 };
 
-class DeleteOp {
- public:
+struct RangeSearchOp {
+  std::vector<int32> field_indexes;
+
+  std::shared_ptr<Storage::RecordBase> left_key;
+  bool left_open = true;
+
+  std::shared_ptr<Storage::RecordBase> right_key;
+  bool right_open = true;
+};
+
+struct DeleteOp {
   int key_index = -1;
   std::vector<std::shared_ptr<Storage::RecordBase>> keys;
-  OpCondition op_cond = EQ;
+  Query::OperatorType op_cond = Query::EQUAL;
 };
 
 class DeleteResult {

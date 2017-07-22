@@ -74,6 +74,7 @@ bool PageRecordsManager::LoadRecordsFromPage() {
       continue;
     }
     plrecords_.push_back(PageLoadedRecord(slot_id));
+    slot_plrecords_.emplace(slot_id, &plrecords_.back());
     plrecords_.back().GenerateRecordPrototype(*schema_, key_indexes_,
                                               file_type_, page_type_);
     int load_size = plrecords_.back().LoadFromMem(page_->Record(slot_id));

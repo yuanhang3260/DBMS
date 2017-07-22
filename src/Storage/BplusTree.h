@@ -115,11 +115,14 @@ class BplusTree {
   std::shared_ptr<RecordBase> GetRecord(RecordID rid);
 
   // Serach records by a key. Returns all records that matches this key.
-  int SearchRecords(const std::vector<std::shared_ptr<RecordBase>>& keys,
-                    std::vector<std::shared_ptr<RecordBase>>* result);
+  // int SearchRecords(const std::vector<std::shared_ptr<RecordBase>>& keys,
+  //                   std::vector<std::shared_ptr<RecordBase>>* result);
 
   int SearchRecords(const RecordBase& key,
                     std::vector<std::shared_ptr<RecordBase>>* result);
+
+  int RangeSearchRecords(const DB::RangeSearchOp& op,
+                         std::vector<std::shared_ptr<RecordBase>>* result);
 
   // Search a key and return the leave.
   RecordPage* SearchByKey(const RecordBase& key);

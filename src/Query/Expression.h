@@ -131,7 +131,6 @@ class ColumnNode : public ExprTreeNode {
   ColumnNode(const Column& column, const DB::TableField& field);
 
   Type type() const override { return ExprTreeNode::TABLE_COLUMN; }
-  
 
   void Print() const override;
 
