@@ -154,6 +154,7 @@ bool Table::PreLoadData(
     return false;
   }
 
+  printf("tree map size = %d\n", tree_map_.size());
   tree_map_.clear();
 
   // Sort the record based on idata_indexes_ (preferably primary key).
@@ -277,6 +278,15 @@ int Table::SearchRecords(const DB::SearchOp& op,
 
 int Table::RangeSearchRecords(const DB::RangeSearchOp& op,
                               std::vector<std::shared_ptr<RecordBase>>* result){
+  // Compare left and right key. If they form an empty set, return 0.
+  if (op.left_key && op.right_key) {
+    int re = RecordBase::CompareRecords(*op.left_key, *op.right_key);
+    if (re > 0 || (re == 0 && (op.left_open || op.right_open))) {
+      LogINFO("Left and right keys produce empty range");
+      return 0;
+    }
+  }
+
   auto data_tree = DataTree();
   if (IsDataFileKey(op.field_indexes)) {
     return data_tree->RangeSearchRecords(op, result);

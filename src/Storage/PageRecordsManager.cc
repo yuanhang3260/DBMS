@@ -35,7 +35,7 @@ PageRecordsManager::PageRecordsManager(RecordPage* page,
 void PageRecordsManager::SortRecords(
          std::vector<std::shared_ptr<RecordBase>>* records,
          const std::vector<int>& key_indexes) {
-  for (int i : key_indexes) {
+  for (uint32 i : key_indexes) {
     if (i >= records->at(0)->NumFields()) {
       LogERROR("key index = %d, records only has %d fields",
                i, records->at(0)->NumFields());

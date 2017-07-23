@@ -573,7 +573,7 @@ bool BplusTree::InsertTreeNodeRecord(const Storage::TreeNodeRecord& tn_record,
     // Current tree node is root, so create new root and we need to add both
     // tree nodes to the root.
     RecordPage* new_root = AllocateNewPage(TREE_NODE);
-    LogINFO("Creating new root %d", new_root->id());
+    //LogINFO("Creating new root %d", new_root->id());
     header_->set_root_page(new_root->id());
     header_->increment_depth(1);
 
@@ -865,6 +865,7 @@ bool BplusTree::ValidityCheck() {
 
   // Level-traverse the B+ tree.
   page_q.push(root);
+  vc_status_ = ValidityCheckStatus();
   vc_status_.count_num_pages = 2;  // header page + root
   vc_status_.count_num_used_pages = 2;
   while (!page_q.empty()) {
@@ -1250,16 +1251,25 @@ int BplusTree::FetchResultsFromLeave(
 int BplusTree::RangeSearchRecords(
       const DB::RangeSearchOp& op,
       std::vector<std::shared_ptr<RecordBase>>* result) {
-  SANITY_CHECK(op.left_key && CheckKeyFieldsType(*op.left_key),
-               "Left key fields type mismatch table schema of this B+ tree");
+  if (op.left_key) {
+    SANITY_CHECK(CheckKeyFieldsType(*op.left_key),
+                 "Left key fields type mismatch table schema of this B+ tree");
+  }
 
-  SANITY_CHECK(op.right_key && CheckKeyFieldsType(*op.right_key),
-               "Right key fields type mismatch table schema of this B+ tree");
+  if (op.right_key) {
+    SANITY_CHECK(CheckKeyFieldsType(*op.right_key),
+                 "Right key fields type mismatch table schema of this B+ tree");
+  }
 
-  auto leave = SearchByKey(*op.left_key);
-  if (!leave) {
-    LogERROR("Can't search to leave by this key");
-    return -1;
+  RecordPage* leave = nullptr;
+  if (op.left_key) {
+    leave = SearchByKey(*op.left_key);
+    if (!leave) {
+      LogERROR("Can't search to leave by this key");
+      return 0;
+    }
+  } else {
+    leave = FirstLeave();
   }
 
   result->clear();
@@ -1273,22 +1283,33 @@ int BplusTree::RangeSearchRecords(
     // Fetch all matching records in this leave.
     for (uint32 index = 0; index < prmanager.NumRecords(); index++) {
       // Compare with left bound.
-      int re = prmanager.CompareRecordWithKey(prmanager.record(index),
-                                              *op.left_key);
-      bool left_match = (re > 0 && op.left_open) || (re >= 0 && !op.left_open);
+      bool left_match = false, right_match = false;
+
+      if (op.left_key) {
+        int re = prmanager.CompareRecordWithKey(*op.left_key,
+                                                prmanager.record(index));
+        left_match = (re < 0 && op.left_open) || (re <= 0 && !op.left_open);
+      } else {
+        left_match = true;
+      }
 
       // Compare with right bound.
-      re = prmanager.CompareRecordWithKey(prmanager.record(index),
-                                          *op.right_key);
-      bool right_match = (re < 0 && op.right_open) ||
-                         (re <= 0 && !op.right_open);
-      if (!right_match) {
-        end = true;
-        break;
+      if (op.right_key) {
+        int re = prmanager.CompareRecordWithKey(*op.right_key,
+                                              prmanager.record(index));
+        right_match = (re > 0 && op.right_open) || (re >= 0 && !op.right_open);
+
+        if (!right_match) {
+          end = true;
+          break;
+        }
+      } else {
+        right_match = true;
       }
 
       if (left_match && right_match) {
         result->push_back(prmanager.shared_record(index));
+        //result->back()->Print();
       }
     }
     if (end) {

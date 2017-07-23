@@ -195,12 +195,6 @@ class BplusTreeTest: public UnitTest {
     AssertEqual(0, tree.meta()->depth());
   }
 
-  void CheckBplusTree(FileType file_type, std::vector<int>& key_indexes) {
-    BplusTree tree(table_, file_type, key_indexes);
-    AssertTrue(tree.ValidityCheck(), "Check B+ tree failed");
-    printf("Good B+ Tree!\n");
-  }
-
   // Traverse all records in the B+ tree (data or index tree), and verify they
   // match the original record_resource in the number of records of each key.
   void VerifyAllRecordsInTree(BplusTree* tree, std::vector<int> key_indexes) {
@@ -256,7 +250,7 @@ class BplusTreeTest: public UnitTest {
       auto tree = table_->Tree(file_type, key_index);
       tree->SaveToDisk();
 
-      CheckBplusTree(file_type, key_index);
+      AssertTrue(tree->ValidityCheck(), "Check B+ tree failed");
       VerifyAllRecordsInTree(tree, key_index);
     }
     AssertTrue(table_->ValidateAllIndexRecords(v.size()));
@@ -612,13 +606,13 @@ class BplusTreeTest: public UnitTest {
       // }
     }
     // Search and verify records.
+    AssertTrue(tree.ValidityCheck(), "Check B+ tree failed");
     VerifyAllRecordsInTree(&tree, key_index);
   }
 
   void Test_DeleteRecord(FileType file_type, std::vector<int> key_index) {
     // Create a tree with records.
     Test_InsertRecord(file_type, key_index);
-    CheckBplusTree(file_type, key_index);
     printf("********************** Begin Deleting *************************\n");
 
     // Delete records.
@@ -637,7 +631,7 @@ class BplusTreeTest: public UnitTest {
       tree.Do_DeleteRecordByKey(op.keys, &delete_result);
 
       tree.SaveToDisk();
-      CheckBplusTree(file_type, key_index);
+      AssertTrue(tree.ValidityCheck(), "Check B+ tree failed");
     }
   }
 
@@ -679,7 +673,7 @@ class BplusTreeTest: public UnitTest {
       auto tree = table_->Tree(file_type, key_indexes);
       tree->SaveToDisk();
 
-      CheckBplusTree(file_type, key_indexes);
+      AssertTrue(tree->ValidityCheck(), "Check B+ tree failed");
       VerifyAllRecordsInTree(tree, key_indexes);
     }
   }
@@ -755,7 +749,7 @@ class BplusTreeTest: public UnitTest {
       auto tree = table_->Tree(file_type, key_index);
       tree->SaveToDisk();
 
-      CheckBplusTree(file_type, key_index);
+      AssertTrue(tree->ValidityCheck(), "Check B+ tree failed");
       //VerifyAllRecordsInTree(tree, key_index);
     }
   }
@@ -768,13 +762,13 @@ class BplusTreeTest: public UnitTest {
 
     auto delete_ages = Utils::RandomListFromRange(0, 100);
     //std::sort(delete_ages.begin(), delete_ages.end());
-    int start = 0;
+    int start = 0, crt_records = record_resource_.size();
     while (start < 100) {
       int group_len = Utils::RandomNumber(5) + 1;
-      group_len = start + group_len >= 100 ? (100 - start) : group_len;
+      group_len = std::min(group_len, 101 - start);
       // Generate delete operator, delete ages from index [start, start + len].
       DB::DeleteOp op;
-      //LogERROR("start = %d, end = %d", start, start + group_len - 1);
+      //LogINFO("start = %d, end = %d", start, start + group_len - 1);
       for (int i = start; i < start + group_len; i++) {
         op.key_index = 1;
         op.keys.push_back(std::make_shared<RecordBase>());
@@ -782,15 +776,14 @@ class BplusTreeTest: public UnitTest {
       }
       start += group_len;
 
-      //LogERROR("Deleting");
       // Do deletion.
       int delete_num = table_->DeleteRecord(op);
-      //LogERROR("Deleted %d records", delete_num);
+      crt_records -= delete_num;
+      //LogINFO("Deleted %d records", delete_num);
 
       // Validate index tree records consistency with data tree records.
-      AssertTrue(table_->ValidateAllIndexRecords(-1));
+      AssertTrue(table_->ValidateAllIndexRecords(crt_records));
 
-      //LogERROR("Inserting\n");
       // Re-insert some record.
       int total_insert = delete_num * Utils::RandomNumber(20) / 10;
       for (int insert_num = 0; insert_num < total_insert; insert_num++) {
@@ -798,19 +791,18 @@ class BplusTreeTest: public UnitTest {
         //printf("insert_num = %d\n", insert_num);
         table_->InsertRecord(*record_resource_[insert_record_key]);
       }
-
-      // Validate index tree records consistency with data tree records.
-      AssertTrue(table_->ValidateAllIndexRecords(-1));
+      crt_records += total_insert;
 
       // Consistency check of all B+ trees.
       for (const auto& field: schema_.fields()) {
         auto key_index = std::vector<int>{field.index()};
+        printf("Checking tree %d\n", field.index());
         FileType file_type =
             table_->IsDataFileKey(key_index) ? INDEX_DATA : INDEX;
         auto tree = table_->Tree(file_type, key_index);
         tree->SaveToDisk();
 
-        CheckBplusTree(file_type, key_index);
+        AssertTrue(tree->ValidityCheck(), "Check B+ tree failed");
         //VerifyAllRecordsInTree(tree, key_index);
       }
     }
@@ -843,7 +835,6 @@ int main(int argc, char** argv) {
   // test.Test_SplitLeave();
   // for (int i = 0; i < 1; i++) {
   //   test.Test_InsertRecord(file_type, key_index);
-  //   test.CheckBplusTree(file_type, key_index);
   // }
 
   // for (int i = 0; i < 100; i++) {

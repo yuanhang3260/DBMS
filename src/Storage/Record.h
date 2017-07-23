@@ -89,7 +89,7 @@ class RecordBase {
   virtual uint32 size() const;
 
   // Number of fields this key contains.
-  int NumFields() const { return fields_.size(); }
+  uint32 NumFields() const { return fields_.size(); }
 
   virtual RecordType type() const { return UNKNOWN_RECORDTYPE; }
 
@@ -148,6 +148,8 @@ class RecordBase {
   static bool RecordComparatorGt(const RecordBase& r1,
                                  const RecordBase& r2,
                                  const std::vector<int>& indexes);
+
+  static int CompareRecords(const RecordBase& r1, const RecordBase& r2);
 
   static int CompareRecordWithKey(const RecordBase& key,
                                   const RecordBase& record,

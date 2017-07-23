@@ -140,6 +140,25 @@ bool RecordBase::operator==(const RecordBase& other) const {
   return true;
 }
 
+int RecordBase::CompareRecords(const RecordBase& r1, const RecordBase& r2) {
+  SANITY_CHECK(r1.NumFields() == r2.NumFields(),
+               "records have different number of fields");
+
+  for (uint32 i = 0; i < r1.NumFields(); i++) {
+    CHECK(r1.fields_.at(i)->type() == r2.fields_.at(i)->type(),
+          "Comparing different types of schema fields!");
+    int re = RecordBase::CompareSchemaFields(r1.fields_.at(i).get(),
+                                             r2.fields_.at(i).get());
+    if (re < 0) {
+      return -1;
+    }
+    else if (re > 0) {
+      return 1;
+    }
+  }
+  return 0;
+}
+
 int RecordBase::CompareRecordsBasedOnIndex(const RecordBase& r1,
                                            const RecordBase& r2,
                                            const std::vector<int>& indexes) {
@@ -175,7 +194,9 @@ int RecordBase::CompareRecordWithKey(const RecordBase& key,
                                      const RecordBase& record,
                                      const std::vector<int>& indexes) {
   SANITY_CHECK(!indexes.empty(), "empty comparing indexes");
-  for (int i = 0; i < (int)indexes.size(); i++) {
+  SANITY_CHECK(key.NumFields() == indexes.size(),
+               "Number of key fields mismatch with indexes to compare");
+  for (uint i = 0; i < indexes.size(); i++) {
     int re = RecordBase::CompareSchemaFields(
                  key.fields_.at(i).get(),
                  record.fields_.at(indexes[i]).get()
@@ -218,9 +239,7 @@ int RecordBase::CompareSchemaFields(const Schema::Field* field1,
   }
 
   auto type = field1->type();
-  if (type != field2->type()) {
-    LogFATAL("Comparing different types of schema fields!");
-  }
+  CHECK(type == field2->type(), "Comparing different types of schema fields!");
 
   if (type == Schema::FieldType::INT) {
     COMPARE_FIELDS_WITH_TYPE(Schema::IntField, field1, field2);

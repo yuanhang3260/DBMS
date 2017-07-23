@@ -204,7 +204,7 @@ std::shared_ptr<RecordBase> MergeSortTempfileManager::NextRecord() {
                crt_page_num_, record_length, load_size);
   
   total_records_++;
-  return plrecord.Shared_Record();
+  return plrecord.shared_record();
 }
 
 bool MergeSortTempfileManager::WriteRecord(const RecordBase& record) {

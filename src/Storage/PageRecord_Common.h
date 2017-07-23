@@ -21,7 +21,7 @@ class PageLoadedRecord {
   DEFINE_ACCESSOR_SMART_PTR(record, RecordBase);
   std::shared_ptr<RecordBase> shared_record() { return record_; }
 
-  int NumFields() const {
+  uint32 NumFields() const {
     if (!record_) {
       return 0;
     }

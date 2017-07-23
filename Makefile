@@ -52,15 +52,16 @@ TESTOBJ = $(OBJ_DIR)/Schema/DataTypes_test.o  \
 					$(OBJ_DIR)/Query/Query_test.o  \
 
 
-TESTEXE = test/RecordPage_test.out  \
+TESTEXE = test/BplusTree_test.out  \
+					test/Database_test.out  \
           test/DataTypes_test.out  \
-          test/Record_test.out  \
-          test/PageRecord_Common_test.out  \
-          test/BplusTree_test.out  \
-          test/Operation_test.out  \
-          test/Database_test.out  \
           test/MergeSort_test.out  \
+          test/Operation_test.out  \
+          test/PageRecord_Common_test.out  \
           test/Query_test.out  \
+					test/RecordPage_test.out  \
+          test/Record_test.out  \
+          test/Table_test.out  \
 
  LIB_DIRS = $(OBJ_DIR)/Storage  \
             $(OBJ_DIR)/Database  \
