@@ -13,6 +13,8 @@ namespace {
 
 const ::proto::MessageDescriptor* TableField_descriptor_ = nullptr;
 const ::proto::MessageReflection* TableField_reflection_ = nullptr;
+const ::proto::MessageDescriptor* Index_descriptor_ = nullptr;
+const ::proto::MessageReflection* Index_reflection_ = nullptr;
 const ::proto::MessageDescriptor* TableInfo_descriptor_ = nullptr;
 const ::proto::MessageReflection* TableInfo_reflection_ = nullptr;
 const ::proto::MessageDescriptor* DatabaseCatalog_descriptor_ = nullptr;
@@ -26,6 +28,10 @@ void static_init_default_instances_home_hy_Desktop_Projects_DBMS_src_Database_Ca
   if (DB::TableField::default_instance_ == nullptr) {
     DB::TableField::default_instance_ = new DB::TableField();
     DB::TableField::default_instance_->InitAsDefaultInstance();
+  }
+  if (DB::Index::default_instance_ == nullptr) {
+    DB::Index::default_instance_ = new DB::Index();
+    DB::Index::default_instance_->InitAsDefaultInstance();
   }
   if (DB::TableInfo::default_instance_ == nullptr) {
     DB::TableInfo::default_instance_ = new DB::TableInfo();
@@ -67,11 +73,27 @@ void static_init_home_hy_Desktop_Projects_DBMS_src_Database_Catalog() {
           PROTO_MESSAGE_FIELD_OFFSET(DB::TableField, has_bits_));
   ::proto::MessageFactory::RegisterGeneratedMessage(TableField_reflection_);
 
+  // static init for class Index
+  static const int Index_offsets_[1] = {
+    PROTO_MESSAGE_FIELD_OFFSET(DB::Index, index_fields_),
+  };
+  Index_descriptor_ = file_dscpt->FindMessageTypeByName("DB.Index");
+  CHECK(Index_descriptor_ != nullptr, 
+        "Can't find message descriptor for DB.Index");
+  Index_reflection_ = 
+      new ::proto::MessageReflection(
+          Index_descriptor_,
+          DB::Index::default_instance_,
+          Index_offsets_,
+          PROTO_MESSAGE_FIELD_OFFSET(DB::Index, has_bits_));
+  ::proto::MessageFactory::RegisterGeneratedMessage(Index_reflection_);
+
   // static init for class TableInfo
-  static const int TableInfo_offsets_[3] = {
+  static const int TableInfo_offsets_[4] = {
     PROTO_MESSAGE_FIELD_OFFSET(DB::TableInfo, name_),
     PROTO_MESSAGE_FIELD_OFFSET(DB::TableInfo, fields_),
-    PROTO_MESSAGE_FIELD_OFFSET(DB::TableInfo, primary_key_indexes_),
+    PROTO_MESSAGE_FIELD_OFFSET(DB::TableInfo, primary_index_),
+    PROTO_MESSAGE_FIELD_OFFSET(DB::TableInfo, indexes_),
   };
   TableInfo_descriptor_ = file_dscpt->FindMessageTypeByName("DB.TableInfo");
   CHECK(TableInfo_descriptor_ != nullptr, 
@@ -381,6 +403,179 @@ void TableField::clear_size() {
   has_bits_[0] &= (~0x10);
 }
 
+// ******************** Index ******************** //
+// constructor
+Index::Index() {
+  for (unsigned int i = 0; i < sizeof(has_bits_); i++) {
+    has_bits_[i] = 0;
+  }
+  default_instance_ = nullptr;
+}
+
+// copy constructor
+Index::Index(const Index& other) {
+  CopyFrom(other);
+}
+
+// move constructor
+Index::Index(Index&& other) {
+  MoveFrom(std::move(other));
+}
+
+// copy assignment
+Index& Index::operator=(const Index& other) {
+  CopyFrom(other);
+  return *this;
+}
+// move assignment
+Index& Index::operator=(Index&& other) {
+  MoveFrom(std::move(other));
+  return *this;
+}
+
+// New()
+::proto::Message* Index::New() const {
+  return reinterpret_cast<::proto::Message*>(new Index());
+}
+
+// CopyFrom()
+void Index::CopyFrom(const Index& other) {
+  index_fields_ = other.index_fields();
+  for (unsigned int i = 0; i < sizeof(has_bits_); i++) {
+    has_bits_[i] = other.has_bits_[i];
+  }
+}
+
+// MoveFrom()
+void Index::MoveFrom(Index&& other) {
+  for (unsigned int i = 0; i < sizeof(has_bits_); i++) {
+    has_bits_[i] = other.has_bits_[i];
+  }
+  index_fields_ = std::move(other.mutable_index_fields());
+  for (unsigned int i = 0; i < sizeof(has_bits_); i++) {
+    other.has_bits_[i] = 0;
+  }
+}
+
+// Equals()
+bool Index::Equals(const Index& other) const {
+  for (unsigned int i = 0; i < sizeof(has_bits_); i++) {
+    if (has_bits_[i] != other.has_bits_[i]) {
+      return false;
+    }
+  }
+  for (unsigned int i = 0; i < index_fields_.size(); i++) {
+    if (index_fields_.at(i) != other.index_fields_.at(i)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+// Serialize()
+::proto::SerializedMessage* Index::Serialize() const {
+  return Index_reflection_->Serialize(this);
+}
+
+// DeSerialize()
+void Index::DeSerialize(const char* buf, unsigned int size) {
+  Index_reflection_->DeSerialize(this, buf, size);
+}
+
+// Print()
+void Index::Print(int indent_num) const {
+  PrintIndent(indent_num);
+  std::cout << "Index " << "{" << std::endl;
+  if (index_fields_size() > 0) {
+    PrintIndent(indent_num + 1);
+    std::cout << "index_fields: " << "[";
+    for (const auto& ele: index_fields_) {
+        std::cout << ele << ", ";
+    }
+    std::cout << "]" << std::endl;
+  }
+  PrintIndent(indent_num);
+  std::cout << "}" << std::endl;
+}
+
+// InitAsDefaultInstance()
+void Index::InitAsDefaultInstance() {
+}
+
+// swapper
+void Index::Swap(Index* other) {
+  // store has_bits
+  char* buf = new char[2 * sizeof(has_bits_)];
+  for (unsigned int i = 0; i < sizeof(has_bits_); i++) {
+    buf[i] = has_bits_[i];
+    buf[i + sizeof(has_bits_)] = other->has_bits_[i];
+  }
+
+  ::proto::RepeatedField<int> index_fields_tmp__ = std::move(other->mutable_index_fields());
+  other->mutable_index_fields() = std::move(index_fields_);
+  index_fields_ = std::move(index_fields_tmp__);
+
+  // swap has_bits
+  for (unsigned int i = 0; i < sizeof(has_bits_); i++) {
+    has_bits_[i] = buf[i + sizeof(has_bits_)];
+    other->has_bits_[i] = buf[i];
+  }
+  delete buf;
+}
+
+// default_instance()
+const Index& Index::default_instance() {
+  if (default_instance_ == nullptr) {
+    static_init_default_instances_home_hy_Desktop_Projects_DBMS_src_Database_Catalog();
+  }
+  return *default_instance_;
+}
+
+Index* Index::default_instance_ = nullptr;
+
+const ::proto::MessageDescriptor* Index::GetDescriptor() const {
+  return Index_descriptor_;
+}
+
+const ::proto::MessageReflection* Index::GetReflection() const {
+  return Index_reflection_;
+}
+
+// destructor
+Index::~Index() {
+}
+
+// "index_fields" = 1
+int Index::index_fields_size() const {
+  return index_fields_.size();
+}
+
+int Index::index_fields(int index) const {
+  return index_fields_.Get(index);
+}
+
+void Index::set_index_fields(int index, int value) {
+  if ((int)index_fields_.size() > index) {
+    index_fields_.Set(index, value);
+  }
+}
+
+void Index::add_index_fields(int value) {
+   index_fields_.Add(value);
+}
+
+void Index::clear_index_fields() {
+  index_fields_ .Clear();
+}
+
+const ::proto::RepeatedField<int>& Index::index_fields() const {
+  return index_fields_;
+}
+
+::proto::RepeatedField<int>& Index::mutable_index_fields() {
+  return index_fields_;
+}
+
 // ******************** TableInfo ******************** //
 // constructor
 TableInfo::TableInfo() {
@@ -422,7 +617,15 @@ void TableInfo::CopyFrom(const TableInfo& other) {
   for (const TableField* p: other.fields().GetElements()) {
     fields_.AddAllocated(new TableField(*p));
   }
-  primary_key_indexes_ = other.primary_key_indexes();
+  if (other.primary_index_) {
+    if (!primary_index_) {
+      primary_index_ = new Index();
+    }
+    *primary_index_ = other.primary_index();
+  }
+  for (const Index* p: other.indexes().GetElements()) {
+    indexes_.AddAllocated(new Index(*p));
+  }
   for (unsigned int i = 0; i < sizeof(has_bits_); i++) {
     has_bits_[i] = other.has_bits_[i];
   }
@@ -435,7 +638,14 @@ void TableInfo::MoveFrom(TableInfo&& other) {
   }
   name_ = std::move(other.mutable_name());
   fields_ = std::move(other.mutable_fields());
-  primary_key_indexes_ = std::move(other.mutable_primary_key_indexes());
+  if (other.primary_index_) {
+    if (primary_index_) {
+      delete primary_index_;
+    }
+    primary_index_ = other.primary_index_;
+    other.primary_index_ = nullptr;
+  }
+  indexes_ = std::move(other.mutable_indexes());
   for (unsigned int i = 0; i < sizeof(has_bits_); i++) {
     other.has_bits_[i] = 0;
   }
@@ -456,8 +666,12 @@ bool TableInfo::Equals(const TableInfo& other) const {
       return false;
     }
   }
-  for (unsigned int i = 0; i < primary_key_indexes_.size(); i++) {
-    if (primary_key_indexes_.at(i) != other.primary_key_indexes_.at(i)) {
+  if (primary_index_ && other.primary_index_ &&
+      !primary_index_->Equals(*other.primary_index_)) {
+    return false;
+  }
+  for (unsigned int i = 0; i < indexes_.size(); i++) {
+    if (!indexes_.at(i).Equals(other.indexes_.at(i))) {
       return false;
     }
   }
@@ -489,13 +703,17 @@ void TableInfo::Print(int indent_num) const {
         ele.Print(indent_num + 1);
     }
   }
-  if (primary_key_indexes_size() > 0) {
+  if (has_primary_index()) {
     PrintIndent(indent_num + 1);
-    std::cout << "primary_key_indexes: " << "[";
-    for (const auto& ele: primary_key_indexes_) {
-        std::cout << ele << ", ";
+    std::cout << "primary_index: " << "*" << std::endl;
+    primary_index_->Print(indent_num + 1);
+  }
+  if (indexes_size() > 0) {
+    PrintIndent(indent_num + 1);
+    std::cout << "indexes: " << "[***]" << std::endl;
+    for (const auto& ele: indexes_) {
+        ele.Print(indent_num + 1);
     }
-    std::cout << "]" << std::endl;
   }
   PrintIndent(indent_num);
   std::cout << "}" << std::endl;
@@ -503,6 +721,7 @@ void TableInfo::Print(int indent_num) const {
 
 // InitAsDefaultInstance()
 void TableInfo::InitAsDefaultInstance() {
+  primary_index_ = const_cast<Index*>(&Index::default_instance());
 }
 
 // swapper
@@ -522,9 +741,13 @@ void TableInfo::Swap(TableInfo* other) {
   other->mutable_fields() = std::move(fields_);
   fields_ = std::move(fields_tmp__);
 
-  ::proto::RepeatedField<int> primary_key_indexes_tmp__ = std::move(other->mutable_primary_key_indexes());
-  other->mutable_primary_key_indexes() = std::move(primary_key_indexes_);
-  primary_key_indexes_ = std::move(primary_key_indexes_tmp__);
+  Index* primary_index_tmp__ = other->release_primary_index();
+  other->set_allocated_primary_index(this->release_primary_index());
+  set_allocated_primary_index(primary_index_tmp__);
+
+  ::proto::RepeatedPtrField<Index> indexes_tmp__ = std::move(other->mutable_indexes());
+  other->mutable_indexes() = std::move(indexes_);
+  indexes_ = std::move(indexes_tmp__);
 
   // swap has_bits
   for (unsigned int i = 0; i < sizeof(has_bits_); i++) {
@@ -554,6 +777,9 @@ const ::proto::MessageReflection* TableInfo::GetReflection() const {
 
 // destructor
 TableInfo::~TableInfo() {
+  if (primary_index_) {
+    delete primary_index_;
+  }
 }
 
 // "name" = 1
@@ -618,35 +844,86 @@ const ::proto::RepeatedPtrField<TableField>& TableInfo::fields() const {
   return fields_;
 }
 
-// "primary_key_indexes" = 3
-int TableInfo::primary_key_indexes_size() const {
-  return primary_key_indexes_.size();
+// "primary_index" = 3
+bool TableInfo::has_primary_index() const {
+  return (has_bits_[0] & 0x8) != 0;
 }
 
-int TableInfo::primary_key_indexes(int index) const {
-  return primary_key_indexes_.Get(index);
-}
-
-void TableInfo::set_primary_key_indexes(int index, int value) {
-  if ((int)primary_key_indexes_.size() > index) {
-    primary_key_indexes_.Set(index, value);
+const Index& TableInfo::primary_index() const {
+  if (has_primary_index() && primary_index_) {
+    return *primary_index_;
+  }
+  else {
+    return Index::default_instance();
   }
 }
 
-void TableInfo::add_primary_key_indexes(int value) {
-   primary_key_indexes_.Add(value);
+Index* TableInfo::mutable_primary_index() {
+  if (has_primary_index() && primary_index_) {
+    return primary_index_;
+  }
+  else {
+    primary_index_ = new Index();
+    has_bits_[0] |= 0x8;
+    return primary_index_;
+  }
 }
 
-void TableInfo::clear_primary_key_indexes() {
-  primary_key_indexes_ .Clear();
+void TableInfo::set_allocated_primary_index(Index* primary_index) {
+  if (primary_index_) {
+    delete primary_index_;
+  }
+  primary_index_ = primary_index;
+  if (primary_index_) {
+    has_bits_[0] |= 0x8;
+  }
+  else {
+    has_bits_[0] &= (~0x8);
+  }
 }
 
-const ::proto::RepeatedField<int>& TableInfo::primary_key_indexes() const {
-  return primary_key_indexes_;
+Index* TableInfo::release_primary_index() {
+  Index* primary_index_tmp__ = primary_index_;
+  primary_index_ = nullptr;
+  has_bits_[0] &= (~0x8);
+  return primary_index_tmp__;
 }
 
-::proto::RepeatedField<int>& TableInfo::mutable_primary_key_indexes() {
-  return primary_key_indexes_;
+void TableInfo::clear_primary_index() {
+  if (primary_index_) {
+    delete primary_index_;
+  }
+  primary_index_ = nullptr;
+  has_bits_[0] &= (~0x8);
+}
+
+// "indexes" = 4
+int TableInfo::indexes_size() const {
+  return indexes_.size();
+}
+
+const Index& TableInfo::indexes(int index) const {
+  return indexes_.Get(index);
+}
+
+Index* TableInfo::add_indexes() {
+  return indexes_.Add();
+}
+
+Index* TableInfo::mutable_indexes(int index) {
+  return indexes_.GetMutable(index);
+}
+
+void TableInfo::clear_indexes() {
+  indexes_.Clear();
+}
+
+const ::proto::RepeatedPtrField<Index>& TableInfo::indexes() const {
+  return indexes_;
+}
+
+::proto::RepeatedPtrField<Index>& TableInfo::mutable_indexes() {
+  return indexes_;
 }
 
 // ******************** DatabaseCatalog ******************** //
@@ -892,11 +1169,16 @@ std::string GetProtoContent() {
 "  optional int32 size = 4;  // Only meaningful for CharArray - length limit.\n"
 "}\n"
 "\n"
+"message Index {\n"
+"  repeated int32 index_fields = 1;\n"
+"}\n"
+"\n"
 "message TableInfo {\n"
 "  optional string name = 1;\n"
 "  repeated TableField fields = 2;\n"
 "\n"
-"  repeated int32 primary_key_indexes = 3;\n"
+"  optional Index primary_index = 3;\n"
+"  repeated Index indexes = 4;\n"
 "\n"
 "  // TODO: foreign keys, constraints, assertions ...\n"
 "}\n"

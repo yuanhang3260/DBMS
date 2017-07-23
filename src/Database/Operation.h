@@ -39,7 +39,7 @@ struct RangeSearchOp {
 };
 
 struct DeleteOp {
-  int key_index = -1;
+  std::vector<int32> field_indexes;
   std::vector<std::shared_ptr<Storage::RecordBase>> keys;
   Query::OperatorType op_cond = Query::EQUAL;
 };

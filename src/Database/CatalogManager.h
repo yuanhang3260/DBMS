@@ -52,13 +52,19 @@ class TableInfoManager {
   FieldInfoManager* FindFieldByName(const std::string field_name);
   FieldInfoManager* FindFieldByIndex(uint32 index);
 
-  std::vector<int32> primary_key_indexes() const;
+  std::vector<int32> PrimaryIndex() const;
+  bool IsPrimaryIndex(const std::vector<int32>& index) const;
+  static std::vector<int32> MakeIndex(const DB::Index& index);
+  bool HasIndex(const std::vector<int32>& index) const;
 
  private:
   TableInfo* table_info_;
 
   std::map<std::string, std::shared_ptr<FieldInfoManager>> fields_;
   std::map<int32, FieldInfoManager*> fields_by_index_;
+
+  // indexes of INDEX_DATA file.
+  std::vector<int> idata_index_;
 };
 
 class FieldInfoManager {

@@ -94,6 +94,54 @@ class TableField: public ::proto::Message {
   friend void ::static_init_default_instances_home_hy_Desktop_Projects_DBMS_src_Database_Catalog();
 };
 
+class Index: public ::proto::Message {
+ public:
+  // constructors and destructor //
+  Index();
+  ~Index();
+  Index(const Index& other);  // copy constructor
+  Index(Index&& other);  // move constructor
+  Index& operator=(const Index& other); // copy assignment
+  Index& operator=(Index&& other);  // move assignment
+  void Swap(Index* other);  // Swap
+  ::proto::Message* New() const override;  // New()
+  void CopyFrom(const Index& other);  // CopyFrom()
+  void MoveFrom(Index&& other);  // MoveFrom()
+  bool Equals(const Index& other) const;  // Compare
+  // Serialize() and DeSerialize().
+  ::proto::SerializedMessage* Serialize() const override;
+  void DeSerialize(const char* buf, unsigned int size) override;
+  static const Index& default_instance();
+  const ::proto::MessageDescriptor* GetDescriptor() const override;
+  const ::proto::MessageReflection* GetReflection() const override;
+  void Print(int indent_num=0) const override;
+
+  // --- Field accessors --- //
+
+  // "index_fields" = 1
+  int index_fields_size() const;
+  int index_fields(int index) const;
+  void set_index_fields(int index, int value);
+  void add_index_fields(int value);
+  void clear_index_fields();
+  const ::proto::RepeatedField<int>& index_fields() const;
+  ::proto::RepeatedField<int>& mutable_index_fields();
+
+ private:
+  // has bits
+  char has_bits_[1];
+  // message fields
+  ::proto::RepeatedField<int> index_fields_;
+
+  // InitAsDefaultInstance()
+  void InitAsDefaultInstance() override;
+  // default instance
+  static Index* default_instance_;
+
+  friend void ::static_init_home_hy_Desktop_Projects_DBMS_src_Database_Catalog();
+  friend void ::static_init_default_instances_home_hy_Desktop_Projects_DBMS_src_Database_Catalog();
+};
+
 class TableInfo: public ::proto::Message {
  public:
   // constructors and destructor //
@@ -136,14 +184,22 @@ class TableInfo: public ::proto::Message {
   const ::proto::RepeatedPtrField<TableField>& fields() const;
   ::proto::RepeatedPtrField<TableField>& mutable_fields();
 
-  // "primary_key_indexes" = 3
-  int primary_key_indexes_size() const;
-  int primary_key_indexes(int index) const;
-  void set_primary_key_indexes(int index, int value);
-  void add_primary_key_indexes(int value);
-  void clear_primary_key_indexes();
-  const ::proto::RepeatedField<int>& primary_key_indexes() const;
-  ::proto::RepeatedField<int>& mutable_primary_key_indexes();
+  // "primary_index" = 3
+  bool has_primary_index() const;
+  const Index& primary_index() const;
+  Index* mutable_primary_index();
+  void set_allocated_primary_index(Index* primary_index);
+  Index* release_primary_index();
+  void clear_primary_index();
+
+  // "indexes" = 4
+  int indexes_size() const;
+  const Index& indexes(int index) const;
+  Index* add_indexes();
+  Index* mutable_indexes(int index);
+  void clear_indexes();
+  const ::proto::RepeatedPtrField<Index>& indexes() const;
+  ::proto::RepeatedPtrField<Index>& mutable_indexes();
 
  private:
   // has bits
@@ -151,7 +207,8 @@ class TableInfo: public ::proto::Message {
   // message fields
   std::string name_ = "";
   ::proto::RepeatedPtrField<TableField> fields_;
-  ::proto::RepeatedField<int> primary_key_indexes_;
+  Index* primary_index_ = nullptr;
+  ::proto::RepeatedPtrField<Index> indexes_;
 
   // InitAsDefaultInstance()
   void InitAsDefaultInstance() override;

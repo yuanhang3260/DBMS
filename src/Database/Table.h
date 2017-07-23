@@ -5,9 +5,10 @@
 #include <map>
 #include <memory>
 
+#include "Database/CatalogManager.h"
+#include "Database/Operation.h"
 #include "Storage/Record.h"
 #include "Storage/BplusTree.h"
-#include "Database/Operation.h"
 
 namespace Storage {
   class BplusTree;
@@ -19,15 +20,14 @@ class Table {
  public:
   Table() = default;
   Table(const std::string& db_name, const std::string& name,
-        const TableInfo* schema);
+        const TableInfoManager* table_m);
 
   DEFINE_ACCESSOR(name, std::string);
-  DEFINE_ACCESSOR(idata_indexes, std::vector<int>);
 
-  const DB::TableInfo& schema() const { return *schema_; }
+  const DB::TableInfo& schema() const { return table_m_->table_info(); }
 
   std::string BplusTreeFileName(Storage::FileType file_type,
-                                std::vector<int> key_indexes);
+                                const std::vector<int>& key_indexes);
 
   // Bulkload data records and generate all index files.
   bool PreLoadData(std::vector<std::shared_ptr<Storage::RecordBase>>& records);
@@ -37,6 +37,8 @@ class Table {
 
   bool IsDataFileKey(const std::vector<int>& indexes) const;
   std::vector<int> DataTreeKey() const;
+  bool HasIndex(const std::vector<int32>& index) const;
+  static std::string IndexStr(const std::vector<int32>& index);
 
   bool InitTrees();
 
@@ -49,6 +51,11 @@ class Table {
   int RangeSearchRecords(
       const DB::RangeSearchOp& op,
       std::vector<std::shared_ptr<Storage::RecordBase>>* result);
+
+  int ScanRecords(std::vector<std::shared_ptr<Storage::RecordBase>>* result);
+
+  int ScanRecords(std::vector<std::shared_ptr<Storage::RecordBase>>* result,
+                  const std::vector<int>& key_indexes);
 
   bool InsertRecord(const Storage::RecordBase& record);
 
@@ -85,12 +92,8 @@ class Table {
 
   std::string db_name_;
   std::string name_;
-  const DB::TableInfo* schema_;
+  const DB::TableInfoManager* table_m_;
 
-  // indexes of INDEX_DATA file.
-  std::vector<int> idata_indexes_;
-  // map: field name --> field index
-  std::map<std::string, int> field_index_map_;
   // map: file name --> B+ tree
   using TreeMap =
           std::map<std::string, std::shared_ptr<Storage::BplusTree>>;

@@ -30,6 +30,7 @@ class TableTest: public UnitTest {
  private:
   std::vector<int> key_indexes_;
   TableInfo schema_;
+  std::shared_ptr<TableInfoManager> table_m;
   std::shared_ptr<Table> table_;
   std::vector<std::shared_ptr<RecordBase>> puppy_records_;
 
@@ -70,11 +71,26 @@ class TableTest: public UnitTest {
     field->set_type(TableField::CHARARRAY);
     field->set_size(20);
 
-    schema_.add_primary_key_indexes(2);
+    auto* index = schema_.mutable_primary_index();
+    index->add_index_fields(2);
     // Create key_indexes.
-    for (auto i: schema_.primary_key_indexes()) {
+    for (auto i: schema_.primary_index().index_fields()) {
       key_indexes_.push_back(i);
     }
+
+    index = schema_.add_indexes();
+    index->add_index_fields(0);
+    index = schema_.add_indexes();
+    index->add_index_fields(1);
+    index = schema_.add_indexes();
+    index->add_index_fields(3);
+    index = schema_.add_indexes();
+    index->add_index_fields(4);
+    index = schema_.add_indexes();
+    index->add_index_fields(5);
+
+    table_m.reset(new TableInfoManager(&schema_));
+    AssertTrue(table_m->Init());
   }
 
   void InitRecordResource() {
@@ -127,7 +143,7 @@ class TableTest: public UnitTest {
     CreateDBDirectory();
     InitRecordResource();
 
-    table_.reset(new Table(kDBName, kTableName, &schema_));
+    table_.reset(new Table(kDBName, kTableName, table_m.get()));
     LoadData();
   }
 
@@ -135,16 +151,18 @@ class TableTest: public UnitTest {
     table_->PreLoadData(puppy_records_);
     AssertTrue(table_->ValidateAllIndexRecords(puppy_records_.size()));
 
-    for (const auto& field: schema_.fields()) {
-      printf("Checking tree %d\n", field.index());
-      auto key_indexes = std::vector<int>{field.index()};
-      auto file_type = table_->IsDataFileKey(key_indexes) ?
+    for (const auto& index: table_m->table_info().indexes()) {
+      std::vector<int> key_index = TableInfoManager::MakeIndex(index);
+      printf("Checking tree %s\n", Table::IndexStr(key_index).c_str());
+      auto file_type = table_->IsDataFileKey(key_index) ?
                            Storage::INDEX_DATA : Storage::INDEX;
-      auto tree = table_->Tree(file_type, key_indexes);
+      auto tree = table_->Tree(file_type, key_index);
       tree->SaveToDisk();
 
-      AssertTrue(tree->ValidityCheck(), "Check B+ tree failed");
+      AssertTrue(tree->ValidityCheck(), "Check Index tree failed");
     }
+    printf("Checking tree %s\n",Table::IndexStr(table_->DataTreeKey()).c_str());
+    AssertTrue(table_->DataTree()->ValidityCheck(), "Check Data tree failed");
   }
 
   void PrintRecords(
@@ -194,6 +212,14 @@ class TableTest: public UnitTest {
       }
     }
     return expected_matches;
+  }
+
+  void Test_ScanRecords() {
+    std::vector<std::shared_ptr<Storage::RecordBase>> result;
+    AssertEqual(kNumRecordsSource, table_->ScanRecords(&result));
+
+    result.clear();
+    AssertEqual(kNumRecordsSource, table_->ScanRecords(&result, {3}));
   }
 
   void Test_SearchRecords() {
@@ -291,6 +317,7 @@ int main() {
   test.setup();
 
   //test.Test_SearchRecords();
+  //test.Test_ScanRecords();
   test.Test_RangeSearchRecords();
 
   test.teardown();

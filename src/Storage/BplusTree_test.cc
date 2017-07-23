@@ -28,6 +28,7 @@ class BplusTreeTest: public UnitTest {
  private:
   std::vector<int> key_indexes_;
   DB::TableInfo schema_;
+  std::shared_ptr<DB::TableInfoManager> table_m;
   DB::Table* table_;
   std::map<int, std::shared_ptr<DataRecord>> record_resource_;
 
@@ -67,11 +68,26 @@ class BplusTreeTest: public UnitTest {
     field->set_type(DB::TableField::CHARARRAY);
     field->set_size(20);
 
-    schema_.add_primary_key_indexes(2);
+    auto* index = schema_.mutable_primary_index();
+    index->add_index_fields(2);
     // Create key_indexes.
-    for (auto i: schema_.primary_key_indexes()) {
+    for (auto i: schema_.primary_index().index_fields()) {
       key_indexes_.push_back(i);
     }
+
+    index = schema_.add_indexes();
+    index->add_index_fields(0);
+    index = schema_.add_indexes();
+    index->add_index_fields(1);
+    index = schema_.add_indexes();
+    index->add_index_fields(3);
+    index = schema_.add_indexes();
+    index->add_index_fields(4);
+    index = schema_.add_indexes();
+    index->add_index_fields(5);
+
+    table_m.reset(new DB::TableInfoManager(&schema_));
+    AssertTrue(table_m->Init());
   }
 
   void InitRecordResource() {
@@ -144,7 +160,7 @@ class BplusTreeTest: public UnitTest {
     CreateDBDirectory();
     InitRecordResource();
     //InitRecordResourceFromFile("out1");
-    table_ = new DB::Table(kDBName, kTableName, &schema_);
+    table_ = new DB::Table(kDBName, kTableName, table_m.get());
   }
 
   void teardown() override {
@@ -622,7 +638,7 @@ class BplusTreeTest: public UnitTest {
     for (int i: del_keys) {
       printf("--------------------- i = %d ---------------------------\n", i);
       DB::DeleteOp op;
-      op.key_index = key_index[0];
+      op.field_indexes = key_index;
       op.keys.push_back(std::make_shared<RecordBase>());
       op.keys.back()->AddField(new Schema::LongIntField(i));
       op.keys.back()->Print();
@@ -691,7 +707,7 @@ class BplusTreeTest: public UnitTest {
     DB::DeleteOp op;
     std::vector<int> ages = Utils::RandomListFromRange(0,10);
     for (int i = 0; i < (int)ages.size(); i++) {
-      op.key_index = key_index[0];
+      op.field_indexes = key_index;
       op.keys.push_back(std::make_shared<RecordBase>());
       op.keys.back()->AddField(new Schema::IntField(ages[i]));
     }
@@ -730,7 +746,7 @@ class BplusTreeTest: public UnitTest {
     DB::DeleteOp op;
     std::vector<int> ages = Utils::RandomListFromRange(0, 0);
     for (int i = 0; i < (int)ages.size(); i++) {
-      op.key_index = key_index[0];
+      op.field_indexes = key_index;
       op.keys.push_back(std::make_shared<RecordBase>());
       op.keys.back()->AddField(new Schema::IntField(ages[i]));
     }
@@ -770,7 +786,7 @@ class BplusTreeTest: public UnitTest {
       DB::DeleteOp op;
       //LogINFO("start = %d, end = %d", start, start + group_len - 1);
       for (int i = start; i < start + group_len; i++) {
-        op.key_index = 1;
+        op.field_indexes = {1};
         op.keys.push_back(std::make_shared<RecordBase>());
         op.keys.back()->AddField(new Schema::IntField(delete_ages[i]));
       }

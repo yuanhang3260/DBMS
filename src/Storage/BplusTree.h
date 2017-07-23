@@ -124,6 +124,8 @@ class BplusTree {
   int RangeSearchRecords(const DB::RangeSearchOp& op,
                          std::vector<std::shared_ptr<RecordBase>>* result);
 
+  int ScanRecords(std::vector<std::shared_ptr<RecordBase>>* result);
+
   // Search a key and return the leave.
   RecordPage* SearchByKey(const RecordBase& key);
 

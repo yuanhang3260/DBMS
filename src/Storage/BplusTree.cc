@@ -1321,6 +1321,21 @@ int BplusTree::RangeSearchRecords(
   return result->size();
 }
 
+int BplusTree::ScanRecords(std::vector<std::shared_ptr<RecordBase>>* result) {
+  RecordPage* leave = FirstLeave();
+  while (leave) {
+    PageRecordsManager prmanager(leave, schema(), key_indexes_,
+                                 file_type_, leave->meta().page_type());
+
+    // Fetch all matching records in this leave.
+    for (uint32 index = 0; index < prmanager.NumRecords(); index++) {
+      result->push_back(prmanager.shared_record(index));
+    }
+    leave = Page(leave->Meta()->next_page());
+  }
+  return result->size();
+}
+
 BplusTree::SearchTreeNodeResult
 BplusTree::SearchInTreeNode(const RecordBase& key, RecordPage* page) {
   SearchTreeNodeResult result;

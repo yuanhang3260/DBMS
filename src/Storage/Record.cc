@@ -141,8 +141,8 @@ bool RecordBase::operator==(const RecordBase& other) const {
 }
 
 int RecordBase::CompareRecords(const RecordBase& r1, const RecordBase& r2) {
-  SANITY_CHECK(r1.NumFields() == r2.NumFields(),
-               "records have different number of fields");
+  CHECK(r1.NumFields() == r2.NumFields(),
+        "records have different number of fields");
 
   for (uint32 i = 0; i < r1.NumFields(); i++) {
     CHECK(r1.fields_.at(i)->type() == r2.fields_.at(i)->type(),
@@ -162,8 +162,8 @@ int RecordBase::CompareRecords(const RecordBase& r1, const RecordBase& r2) {
 int RecordBase::CompareRecordsBasedOnIndex(const RecordBase& r1,
                                            const RecordBase& r2,
                                            const std::vector<int>& indexes) {
-  SANITY_CHECK(!indexes.empty(), "empty comparing indexes");
-  for (int i = 0; i < (int)indexes.size(); i++) {
+  CHECK(!indexes.empty(), "empty comparing indexes");
+  for (uint32 i = 0; i < indexes.size(); i++) {
     int re = RecordBase::CompareSchemaFields(
                  r1.fields_.at(indexes[i]).get(),
                  r2.fields_.at(indexes[i]).get()
@@ -193,9 +193,9 @@ bool RecordBase::RecordComparatorGt(const RecordBase& r1,
 int RecordBase::CompareRecordWithKey(const RecordBase& key,
                                      const RecordBase& record,
                                      const std::vector<int>& indexes) {
-  SANITY_CHECK(!indexes.empty(), "empty comparing indexes");
-  SANITY_CHECK(key.NumFields() == indexes.size(),
-               "Number of key fields mismatch with indexes to compare");
+  CHECK(!indexes.empty(), "empty comparing indexes");
+  CHECK(key.NumFields() == indexes.size(),
+        "Number of key fields mismatch with indexes to compare");
   for (uint i = 0; i < indexes.size(); i++) {
     int re = RecordBase::CompareSchemaFields(
                  key.fields_.at(i).get(),

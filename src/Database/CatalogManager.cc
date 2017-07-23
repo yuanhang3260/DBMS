@@ -70,6 +70,15 @@ bool TableInfoManager::Init() {
     fields_by_index_.emplace(field.index(), field_manager.get());
   }
 
+  // Determine the indexes of INDEX_DATA file. If primary key is specified in 
+  // schema, use primary keys. If not, use index 0.
+  for (const auto& index : table_info_->primary_index().index_fields()) {
+    idata_index_.push_back(index);
+  }
+  if (idata_index_.empty()) {
+    idata_index_.push_back(0);
+  }
+
   return true;
 }
 
@@ -94,14 +103,49 @@ FieldInfoManager* TableInfoManager::FindFieldByIndex(uint32 index) {
   return it->second;
 }
 
-std::vector<int32> TableInfoManager::primary_key_indexes() const {
-  std::vector<int32> key_indexes;
-  for (const auto& index : table_info_->primary_key_indexes()) {
-    key_indexes.push_back(index);
-  }
-  return key_indexes;
+std::vector<int32> TableInfoManager::PrimaryIndex() const {
+  return idata_index_;
 }
 
+bool TableInfoManager::IsPrimaryIndex(const std::vector<int32>& index) const {
+  if (index.size() != idata_index_.size()) {
+    return false;
+  }
+
+  for (uint32 i = 0; i < index.size(); i++) {
+    if (index.at(i) != idata_index_.at(i)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+std::vector<int32> TableInfoManager::MakeIndex(const DB::Index& index) {
+  std::vector<int32> re;
+  for (const auto& index_field : index.index_fields()) {
+    re.push_back(index_field);
+  }
+  return re;
+}
+
+bool TableInfoManager::HasIndex(const std::vector<int32>& index) const {
+  for (const auto& table_index : table_info_->indexes()) {
+    if (table_index.index_fields().size() != index.size()) {
+      continue;
+    }
+    bool match = true;
+    for (uint32 i = 0; i < index.size(); i++) {
+      if (table_index.index_fields(i) != index.at(i)) {
+        match = false;
+        break;
+      }
+    }
+    if (match) {
+      return true;
+    }
+  }
+  return false;
+}
 
 // ************************* FieldInfoManager ****************************** //
 FieldInfoManager::FieldInfoManager(TableField* field) : field_(field) {}
