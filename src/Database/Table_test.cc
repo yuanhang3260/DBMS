@@ -271,7 +271,7 @@ class TableTest: public UnitTest {
 
     table_->RangeSearchRecords(op, &result);
     AssertEqual(NumExpectedMatches(op), result.size());
-    printf("Matched records = %d\n", result.size());
+    printf("Matched records = %ld\n", result.size());
 
     // Search by: name >= "m"
     op.reset();
@@ -282,7 +282,7 @@ class TableTest: public UnitTest {
     op.right_key.reset();
     table_->RangeSearchRecords(op, &result);
     AssertEqual(NumExpectedMatches(op), result.size());
-    printf("Matched records = %d\n", result.size());
+    printf("Matched records = %ld\n", result.size());
 
     // Search by: weight < 1.6
     op.reset();
@@ -293,7 +293,7 @@ class TableTest: public UnitTest {
     op.right_open = true;
     table_->RangeSearchRecords(op, &result);
     AssertEqual(NumExpectedMatches(op), result.size());
-    printf("Matched records = %d\n", result.size());
+    printf("Matched records = %ld\n", result.size());
 
     // Search by: 1 < age <= 1
     op.reset();
@@ -306,7 +306,7 @@ class TableTest: public UnitTest {
     table_->RangeSearchRecords(op, &result);
     AssertEqual(NumExpectedMatches(op), result.size());
     AssertEqual(0, result.size());
-    printf("Matched records = %d\n", result.size());
+    printf("Matched records = %ld\n", result.size());
   }
 };
 

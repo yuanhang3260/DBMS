@@ -130,6 +130,67 @@ DB::FieldInfoManager* SqlQuery::FindTableColumn(const Column& column) {
   return re;
 }
 
+const ColumnRequest* SqlQuery::FindColumnRequest(const Column& column) {
+  auto iter = columns_.find(column.table_name);
+  if (iter == columns_.end()) {
+    return nullptr;
+  }
+
+  auto columns = iter->second;
+  auto column_request_iter = columns.find(column.column_name);
+  if (column_request_iter == columns.end()) {
+    return nullptr;
+  }
+
+  return &(column_request_iter->second);
+}
+
+bool SqlQuery::FinalizeParsing() {
+  // Apply default table.
+  std::string default_table = DefaultTable();
+  if (!default_table.empty()) {
+    auto iter = columns_.find("");
+    if (iter != columns_.end()) {
+      auto columns = iter->second;
+      bool has_star_column = (columns_[default_table].size() == 1) &&
+                             (columns_[default_table].begin()->first == "*");
+      if (!has_star_column) {
+        for (auto& column_request_iter : columns) {
+          if (column_request_iter.first == "*") {
+            columns_[default_table].clear();
+            has_star_column = true;
+          }
+          column_request_iter.second.column.table_name = default_table;
+          columns_[default_table].emplace(column_request_iter.first,
+                                          column_request_iter.second);
+          if (has_star_column) {
+            break;
+          }
+        }
+      }
+      columns_.erase(iter);
+    }
+  }
+
+  // Check all tables and columns are valid.
+  for (const auto& table_name : tables_) {
+    if (!TableIsValid(table_name)) {
+      return false;
+    }
+  }
+
+  for (const auto& iter : columns_) {
+    auto columns = iter.second;
+    for (auto& column_request_iter : columns) {
+      if (!ColumnIsValid(column_request_iter.second.column)) {
+        return false;
+      }
+    }
+  }
+
+  return true;
+}
+
 std::string SqlQuery::error_msg() const {
   return error_msg_;
 }

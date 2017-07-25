@@ -62,8 +62,6 @@ class Table {
   int DeleteRecord(const DeleteOp& op);
 
  private:
-  bool BuildFieldIndexMap();
-
   bool UpdateIndexTrees(
            std::vector<Storage::DataRecordRidMutation>& rid_mutations);
 

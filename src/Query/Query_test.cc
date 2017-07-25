@@ -313,20 +313,40 @@ class QueryTest: public UnitTest {
     AssertTrue(interpreter_->Parse(expr));
     auto node = interpreter_->shared_query()->GetExprNode();
     AssertTrue(node && node->valid());
+    AssertTrue(interpreter_->shared_query()->FinalizeParsing());
+    AssertTrue(interpreter_->shared_query()
+                   ->FindColumnRequest(Column("Puppy", "age")) != nullptr);
+    AssertTrue(interpreter_->shared_query()
+                   ->FindColumnRequest(Column("Puppy", "name")) != nullptr);
     interpreter_->reset();
     printf("\n");
 
-    expr = "SELECT * FROM Puppy WHERE name = \"snoopy\"";
+    expr = "SELECT Puppy.name, *, age FROM Puppy WHERE name = \"snoopy\"";
     std::cout << expr << std::endl;
     AssertTrue(interpreter_->Parse(expr));
     node = interpreter_->shared_query()->GetExprNode();
     AssertTrue(node && node->valid());
+    AssertTrue(interpreter_->shared_query()->FinalizeParsing());
+    AssertTrue(interpreter_->shared_query()
+                   ->FindColumnRequest(Column("Puppy", "*")) != nullptr);
+    AssertTrue(interpreter_->shared_query()
+                   ->FindColumnRequest(Column("Puppy", "age")) == nullptr);
+    AssertTrue(interpreter_->shared_query()
+                   ->FindColumnRequest(Column("Puppy", "name")) == nullptr);
     interpreter_->reset();
     printf("\n");
 
     expr = "SELECT age FROM Puppy, Host WHERE name = \"hy\"";
     std::cout << expr << std::endl;
     AssertFalse(interpreter_->Parse(expr));
+    std::cout << interpreter_->error_msg() << std::endl;
+    interpreter_->reset();
+    printf("\n");
+
+    expr = "SELECT age, hehe FROM Puppy WHERE name = \"snoopy\"";
+    std::cout << expr << std::endl;
+    AssertTrue(interpreter_->Parse(expr));
+    AssertFalse(interpreter_->shared_query()->FinalizeParsing());
     std::cout << interpreter_->error_msg() << std::endl;
     interpreter_->reset();
     printf("\n");

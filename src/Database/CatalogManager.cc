@@ -144,6 +144,11 @@ bool TableInfoManager::HasIndex(const std::vector<int32>& index) const {
       return true;
     }
   }
+
+  if (index == idata_index_) {
+    return true;
+  }
+
   return false;
 }
 

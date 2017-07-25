@@ -39,9 +39,12 @@ class SqlQuery {
 
   DB::TableInfoManager* FindTable(const std::string& table);
   DB::FieldInfoManager* FindTableColumn(const Column& column);
+  const ColumnRequest* FindColumnRequest(const Column& column);
 
   bool TableIsValid(const std::string& table);
   bool ColumnIsValid(const Column& column);
+
+  bool FinalizeParsing();
 
   void reset();
   std::string error_msg() const;
@@ -51,7 +54,7 @@ class SqlQuery {
   DB::CatalogManager* catalog_m_ = nullptr;
 
   std::shared_ptr<Query::ExprTreeNode> expr_node_;
-  
+
   // Target tables.
   std::set<std::string> tables_;
 

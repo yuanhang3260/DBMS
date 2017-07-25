@@ -26,25 +26,17 @@ Table::Table(const std::string& db_name, const std::string& name,
     db_name_(db_name),
     name_(name),
     table_m_(table_m) {
-  BuildFieldIndexMap();
-}
-
-bool Table::BuildFieldIndexMap() {
-  return true;
 }
 
 Storage::BplusTree* Table::Tree(Storage::FileType file_type,
                                 std::vector<int> key_index) {
+  CHECK(HasIndex(key_index),
+        Strings::StrCat("Index ", IndexStr(key_index), " not found"));
+
   std::string filename = BplusTreeFileName(file_type, key_index);
   if (tree_map_.find(filename) != tree_map_.end()) {
-    return tree_map_.at(filename).get();  
+    return tree_map_.at(filename).get();
   }
-
-  CHECK(HasIndex(key_index), "Index not found");
-
-  auto tree = std::make_shared<Storage::BplusTree>(
-                   this, file_type, key_index);
-  tree_map_.emplace(filename, tree);
 
   return nullptr;
 }
