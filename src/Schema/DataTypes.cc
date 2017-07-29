@@ -1,9 +1,185 @@
 #include "Base/Log.h"
+#include "Strings/Utils.h"
 
 #include "Schema/DataTypes.h"
 
 namespace Schema {
 
+namespace {
+
+template<typename T>
+double EvaluateIntegerValueRatio(ValueRange<T>& range) {
+  if (range.min > range.max) {
+    return 0;
+  }
+
+  if (range.single_value) {
+    if (*range.single_value >= range.min && *range.single_value <= range.max) {
+      return 1.0 / (range.max - range.min + 1);
+    } else {
+      return 0;
+    }
+  } else {
+    if (!range.left_value) {
+      range.set_left_value(range.min);
+    }
+    if (!range.right_value) {
+      range.set_right_value(range.max);
+    }
+
+    *range.left_value = std::max(*range.left_value, range.min);
+    *range.right_value = std::min(*range.right_value, range.max);
+
+    if (*range.left_value > *range.right_value) {
+      return 0;
+    }
+    if (*range.left_value > range.max || *range.right_value < range.min) {
+      return 0;
+    }
+
+    return 1.0 * (*range.right_value - *range.left_value + 1) /
+                 (range.max - range.min + 1);
+  }
+}
+
+double EvaluateDoubleValueRatio(ValueRange<double>& range) {
+  if (range.min > range.max) {
+    return 0;
+  }
+
+  if (range.single_value) {
+    return 0;
+  } else {
+    if (!range.left_value) {
+      range.set_left_value(range.min);
+    }
+    if (!range.right_value) {
+      range.set_right_value(range.max);
+    }
+
+    *range.left_value = std::max(*range.left_value, range.min);
+    *range.right_value = std::min(*range.right_value, range.max);
+
+    if (*range.left_value > *range.right_value) {
+      return 0;
+    }
+    if (*range.left_value > range.max || *range.right_value < range.min) {
+      return 0;
+    }
+
+    return 1.0 * (*range.right_value - *range.left_value) /
+                 (range.max - range.min);
+  }
+}
+
+double EvaluateStringValueRatio(ValueRange<std::string>& range) {
+  if (range.min > range.max) {
+    return 0;
+  }
+
+  // Map a string into an int64 space, each char is 128-base weighted.
+  auto numerise_str = [&] (const std::string& str, uint32 skip_prefix) {
+    int64 sum = 0;
+    int64 weight = 128*128*128*128;
+    for (uint32 i = skip_prefix; i < skip_prefix + 5; i++) {
+      char c;
+      if (i >= str.length()) {
+        c = 0;
+      } else {
+        c = str.at(i);
+      }
+      sum += c * weight;
+      weight /= 128;
+    }
+    return sum;
+  };
+
+  auto longest_common_preifx =
+    [&] (const std::vector<const std::string*>& strs) {
+      uint32 prefix_len = INT_MAX;
+      for (uint32 i = 0; i < strs.size() - 1; i++) {
+        uint32 prefix = Strings::LongestCommonPrefix(*strs.at(i),
+                                                     *strs.at(i + 1));
+        prefix_len = std::min(prefix_len, prefix);
+      }
+      return prefix_len;
+    };
+
+  if (range.single_value) {
+    if (*range.single_value >= range.min && *range.single_value <= range.max) {
+      uint32 prefix = longest_common_preifx({range.single_value.get(),
+                                             &range.min,
+                                             &range.max});
+      // std::cout << numerise_str(range.max, prefix) << " - "
+      //           << numerise_str(range.min, prefix) << std::endl;
+      return 1.0 / (numerise_str(range.max, prefix) -
+                    numerise_str(range.min, prefix));
+    } else {
+      return 0;
+    }
+  } else {
+    if (!range.left_value) {
+      range.set_left_value(range.min);
+    }
+    if (!range.right_value) {
+      range.set_right_value(range.max);
+    }
+
+    *range.left_value = std::max(*range.left_value, range.min);
+    *range.right_value = std::min(*range.right_value, range.max);
+
+    if (*range.left_value > *range.right_value) {
+      return 0;
+    }
+    if (*range.left_value > range.max || *range.right_value < range.min) {
+      return 0;
+    }
+
+    uint32 prefix = longest_common_preifx({range.left_value.get(),
+                                           range.right_value.get(),
+                                           &range.min,
+                                           &range.max});
+    // std::cout << (numerise_str(*range.right_value, prefix) -
+    //               numerise_str(*range.left_value, prefix) + 1) << ", "
+    //           << (numerise_str(range.max, prefix) -
+    //               numerise_str(range.min, prefix) + 1)
+    //           << std::endl;
+    return 1.0 *
+            (numerise_str(*range.right_value, prefix) -
+             numerise_str(*range.left_value, prefix) + 1) /
+            (numerise_str(range.max, prefix) -
+             numerise_str(range.min, prefix) + 1);
+  }
+}
+
+}  // namespace
+
+// ******************************** Int ************************************* //
+double IntField::EvaluateValueRatio(ValueRange<int>& range) {
+  return EvaluateIntegerValueRatio<int>(range);
+}
+
+// ****************************** Long Int ********************************** //
+double LongIntField::EvaluateValueRatio(ValueRange<int64>& range) {
+  return EvaluateIntegerValueRatio<int64>(range);
+}
+
+// ******************************* Double *********************************** //
+double DoubleField::EvaluateValueRatio(ValueRange<double>& range) {
+  return EvaluateDoubleValueRatio(range);
+}
+
+// ******************************** Bool ************************************ //
+double BoolField::EvaluateValueRatio(ValueRange<bool>& range) {
+  return 0.5;
+}
+
+// ******************************** Char ************************************ //
+double CharField::EvaluateValueRatio(ValueRange<char>& range) {
+  return EvaluateIntegerValueRatio<char>(range);
+}
+
+// ******************************* String *********************************** //
 // Comparable
 bool StringField::operator<(const StringField& other) const {
   return value_ < other.value_;
@@ -48,6 +224,11 @@ int StringField::LoadFromMem(const byte* buf) {
   return value_.length() + 1;
 }
 
+double StringField::EvaluateValueRatio(ValueRange<std::string>& range) {
+  return EvaluateStringValueRatio(range);
+}
+
+// ****************************** CharArray ********************************* //
 CharArrayField::CharArrayField(int lenlimit) :
     length_limit_(lenlimit) {
   value_ = new char[length_limit_];

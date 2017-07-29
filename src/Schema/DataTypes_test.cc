@@ -137,6 +137,69 @@ class DataTypesTest: public UnitTest {
     AssertFalse(chararray_field.SetData("abcdefg", 6));
     AssertTrue(strncmp(chararray_field.value(), "abc", 3) == 0);
   }
+
+  void Test_EvaluateValueRatio() {
+    // Int
+    ValueRange<int> int_range;
+    int_range.min = 1;
+    int_range.max = 5;
+    int_range.set_single_value(3);
+    AssertFloatEqual(0.2, IntField::EvaluateValueRatio(int_range));
+
+    int_range.single_value.reset();
+
+    int_range.set_left_value(2);
+    int_range.set_right_value(3);
+    AssertFloatEqual(0.4, IntField::EvaluateValueRatio(int_range));
+
+    int_range.set_left_value(-1);
+    int_range.set_right_value(3);
+    AssertFloatEqual(0.6, IntField::EvaluateValueRatio(int_range));
+
+    int_range.set_left_value(2);
+    int_range.set_right_value(8);
+    AssertFloatEqual(0.8, IntField::EvaluateValueRatio(int_range));
+
+    int_range.set_right_value(1);
+    int_range.left_value.reset();
+    AssertFloatEqual(0.2, IntField::EvaluateValueRatio(int_range));
+
+    int_range.set_left_value(2);
+    int_range.right_value.reset();
+    AssertFloatEqual(0.8, IntField::EvaluateValueRatio(int_range));
+
+    int_range.set_left_value(3);
+    int_range.set_right_value(1);
+    AssertFloatEqual(0, IntField::EvaluateValueRatio(int_range));
+
+    int_range.set_left_value(-3);
+    int_range.set_right_value(-1);
+    AssertFloatEqual(0, IntField::EvaluateValueRatio(int_range));
+
+    int_range.set_left_value(6);
+    int_range.set_right_value(9);
+    AssertFloatEqual(0, IntField::EvaluateValueRatio(int_range));
+
+    // String
+    ValueRange<std::string> str_range;
+    str_range.min = "abcdefghi";
+    str_range.max = "abcxyzw";
+    str_range.set_single_value("abd");
+    AssertFloatEqual(0, StringField::EvaluateValueRatio(str_range));
+
+    str_range.set_single_value("abcmn");
+    AssertFloatEqual(1.0 / 5410981784,
+                     StringField::EvaluateValueRatio(str_range));
+
+    str_range.single_value.reset();
+
+    str_range.min = "xya";
+    str_range.max = "xyf";
+    str_range.set_left_value("xyb");
+    str_range.set_right_value("xyc");
+    AssertFloatEqual(268435457.0 / 1342177281,  //  ~= 0.2
+                     StringField::EvaluateValueRatio(str_range));
+  }
 };
 
 }  // namespace Schema
@@ -144,12 +207,13 @@ class DataTypesTest: public UnitTest {
 int main() {
   Schema::DataTypesTest test;
   test.setup();
-  test.Test_IntField();
-  test.Test_LongIntField();
-  test.Test_DoubleField();
-  test.Test_CharField();
-  test.Test_StringField();
-  test.Test_CharArrayField();
+  // test.Test_IntField();
+  // test.Test_LongIntField();
+  // test.Test_DoubleField();
+  // test.Test_CharField();
+  // test.Test_StringField();
+  // test.Test_CharArrayField();
+  test.Test_EvaluateValueRatio();
   test.teardown();
 
   std::cout << "\033[2;32mPassed ^_^\033[0m" << std::endl;

@@ -40,19 +40,14 @@ bool SqlQuery::AddColumn(const std::string& name) {
     return false;
   }
 
-  auto& table_columns = columns_[column.table_name];
-  if (table_columns.size() == 1 &&
-      table_columns.begin()->first == "*") {
-    return true;
-  }
-
-  if (column.column_name == "*") {
-    table_columns.clear();
-  }
-
   ColumnRequest column_request;
   column_request.column = column;
   column_request.request_pos = ++columns_num_;
+
+  auto& table_columns = columns_[column.table_name];
+  if (table_columns.find(column.column_name) != table_columns.end()) {
+    return true;
+  }
   table_columns.emplace(column.column_name, column_request);
 
   return true;
@@ -148,28 +143,82 @@ const ColumnRequest* SqlQuery::FindColumnRequest(const Column& column) {
 bool SqlQuery::FinalizeParsing() {
   // Apply default table.
   std::string default_table = DefaultTable();
-  if (!default_table.empty()) {
-    auto iter = columns_.find("");
-    if (iter != columns_.end()) {
-      auto columns = iter->second;
-      bool has_star_column = (columns_[default_table].size() == 1) &&
-                             (columns_[default_table].begin()->first == "*");
-      if (!has_star_column) {
-        for (auto& column_request_iter : columns) {
-          if (column_request_iter.first == "*") {
-            columns_[default_table].clear();
-            has_star_column = true;
-          }
-          column_request_iter.second.column.table_name = default_table;
-          columns_[default_table].emplace(column_request_iter.first,
-                                          column_request_iter.second);
-          if (has_star_column) {
-            break;
-          }
-        }
-      }
-      columns_.erase(iter);
+  auto iter = columns_.find("");
+  if (iter != columns_.end()) {
+    if (default_table.empty()) {
+      error_msg_ = Strings::StrCat("Default table not found.");
+      return false;
     }
+    auto& columns = iter->second;
+    for (auto& column_request_iter : columns) {
+      column_request_iter.second.column.table_name = default_table;
+      auto& table_columns = columns_[default_table];
+      if (table_columns.find(column_request_iter.first) !=
+          table_columns.end()) {
+        continue;
+      }
+      table_columns.emplace(column_request_iter.first,
+                            column_request_iter.second);
+    }
+    columns_.erase(iter);
+  }
+
+  // Expand * columns
+  for (auto& columns_iter : columns_) {
+    const auto& table_name = columns_iter.first;
+    auto& columns = columns_iter.second;
+    auto iter = columns.find("*");
+    if (iter == columns.end()) {
+      continue;
+    }
+    auto table_m = FindTable(table_name);
+    CHECK(table_m != nullptr, Strings::StrCat("Can't find table ", table_name));
+    for (uint32 i = 0; i < table_m->NumFields(); i++) {
+      auto field_m = table_m->FindFieldByIndex(i);
+      CHECK(field_m != nullptr,
+            Strings::StrCat("Can't find field ", std::to_string(i),
+                            " in table ", table_name));
+      if (columns.find(field_m->name()) != columns.end()) {
+        continue;
+      }
+      ColumnRequest column_request;
+      column_request.column.table_name = table_name;
+      column_request.column.column_name = field_m->name();
+      column_request.request_pos = iter->second.request_pos;
+      column_request.sub_request_pos = i;
+      columns.emplace(field_m->name(), column_request);
+    }
+    columns.erase(iter);
+  }
+
+  // Re-assign column request positions.
+  std::vector<ColumnRequest*> columns_list;
+  for (auto& iter : columns_) {
+    for (auto& column_request_iter : iter.second) {
+      columns_list.push_back(&column_request_iter.second);
+    }
+  }
+
+  auto comparator = [&] (const ColumnRequest* c1,
+                         const ColumnRequest* c2) {
+    if (c1->request_pos < c2->request_pos) {
+      return true;
+    } else if (c1->request_pos > c2->request_pos) {
+      return false;
+    } else {
+      if (c1->sub_request_pos < c2->sub_request_pos) {
+        return true;
+      } else if (c1->sub_request_pos > c2->sub_request_pos) {
+        return false;
+      } else {
+        return false;
+      }
+    }
+  };
+
+  std::sort(columns_list.begin(), columns_list.end(), comparator);
+  for (uint32 i = 0; i < columns_list.size(); i++) {
+    columns_list.at(i)->request_pos = i;
   }
 
   // Check all tables and columns are valid.

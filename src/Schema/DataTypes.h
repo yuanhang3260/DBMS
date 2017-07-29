@@ -13,6 +13,19 @@
 
 namespace Schema {
 
+template <class T>
+struct ValueRange {
+  T min;
+  T max;
+  std::shared_ptr<T> single_value;
+  std::shared_ptr<T> left_value;
+  std::shared_ptr<T> right_value;
+
+  void set_single_value(const T& v) { single_value.reset(new T(v)); }
+  void set_left_value(const T& v) { left_value.reset(new T(v)); }
+  void set_right_value(const T& v) { right_value.reset(new T(v)); }
+};
+
 class IntField: public Field {
  public:
   IntField() = default;
@@ -67,6 +80,8 @@ class IntField: public Field {
   }
 
   void reset() override { value_ = INT_MIN; }
+
+  static double EvaluateValueRatio(ValueRange<int>& range);
 
  private:
   int value_ = LONG_MIN;
@@ -128,6 +143,8 @@ class LongIntField: public Field {
 
   void reset() override { value_ = LLONG_MIN; }
 
+  static double EvaluateValueRatio(ValueRange<int64>& range);
+
  private:
   int64 value_ = LLONG_MIN;
 };
@@ -187,6 +204,8 @@ class DoubleField: public Field {
   }
 
   void reset() override { value_ = -DBL_MAX; }
+
+  static double EvaluateValueRatio(ValueRange<double>& range);
 
  private:
   double value_ = -DBL_MAX;
@@ -248,6 +267,8 @@ class BoolField: public Field {
 
   void reset() override { value_ = false; }
 
+  static double EvaluateValueRatio(ValueRange<bool>& range);
+
  private:
   bool value_ = false;
 };
@@ -308,6 +329,8 @@ class CharField: public Field {
 
   void reset() override { value_ = 0; }
 
+  static double EvaluateValueRatio(ValueRange<char>& range);
+
  private:
   char value_ = 0;
 };
@@ -338,6 +361,8 @@ class StringField: public Field {
   std::string AsString() const override { return value_; }
 
   void reset() override { value_.clear(); }
+
+  static double EvaluateValueRatio(ValueRange<std::string>& range);
 
  private:
   std::string value_;

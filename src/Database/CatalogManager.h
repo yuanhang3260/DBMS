@@ -48,6 +48,7 @@ class TableInfoManager {
 
   // Table name.
   std::string name() const;
+  uint32 NumFields() const { return fields_.size(); }
 
   FieldInfoManager* FindFieldByName(const std::string field_name);
   FieldInfoManager* FindFieldByIndex(uint32 index);

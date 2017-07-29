@@ -321,18 +321,31 @@ class QueryTest: public UnitTest {
     interpreter_->reset();
     printf("\n");
 
-    expr = "SELECT Puppy.name, *, age FROM Puppy WHERE name = \"snoopy\"";
+    expr = "SELECT Puppy.name, Puppy.*, Host.name, Puppy.age FROM Puppy, Host WHERE Puppy.name = \"snoopy\"";
     std::cout << expr << std::endl;
     AssertTrue(interpreter_->Parse(expr));
     node = interpreter_->shared_query()->GetExprNode();
     AssertTrue(node && node->valid());
     AssertTrue(interpreter_->shared_query()->FinalizeParsing());
     AssertTrue(interpreter_->shared_query()
-                   ->FindColumnRequest(Column("Puppy", "*")) != nullptr);
+                   ->FindColumnRequest(Column("Puppy", "*")) == nullptr);
     AssertTrue(interpreter_->shared_query()
-                   ->FindColumnRequest(Column("Puppy", "age")) == nullptr);
+                   ->FindColumnRequest(Column("Puppy", "name")) != nullptr);
+    AssertEqual(0, interpreter_->shared_query()
+                     ->FindColumnRequest(Column("Puppy", "name"))->request_pos);
     AssertTrue(interpreter_->shared_query()
-                   ->FindColumnRequest(Column("Puppy", "name")) == nullptr);
+                   ->FindColumnRequest(Column("Puppy", "age")) != nullptr);
+    AssertEqual(6, interpreter_->shared_query()
+                     ->FindColumnRequest(Column("Puppy", "age"))->request_pos);
+    AssertTrue(interpreter_->shared_query()
+                   ->FindColumnRequest(Column("Puppy", "id")) != nullptr);
+    AssertEqual(1, interpreter_->shared_query()
+                     ->FindColumnRequest(Column("Puppy", "id"))->request_pos);
+    AssertEqual(2, interpreter_->shared_query()
+                   ->FindColumnRequest(Column("Puppy", "weight"))->request_pos);
+    AssertEqual(3, interpreter_->shared_query()
+                    ->FindColumnRequest(Column("Puppy", "adult"))->request_pos);
+
     interpreter_->reset();
     printf("\n");
 

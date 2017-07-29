@@ -21,6 +21,9 @@ struct ColumnRequest {
   //
   // The 1st column is a, 2nd is b, etc.
   uint32 request_pos;
+  // Only used for *-expanded columns of a table, to preserve its intrinsic
+  // fields order.
+  uint32 sub_request_pos = 0;
 };
 
 class SqlQuery {
