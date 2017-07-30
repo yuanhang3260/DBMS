@@ -71,6 +71,9 @@ class ExprTreeNode {
       left_(left),
       right_(right) {}
 
+  ExprTreeNode* left() const { return left_.get(); }
+  ExprTreeNode* right() const { return right_.get(); }
+
   void set_parent(std::shared_ptr<ExprTreeNode> parent) {
     parent_ = parent;
   }
@@ -99,6 +102,8 @@ class ExprTreeNode {
   std::string error_msg() const { return error_msg_; }
   void set_error_msg(const std::string error_msg) { error_msg_ = error_msg; }
 
+  DEFINE_ACCESSOR(physical_query_root, bool);
+
   virtual NodeValue Evaluate(const EvaluateArgs& arg) const = 0;
 
  protected:
@@ -109,6 +114,8 @@ class ExprTreeNode {
   std::shared_ptr<ExprTreeNode> left_;
   std::shared_ptr<ExprTreeNode> right_;
   std::shared_ptr<ExprTreeNode> parent_;
+
+  bool physical_query_root_ = false;
 };
 
 
@@ -152,6 +159,8 @@ class OperatorNode : public ExprTreeNode {
                std::shared_ptr<ExprTreeNode> right);
 
   Type type() const override { return ExprTreeNode::OPERATOR; }
+
+  OperatorType OpType() const { return op_; }
 
   void Print() const override;
 

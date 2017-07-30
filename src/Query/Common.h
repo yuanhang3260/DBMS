@@ -45,8 +45,11 @@ enum OperatorType {
   NOT,
 };
 
-std::string OpTypeStr(OperatorType value_type);
+std::string OpTypeStr(OperatorType op_type);
 OperatorType StrToOp(const std::string& str);
+bool IsNumerateOp(OperatorType op_type);
+bool IsCompareOp(OperatorType op_type);
+bool IsLogicalOp(OperatorType op_type);
 
 struct Column {
   Column() = default;

@@ -20,8 +20,8 @@ std::string ValueTypeStr(ValueType value_type) {
   return "UNKNOWN_VALUE_TYPE";
 }
 
-std::string OpTypeStr(OperatorType value_type) {
-  switch (value_type) {
+std::string OpTypeStr(OperatorType op_type) {
+  switch (op_type) {
     case ADD:
       return "+";
     case SUB:
@@ -112,6 +112,30 @@ OperatorType StrToOp(const std::string& str) {
   }
 
   return UNKNOWN_OPERATOR;
+}
+
+bool IsNumerateOp(OperatorType op_type) {
+  if (op_type == ADD || op_type == SUB ||
+      op_type == MUL || op_type == DIV || op_type == MOD) {
+    return true;
+  }
+  return false;
+}
+
+bool IsCompareOp(OperatorType op_type) {
+  if (op_type == EQUAL || op_type == NONEQUAL ||
+      op_type == LT || op_type == GT ||
+      op_type == LE || op_type == GE) {
+    return true;
+  }
+  return false;
+}
+
+bool IsLogicalOp(OperatorType op_type) {
+  if (op_type == AND || op_type == OR || op_type == NOT) {
+    return true;
+  }
+  return false;
 }
 
 }  // namespace Query

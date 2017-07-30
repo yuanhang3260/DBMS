@@ -54,6 +54,8 @@ class SqlQuery {
   void set_error_msg(const std::string& error_msg);
 
  private:
+  bool GroupPhysicalQuery(ExprTreeNode* node);
+
   DB::CatalogManager* catalog_m_ = nullptr;
 
   std::shared_ptr<Query::ExprTreeNode> expr_node_;

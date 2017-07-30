@@ -240,6 +240,38 @@ bool SqlQuery::FinalizeParsing() {
   return true;
 }
 
+bool SqlQuery::GroupPhysicalQuery(ExprTreeNode* node) {
+  if (node == nullptr) {
+    return true;
+  }
+
+  bool left_re = GroupPhysicalQuery(node->left());
+  bool right_re = GroupPhysicalQuery(node->right());
+
+  bool re = left_re && right_re;
+  if (re) {
+    if (node->type() == ExprTreeNode::OPERATOR) {
+      OperatorNode* op_node = dynamic_cast<OperatorNode*>(node);
+      if (op_node->OpType() == OR || op_node->OpType() == NOT) {
+        re = false;
+      }
+    }
+  }
+
+  // Set children node as the root of "physical query", which means from this
+  // node, a physical query may be executed.
+  if (!re) {
+    if (left_re) {
+      node->left()->set_physical_query_root(true);
+    }
+    if (right_re) {
+      node->right()->set_physical_query_root(true);
+    }
+  }
+
+  return re;
+}
+
 std::string SqlQuery::error_msg() const {
   return error_msg_;
 }
