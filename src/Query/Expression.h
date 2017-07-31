@@ -14,31 +14,6 @@
 
 namespace Query {
 
-struct NodeValue {
-  int64 v_int64 = 0;
-  double v_double = 0;
-  std::string v_str;
-  char v_char = 0;
-  bool v_bool = false;
-
-  ValueType type = UNKNOWN_VALUE_TYPE;
-  bool negative = false;
-
-  bool has_value() const { return has_value_flags_ != 0; }
-  byte has_value_flags_ = 0;
-
-  NodeValue() : type(UNKNOWN_VALUE_TYPE) {}
-  explicit NodeValue(ValueType type_arg) : type(type_arg) {}
-
-  NodeValue static IntValue(int64 v);
-  NodeValue static DoubleValue(double v);
-  NodeValue static StringValue(const std::string& v);
-  NodeValue static CharValue(char v);
-  NodeValue static BoolValue(bool v);
-
-  std::string AsString() const;
-};
-
 struct EvaluateArgs {
   EvaluateArgs(DB::CatalogManager* catalog_m_,
                const Storage::RecordBase& record_,
@@ -90,6 +65,7 @@ class ExprTreeNode {
   static std::string NodeTypeStr(ExprTreeNode::Type node_type);
 
   const NodeValue& value() { return value_; }
+  ValueType value_type() const { return value_.type; }
   void set_value_type(ValueType value_type) { value_.type = value_type; }
 
   // Careful! This can only be applied to ConstValueNode and ColumnNode.
@@ -104,6 +80,9 @@ class ExprTreeNode {
 
   DEFINE_ACCESSOR(physical_query_root, bool);
 
+  const PhysicalPlan& physical_plan() const { return physical_plan_; }
+  PhysicalPlan* mutable_physical_plan() { return &physical_plan_; }
+
   virtual NodeValue Evaluate(const EvaluateArgs& arg) const = 0;
 
  protected:
@@ -116,6 +95,7 @@ class ExprTreeNode {
   std::shared_ptr<ExprTreeNode> parent_;
 
   bool physical_query_root_ = false;
+  PhysicalPlan physical_plan_;
 };
 
 
@@ -135,20 +115,20 @@ class ConstValueNode : public ExprTreeNode {
 
 class ColumnNode : public ExprTreeNode {
  public:
-  ColumnNode(const Column& column, const DB::TableField& field);
+  ColumnNode(const Column& column);
 
   Type type() const override { return ExprTreeNode::TABLE_COLUMN; }
+
+  const Column& column() const { return column_; }
 
   void Print() const override;
 
   NodeValue Evaluate(const EvaluateArgs& arg) const override;
 
  private:
-  bool Init(const DB::TableField& field);
+  bool Init();
 
   Column column_;
-  int32 field_index_ = -1;
-  Schema::FieldType field_type_ = Schema::FieldType::UNKNOWN_TYPE;
 };
 
 

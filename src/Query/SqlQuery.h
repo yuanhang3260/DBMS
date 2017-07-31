@@ -54,7 +54,15 @@ class SqlQuery {
   void set_error_msg(const std::string& error_msg);
 
  private:
-  bool GroupPhysicalQuery(ExprTreeNode* node);
+  bool GroupPhysicalQueries(ExprTreeNode* node);
+
+  PhysicalPlan* EvaluateNodePhysicalPlans(ExprTreeNode* node);
+
+  PhysicalPlan* PlanPhysicalQuery(ExprTreeNode* node);
+
+  bool IsConstExpression(ExprTreeNode* node);
+
+  void EvaluateQueryConditions(PhysicalPlan* physical_plan);
 
   DB::CatalogManager* catalog_m_ = nullptr;
 

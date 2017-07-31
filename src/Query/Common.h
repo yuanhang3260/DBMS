@@ -7,6 +7,8 @@
 
 namespace Query {
 
+class OperatorNode;
+
 // We use a different representation of value type enum other than
 // DB::TableField::Type. This enum is specific for Sql query parser/evaluator.
 //
@@ -36,10 +38,10 @@ enum OperatorType {
   MOD,  // %
   EQUAL,     // =
   NONEQUAL,  // !=
-  LT,  // <
-  GT,  // >
-  LE,  // <=
   GE,  // >=
+  GT,  // >
+  LT,  // <
+  LE,  // <=
   AND,
   OR,
   NOT,
@@ -50,6 +52,7 @@ OperatorType StrToOp(const std::string& str);
 bool IsNumerateOp(OperatorType op_type);
 bool IsCompareOp(OperatorType op_type);
 bool IsLogicalOp(OperatorType op_type);
+OperatorType FlipOp(OperatorType op_type);
 
 struct Column {
   Column() = default;
@@ -58,6 +61,77 @@ struct Column {
 
   std::string table_name;
   std::string column_name;
+  int index = -1;
+  Schema::FieldType type = Schema::FieldType::UNKNOWN_TYPE;
+};
+
+struct NodeValue {
+  int64 v_int64 = 0;
+  double v_double = 0;
+  std::string v_str;
+  char v_char = 0;
+  bool v_bool = false;
+
+  ValueType type = UNKNOWN_VALUE_TYPE;
+  bool negative = false;
+
+  bool has_value() const { return has_value_flags_ != 0; }
+  byte has_value_flags_ = 0;
+
+  NodeValue() : type(UNKNOWN_VALUE_TYPE) {}
+  explicit NodeValue(ValueType type_arg) : type(type_arg) {}
+
+  NodeValue static IntValue(int64 v);
+  NodeValue static DoubleValue(double v);
+  NodeValue static StringValue(const std::string& v);
+  NodeValue static CharValue(char v);
+  NodeValue static BoolValue(bool v);
+
+  std::string AsString() const;
+
+  bool operator==(const NodeValue& other) const;
+  bool operator!=(const NodeValue& other) const;
+  bool operator<(const NodeValue& other) const;
+  bool operator>(const NodeValue& other) const;
+  bool operator<=(const NodeValue& other) const;
+  bool operator>=(const NodeValue& other) const;
+};
+
+struct QueryCondition {
+  Column column;
+  OperatorType op;
+  NodeValue value;
+  bool is_const = false;
+  bool const_result = false;  // only used when is_const = true
+};
+
+// INT64 can be compared with DOUBLE and CHAR. We need to unify the value type
+// with the column type.
+void CastValueType(QueryCondition* condition);
+
+struct PhysicalPlan {
+  enum Plan {
+    CONST_FALSE_SKIP,
+    CONST_TRUE_SCAN,  // This should scan
+    SCAN,
+    SEARCH,
+    POP,  // pop result from children nodes.
+  };
+
+  enum ExecuteNode {
+    NON,
+    BOTH,
+    LEFT,
+    RIGHT,
+  };
+
+  Plan plan = CONST_FALSE_SKIP;
+  double query_ratio = 0;
+  ExecuteNode pop_node = NON;  // Only used when plan is POP.
+
+  std::vector<QueryCondition> conditions;
+
+  bool ShouldScan() const { return plan == SCAN || plan == CONST_TRUE_SCAN; }
 };
 
 }  // namespace Query

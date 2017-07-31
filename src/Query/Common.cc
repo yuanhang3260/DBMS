@@ -1,3 +1,5 @@
+#include <math.h>
+
 #include "Query/Common.h"
 
 namespace Query {
@@ -136,6 +138,147 @@ bool IsLogicalOp(OperatorType op_type) {
     return true;
   }
   return false;
+}
+
+OperatorType FlipOp(OperatorType op_type) {
+  if (op_type == LT) {
+    return GT;
+  } else if (op_type == GT) {
+    return LT;
+  } else if (op_type == LE) {
+    return GE;
+  } else if (op_type == GE) {
+    return LE;
+  } else {
+    return op_type;
+  }
+}
+
+bool NodeValue::operator==(const NodeValue& other) const {
+  if (type != other.type) {
+    LogFATAL("Comparing with value type %s with %s",
+             ValueTypeStr(type), ValueTypeStr(other.type));
+    return false;
+  }
+
+  switch (type) {
+    case INT64 : return v_int64 == other.v_int64;
+    case DOUBLE : return v_double == other.v_double;
+    case BOOL : return v_bool == other.v_bool;
+    case CHAR : return v_char == other.v_char;
+    case STRING : return v_str == other.v_str;
+    default: return false;
+  }
+  return false;
+}
+
+bool NodeValue::operator!=(const NodeValue& other) const {
+  return !(*this == other);
+}
+
+bool NodeValue::operator<(const NodeValue& other) const {
+  if (type != other.type) {
+    LogFATAL("Comparing with value type %s with %s",
+             ValueTypeStr(type), ValueTypeStr(other.type));
+  }
+
+  switch (type) {
+    case INT64 : return v_int64 < other.v_int64;
+    case DOUBLE : return v_double < other.v_double;
+    case BOOL : return v_bool < other.v_bool;
+    case CHAR : return v_char < other.v_char;
+    case STRING : return v_str < other.v_str;
+    default: return false;
+  }
+  return false;
+}
+
+bool NodeValue::operator>(const NodeValue& other) const {
+  if (type != other.type) {
+    LogFATAL("Comparing with value type %s with %s",
+             ValueTypeStr(type), ValueTypeStr(other.type));
+  }
+
+  switch (type) {
+    case INT64 : return v_int64 > other.v_int64;
+    case DOUBLE : return v_double > other.v_double;
+    case BOOL : return v_bool > other.v_bool;
+    case CHAR : return v_char > other.v_char;
+    case STRING : return v_str > other.v_str;
+    default: return false;
+  }
+  return false;
+}
+
+bool NodeValue::operator<=(const NodeValue& other) const {
+  return !(*this > other);
+}
+
+bool NodeValue::operator>=(const NodeValue& other) const {
+  return !(*this < other);
+}
+
+void CastValueType(QueryCondition* condition) {
+  auto type = FromSchemaType(condition->column.type);
+  auto& value = condition->value;
+  if (type == INT64) {
+    if (value.type == DOUBLE) {
+      // Careful, don't cast directly. Needs to check the op type.
+      if (condition->op == EQUAL) {
+        if (floor(value.v_double) == value.v_double) {
+          condition->is_const = true;
+          condition->const_result = false;
+        } else {
+          value.v_int64 = static_cast<int64>(value.v_double);
+        }
+      } else if (condition->op == NONEQUAL) {
+        if (floor(value.v_double) == value.v_double) {
+          condition->is_const = true;
+          condition->const_result = true;
+        } else {
+          value.v_int64 = static_cast<int64>(value.v_double);
+        }
+      } else if (condition->op == LT) {
+        if (floor(value.v_double) == value.v_double) {
+          value.v_int64 = static_cast<int64>(value.v_double);
+        } else {
+          value.v_int64 = static_cast<int64>(value.v_double) + 1;
+        }
+      } else if (condition->op == LE) {
+        value.v_int64 = static_cast<int64>(value.v_double);
+      } else if (condition->op == GT) {
+        value.v_int64 = static_cast<int64>(value.v_double);
+      } else if (condition->op == GE) {
+        if (floor(value.v_double) == value.v_double) {
+          value.v_int64 = static_cast<int64>(value.v_double);
+        } else {
+          value.v_int64 = static_cast<int64>(value.v_double) + 1;
+        }
+      } 
+    } else if (value.type == CHAR) {
+      value.v_int64 = static_cast<int64>(value.v_char);
+    } else if (value.type != INT64) {
+      LogFATAL("Unexpected value conversion from %s to INT64",
+               ValueTypeStr(value.type).c_str());
+    }
+    value.type = INT64;
+  } else if (type == DOUBLE) {
+    if (value.type == INT64) {
+      value.v_double = static_cast<double>(value.v_int64);
+    } else if (value.type != DOUBLE) {
+      LogFATAL("Unexpected value conversion from %s to DOUBLE",
+               ValueTypeStr(value.type).c_str());
+    }
+    value.type = DOUBLE;
+  } else if (type == CHAR) {
+    if (value.type == INT64) {
+      value.v_char = static_cast<char>(value.v_int64);
+    } else if (value.type != CHAR) {
+      LogFATAL("Unexpected value conversion from %s to DOUBLE",
+               ValueTypeStr(value.type).c_str());
+    }
+    value.type = CHAR;
+  }
 }
 
 }  // namespace Query

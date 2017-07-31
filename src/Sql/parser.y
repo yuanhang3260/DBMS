@@ -178,8 +178,9 @@ expr: INTEGER {
         if (field_m == nullptr) {
           YYABORT;
         }
-        $$ = std::shared_ptr<Query::ExprTreeNode>(
-            new Query::ColumnNode(column, field_m->field()));
+        column.index = field_m->index();
+        column.type = field_m->type();
+        $$.reset(new Query::ColumnNode(column));
         if (!$$->valid()) {
           driver.set_error_msg($$->error_msg());
           YYABORT;
