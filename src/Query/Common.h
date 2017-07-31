@@ -111,6 +111,7 @@ void CastValueType(QueryCondition* condition);
 
 struct PhysicalPlan {
   enum Plan {
+    NO_PLAN,
     CONST_FALSE_SKIP,
     CONST_TRUE_SCAN,  // This should scan
     SCAN,
@@ -125,7 +126,7 @@ struct PhysicalPlan {
     RIGHT,
   };
 
-  Plan plan = CONST_FALSE_SKIP;
+  Plan plan = NO_PLAN;
   double query_ratio = 0;
   ExecuteNode pop_node = NON;  // Only used when plan is POP.
 

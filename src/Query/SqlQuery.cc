@@ -443,21 +443,22 @@ PhysicalPlan* SqlQuery::PlanPhysicalQuery(ExprTreeNode* node) {
                  right_plan->plan == PhysicalPlan::CONST_TRUE_SCAN) {
         this_plan->plan = PhysicalPlan::CONST_TRUE_SCAN;
         this_plan->query_ratio = 1.0;
-      } else if (left_plan->plan == PhysicalPlan::SCAN &&
-                 right_plan->plan == PhysicalPlan::SCAN) {
-        this_plan->plan = PhysicalPlan::SCAN;
-        this_plan->query_ratio = 1.0;
-      } else {
-        if (left_plan->plan != PhysicalPlan::SCAN) {
+      } else if (left_plan->plan == PhysicalPlan::SEARCH ||
+                 right_plan->plan == PhysicalPlan::SEARCH) {
+        this_plan->plan = PhysicalPlan::SEARCH;
+        if (left_plan->plan == PhysicalPlan::SEARCH) {
           this_plan->conditions.insert(this_plan->conditions.end(),
                                        left_plan->conditions.begin(),
                                        left_plan->conditions.end());
         }
-        if (right_plan->plan != PhysicalPlan::SCAN) {
+        if (right_plan->plan == PhysicalPlan::SEARCH) {
           this_plan->conditions.insert(this_plan->conditions.end(),
                                        right_plan->conditions.begin(),
                                        right_plan->conditions.end());
         }
+      } else {
+        this_plan->plan = PhysicalPlan::SCAN;
+        this_plan->query_ratio = 1.0;
       }
     } else if (IsCompareOp(op_node->OpType())) {
       if (node->left()->type() == ExprTreeNode::TABLE_COLUMN &&
