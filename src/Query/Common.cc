@@ -157,7 +157,7 @@ OperatorType FlipOp(OperatorType op_type) {
 bool NodeValue::operator==(const NodeValue& other) const {
   if (type != other.type) {
     LogFATAL("Comparing with value type %s with %s",
-             ValueTypeStr(type), ValueTypeStr(other.type));
+             ValueTypeStr(type).c_str(), ValueTypeStr(other.type).c_str());
     return false;
   }
 
@@ -179,7 +179,7 @@ bool NodeValue::operator!=(const NodeValue& other) const {
 bool NodeValue::operator<(const NodeValue& other) const {
   if (type != other.type) {
     LogFATAL("Comparing with value type %s with %s",
-             ValueTypeStr(type), ValueTypeStr(other.type));
+             ValueTypeStr(type).c_str(), ValueTypeStr(other.type).c_str());
   }
 
   switch (type) {
@@ -196,7 +196,7 @@ bool NodeValue::operator<(const NodeValue& other) const {
 bool NodeValue::operator>(const NodeValue& other) const {
   if (type != other.type) {
     LogFATAL("Comparing with value type %s with %s",
-             ValueTypeStr(type), ValueTypeStr(other.type));
+             ValueTypeStr(type).c_str(), ValueTypeStr(other.type).c_str());
   }
 
   switch (type) {

@@ -487,6 +487,21 @@ PhysicalPlan* SqlQuery::PlanPhysicalQuery(ExprTreeNode* node) {
       LogFATAL("Unexpected Operator type %s for physical query root",
                OpTypeStr(op_node->OpType()).c_str());
     }
+  } else if (node->type() == ExprTreeNode::TABLE_COLUMN) {
+    // This is a special case. We allow bool conditions like
+    // "... WHERE some_bool_field".
+    ColumnNode* column_node = dynamic_cast<ColumnNode*>(node);
+    CHECK(column_node->value_type() == BOOL,
+          Strings::StrCat("Expect single TABLE_COLUMN node to be BOOL, but got",
+                          ValueTypeStr(column_node->value_type())));
+
+    // (TODO): Scan instead of search?
+    QueryCondition condition;
+    condition.column = column_node->column();
+    condition.op = EQUAL;
+    condition.value = NodeValue::BoolValue(true);
+    this_plan->plan = PhysicalPlan::SEARCH;
+    this_plan->conditions.push_back(condition);
   }
 
   return this_plan;
@@ -513,9 +528,7 @@ bool SqlQuery::IsConstExpression(ExprTreeNode* node) {
 }
 
 void SqlQuery::EvaluateQueryConditions(PhysicalPlan* physical_plan) {
-  if (physical_plan->plan == PhysicalPlan::CONST_FALSE_SKIP ||
-      physical_plan->plan == PhysicalPlan::CONST_TRUE_SCAN ||
-      physical_plan->plan == PhysicalPlan::SCAN) {
+  if (physical_plan->plan != PhysicalPlan::SEARCH) {
     return;
   }
 
@@ -533,7 +546,6 @@ void SqlQuery::EvaluateQueryConditions(PhysicalPlan* physical_plan) {
                                 const QueryCondition& c2) {
     return c1.column.index < c2.column.index;
   };
-
   std::sort(conditions.begin(), conditions.end(), column_comparator);
 
   std::vector<std::vector<const QueryCondition*>> condition_groups;
@@ -552,6 +564,9 @@ void SqlQuery::EvaluateQueryConditions(PhysicalPlan* physical_plan) {
     PhysicalPlan group_plan;
     const QueryCondition* equal_condition = nullptr;
     std::vector<const QueryCondition*> comparing_conditions;
+
+    // Iterate all conditions in this group.
+    //
     // Pass 1: Rule out const false conditions and conflict equal conditions.
     for (const auto& condition : group) {
       if (condition->is_const) {
@@ -652,14 +667,17 @@ void SqlQuery::EvaluateQueryConditions(PhysicalPlan* physical_plan) {
         if (downlimit->value > uplimit->value) {
           group_plan.plan = PhysicalPlan::CONST_FALSE_SKIP;
           group_plan.query_ratio = 0.0;
+          return group_plan;
         } else if (downlimit->value == uplimit->value) {
-          if (downlimit->op == GT && uplimit->op == LT) {
-            group_plan.plan = PhysicalPlan::CONST_FALSE_SKIP;
-            group_plan.query_ratio = 0.0;
-          } else {
+          if (downlimit->op == GE && uplimit->op == LE) {
+            // e.g. WHERE (field >= 3 AND field <= 3)  ----->  (field == 3)
             group_plan.plan = PhysicalPlan::SEARCH;
             group_plan.conditions.push_back(*downlimit);
             group_plan.conditions.back().op = EQUAL;
+          } else {
+            group_plan.plan = PhysicalPlan::CONST_FALSE_SKIP;
+            group_plan.query_ratio = 0.0;
+            return group_plan;
           }
         } else {
           group_plan.plan = PhysicalPlan::SEARCH;
@@ -676,17 +694,39 @@ void SqlQuery::EvaluateQueryConditions(PhysicalPlan* physical_plan) {
     } else {
       group_plan.plan = PhysicalPlan::SCAN;
       group_plan.query_ratio = 1.0;
+      return group_plan;
     }
 
-    // (TODO): Evaluate query ratio for this group.
+    // (TODO): Evaluate query search ratio based on conditions.
+    if (group_plan.conditions.size() == 1) {
+      const auto& single_condition = *group_plan.conditions.begin();
+      if (single_condition.op == EQUAL) {
+        if (single_condition.column.type == Schema::FieldType::INT) {
+          
+        }
+      }
+    }
 
     return group_plan;
   };
 
+  auto* table_m = FindTable(conditions.begin()->column.table_name);
+  CHECK(table_m != nullptr,
+        Strings::StrCat("Couldn't find table %s",
+                        conditions.begin()->column.table_name));
   for (const auto& group : condition_groups) {
-    // (TODO): If this column has no index, we have to scan. Otherwise analyze
-    // this group conditions and find the search range.
-    analyze_condition_group(group);
+    // If this column has no index, we have to scan. Otherwise analyze this
+    // group conditions and find the search range.
+    int field_index = (*group.begin())->column.index;
+    CHECK(table_m->FindFieldByIndex(field_index) != nullptr,
+          Strings::StrCat("Couldn't find column \"",
+                          (*group.begin())->column.column_name,
+                          "\" in table \"", table_m->name(), "\""));
+    if (!table_m->HasIndex({field_index})) {
+      continue;
+    }
+
+    auto group_lan = analyze_condition_group(group);
   }
 }
 
