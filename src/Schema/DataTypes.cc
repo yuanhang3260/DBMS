@@ -37,7 +37,13 @@ double EvaluateIntegerValueRatio(ValueRange<T>& range) {
       return 0;
     }
 
-    return 1.0 * (*range.right_value - *range.left_value + 1) /
+    int boundary_num = 0;
+    if (range.left_open && range.right_open) {
+      boundary_num = -1;
+    } else if (!range.left_open && !range.right_open) {
+      boundary_num = 1;
+    }
+    return 1.0 * (*range.right_value - *range.left_value + boundary_num) /
                  (range.max - range.min + 1);
   }
 }
@@ -113,7 +119,7 @@ double EvaluateStringValueRatio(ValueRange<std::string>& range) {
       // std::cout << numerise_str(range.max, prefix) << " - "
       //           << numerise_str(range.min, prefix) << std::endl;
       return 1.0 / (numerise_str(range.max, prefix) -
-                    numerise_str(range.min, prefix));
+                    numerise_str(range.min, prefix) + 1);
     } else {
       return 0;
     }
@@ -144,9 +150,15 @@ double EvaluateStringValueRatio(ValueRange<std::string>& range) {
     //           << (numerise_str(range.max, prefix) -
     //               numerise_str(range.min, prefix) + 1)
     //           << std::endl;
+    int boundary_num = 0;
+    if (range.left_open && range.right_open) {
+      boundary_num = -1;
+    } else if (!range.left_open && !range.right_open) {
+      boundary_num = 1;
+    }
     return 1.0 *
             (numerise_str(*range.right_value, prefix) -
-             numerise_str(*range.left_value, prefix) + 1) /
+             numerise_str(*range.left_value, prefix) + boundary_num) /
             (numerise_str(range.max, prefix) -
              numerise_str(range.min, prefix) + 1);
   }
@@ -352,6 +364,10 @@ void CharArrayField::reset() {
 
   memset(value_, 0, length_limit_);
   length_ = 0;
+}
+
+double CharArrayField::EvaluateValueRatio(ValueRange<std::string>& range) {
+  return EvaluateStringValueRatio(range);
 }
 
 }  // namepsace Schema

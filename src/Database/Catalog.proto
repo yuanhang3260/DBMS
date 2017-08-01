@@ -1,5 +1,15 @@
 package DB;
 
+message ValueLimit {
+  optional int32 limit_int32 = 1;
+  optional int64 limit_int64 = 2;
+  optional double limit_double = 3;
+  optional bool limit_bool = 4;
+  optional char limit_char = 5;
+  optional string limit_str = 6;
+  optional string limit_chararray = 7;
+}
+
 message TableField {
   enum Type {
     UNKNOWN_TYPE,
@@ -16,6 +26,9 @@ message TableField {
   optional int32 index = 2;
   optional Type type = 3;
   optional int32 size = 4;  // Only meaningful for CharArray - length limit.
+
+  optional ValueLimit min_value = 5;
+  optional ValueLimit max_value = 6;
 }
 
 message Index {
@@ -28,6 +41,8 @@ message TableInfo {
 
   optional Index primary_index = 3;
   repeated Index indexes = 4;
+
+  optional int32 num_records = 5;
 
   // TODO: foreign keys, constraints, assertions ...
 }

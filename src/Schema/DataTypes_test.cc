@@ -147,6 +147,8 @@ class DataTypesTest: public UnitTest {
     AssertFloatEqual(0.2, IntField::EvaluateValueRatio(int_range));
 
     int_range.single_value.reset();
+    int_range.left_open = false;
+    int_range.right_open = false;
 
     int_range.set_left_value(2);
     int_range.set_right_value(3);
@@ -192,6 +194,8 @@ class DataTypesTest: public UnitTest {
                      StringField::EvaluateValueRatio(str_range));
 
     str_range.single_value.reset();
+    str_range.left_open = false;
+    str_range.right_open = false;
 
     str_range.min = "xya";
     str_range.max = "xyf";

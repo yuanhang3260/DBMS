@@ -80,6 +80,8 @@ class FieldInfoManager {
   int32 index() const;
   TableField::Type type() const;
   int32 size() const;
+  const ValueLimit& min_value() const { return field_->min_value(); }
+  const ValueLimit& max_value() const { return field_->max_value(); }
 
  private:
   TableField* field_;

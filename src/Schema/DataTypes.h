@@ -19,7 +19,9 @@ struct ValueRange {
   T max;
   std::shared_ptr<T> single_value;
   std::shared_ptr<T> left_value;
+  bool left_open = false;
   std::shared_ptr<T> right_value;
+  bool right_open = false;
 
   void set_single_value(const T& v) { single_value.reset(new T(v)); }
   void set_left_value(const T& v) { left_value.reset(new T(v)); }
@@ -400,6 +402,8 @@ class CharArrayField: public Field {
   int LoadFromMem(const byte* buf) override;
 
   void reset() override;
+
+  static double EvaluateValueRatio(ValueRange<std::string>& range);
 
  private:
   char* value_ = nullptr;

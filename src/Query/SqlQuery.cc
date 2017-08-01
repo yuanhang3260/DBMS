@@ -527,6 +527,34 @@ bool SqlQuery::IsConstExpression(ExprTreeNode* node) {
   return false;
 }
 
+#define EVALUATE_CONDITION_SEARCH_RATIO(schema_type, field_type, literal_type, cpp_type, value_type)  \
+  if (field_m->type() == Schema::FieldType::schema_type) {  \
+    Schema::ValueRange<cpp_type> literal_type##_range;  \
+    literal_type##_range.min = field_m->min_value().limit_##literal_type();  \
+    literal_type##_range.max = field_m->max_value().limit_##literal_type();        \
+    for (const auto& condition : conditions) {  \
+      if (condition.op == EQUAL) {  \
+        const auto& condition = *group_plan.conditions.begin();  \
+        literal_type##_range.set_single_value(condition.value.v_##value_type);  \
+      } else if (condition.op == GT) {  \
+        literal_type##_range.set_left_value(condition.value.v_##value_type);  \
+        literal_type##_range.left_open = true;  \
+      } else if (condition.op == GE) {  \
+        literal_type##_range.set_left_value(condition.value.v_##value_type);  \
+        literal_type##_range.left_open = false;  \
+      } else if (condition.op == LE) {  \
+        literal_type##_range.set_right_value(condition.value.v_##value_type);  \
+        literal_type##_range.right_open = false;  \
+      } else if (condition.op == LT) {  \
+        literal_type##_range.set_right_value(condition.value.v_##value_type);  \
+        literal_type##_range.right_open = true;  \
+      } else {  \
+        LogFATAL("Unexpected Op %s", OpTypeStr(condition.op).c_str());  \
+      }  \
+    }  \
+    search_ratio = Schema::field_type##Field::EvaluateValueRatio(literal_type##_range);  \
+  }  \
+
 void SqlQuery::EvaluateQueryConditions(PhysicalPlan* physical_plan) {
   if (physical_plan->plan != PhysicalPlan::SEARCH) {
     return;
@@ -560,7 +588,8 @@ void SqlQuery::EvaluateQueryConditions(PhysicalPlan* physical_plan) {
 
   // Analyze one group.
   auto analyze_condition_group =
-  [&] (const std::vector<const QueryCondition*>& group) {
+  [&] (const std::vector<const QueryCondition*>& group,
+       DB::FieldInfoManager* field_m) {
     PhysicalPlan group_plan;
     const QueryCondition* equal_condition = nullptr;
     std::vector<const QueryCondition*> comparing_conditions;
@@ -698,15 +727,17 @@ void SqlQuery::EvaluateQueryConditions(PhysicalPlan* physical_plan) {
     }
 
     // (TODO): Evaluate query search ratio based on conditions.
-    if (group_plan.conditions.size() == 1) {
-      const auto& single_condition = *group_plan.conditions.begin();
-      if (single_condition.op == EQUAL) {
-        if (single_condition.column.type == Schema::FieldType::INT) {
-          
-        }
-      }
-    }
+    CHECK(!group_plan.conditions.empty(), "No condition found");
+    double search_ratio = 1.0;
+    EVALUATE_CONDITION_SEARCH_RATIO(INT, Int, int32, int32, int64)
+    EVALUATE_CONDITION_SEARCH_RATIO(LONGINT, LongInt, int64, int64, int64)
+    EVALUATE_CONDITION_SEARCH_RATIO(DOUBLE, Double, double, double, double)
+    EVALUATE_CONDITION_SEARCH_RATIO(BOOL, Bool, bool, bool, bool)
+    EVALUATE_CONDITION_SEARCH_RATIO(CHAR, Char, char, char, char)
+    EVALUATE_CONDITION_SEARCH_RATIO(STRING, String, str, std::string, str)
+    EVALUATE_CONDITION_SEARCH_RATIO(CHARARRAY, CharArray, chararray, std::string, str)
 
+    group_plan.query_ratio = search_ratio;
     return group_plan;
   };
 
@@ -714,11 +745,15 @@ void SqlQuery::EvaluateQueryConditions(PhysicalPlan* physical_plan) {
   CHECK(table_m != nullptr,
         Strings::StrCat("Couldn't find table %s",
                         conditions.begin()->column.table_name));
+
+  physical_plan->plan = PhysicalPlan::SCAN;
+  physical_plan->query_ratio = 1.0;
   for (const auto& group : condition_groups) {
     // If this column has no index, we have to scan. Otherwise analyze this
     // group conditions and find the search range.
     int field_index = (*group.begin())->column.index;
-    CHECK(table_m->FindFieldByIndex(field_index) != nullptr,
+    auto field_m = table_m->FindFieldByIndex(field_index);
+    CHECK(field_m != nullptr,
           Strings::StrCat("Couldn't find column \"",
                           (*group.begin())->column.column_name,
                           "\" in table \"", table_m->name(), "\""));
@@ -726,7 +761,16 @@ void SqlQuery::EvaluateQueryConditions(PhysicalPlan* physical_plan) {
       continue;
     }
 
-    auto group_lan = analyze_condition_group(group);
+    auto group_plan = analyze_condition_group(group, field_m);
+    // Index search ratio larger than kSearchThreshold. Searching by index will
+    // not be any cheaper than a simple scan.
+    if (group_plan.query_ratio > kSearchThreshold &&
+        !table_m->IsPrimaryIndex({field_m->index()})) {
+      continue;
+    }
+    if (group_plan.query_ratio < physical_plan->query_ratio) {
+      *physical_plan = group_plan;
+    }
   }
 }
 
