@@ -7,7 +7,7 @@
 namespace Query {
 
 namespace {
-const double kSearchThreshold = 0.3;
+const double kSearchThreshold = 0.7;
 }
 
 SqlQuery::SqlQuery(DB::CatalogManager* catalog_m) : catalog_m_(catalog_m) {}
@@ -532,9 +532,9 @@ bool SqlQuery::IsConstExpression(ExprTreeNode* node) {
     Schema::ValueRange<cpp_type> literal_type##_range;  \
     literal_type##_range.min = field_m->min_value().limit_##literal_type();  \
     literal_type##_range.max = field_m->max_value().limit_##literal_type();        \
-    for (const auto& condition : conditions) {  \
+    for (const auto& condition : group_plan.conditions) {  \
       if (condition.op == EQUAL) {  \
-        const auto& condition = *group_plan.conditions.begin();  \
+        const auto& condition = group_plan.conditions.front();  \
         literal_type##_range.set_single_value(condition.value.v_##value_type);  \
       } else if (condition.op == GT) {  \
         literal_type##_range.set_left_value(condition.value.v_##value_type);  \
@@ -597,6 +597,7 @@ void SqlQuery::EvaluateQueryConditions(PhysicalPlan* physical_plan) {
     // Iterate all conditions in this group.
     //
     // Pass 1: Rule out const false conditions and conflict equal conditions.
+    //std::cout << "group size = " << group.size() << std::endl;
     for (const auto& condition : group) {
       if (condition->is_const) {
         if (!condition->const_result) {
@@ -691,8 +692,8 @@ void SqlQuery::EvaluateQueryConditions(PhysicalPlan* physical_plan) {
                 value_comparator);
 
       if (!downlimit_conditions.empty() && !uplimit_conditions.empty()) {
-        const QueryCondition* downlimit = *downlimit_conditions.end();
-        const QueryCondition* uplimit = *uplimit_conditions.begin();
+        const QueryCondition* downlimit = downlimit_conditions.back();
+        const QueryCondition* uplimit = uplimit_conditions.front();
         if (downlimit->value > uplimit->value) {
           group_plan.plan = PhysicalPlan::CONST_FALSE_SKIP;
           group_plan.query_ratio = 0.0;
@@ -715,10 +716,10 @@ void SqlQuery::EvaluateQueryConditions(PhysicalPlan* physical_plan) {
         }
       } else if (!downlimit_conditions.empty()) {
         group_plan.plan = PhysicalPlan::SEARCH;
-        group_plan.conditions.push_back(**downlimit_conditions.end());
+        group_plan.conditions.push_back(*downlimit_conditions.back());
       } else if (!uplimit_conditions.empty()) {
         group_plan.plan = PhysicalPlan::SEARCH;
-        group_plan.conditions.push_back(**uplimit_conditions.begin());
+        group_plan.conditions.push_back(*uplimit_conditions.front());
       }
     } else {
       group_plan.plan = PhysicalPlan::SCAN;
@@ -726,8 +727,11 @@ void SqlQuery::EvaluateQueryConditions(PhysicalPlan* physical_plan) {
       return group_plan;
     }
 
-    // (TODO): Evaluate query search ratio based on conditions.
+    // Evaluate query search ratio based on conditions.
     CHECK(!group_plan.conditions.empty(), "No condition found");
+    for (const auto& condition: group_plan.conditions) {
+      std::cout << condition.AsString() << std::endl;
+    }
     double search_ratio = 1.0;
     EVALUATE_CONDITION_SEARCH_RATIO(INT, Int, int32, int32, int64)
     EVALUATE_CONDITION_SEARCH_RATIO(LONGINT, LongInt, int64, int64, int64)
@@ -768,9 +772,14 @@ void SqlQuery::EvaluateQueryConditions(PhysicalPlan* physical_plan) {
         !table_m->IsPrimaryIndex({field_m->index()})) {
       continue;
     }
+    if (group_plan.plan == PhysicalPlan::CONST_FALSE_SKIP) {
+      *physical_plan = group_plan;
+      break;
+    }
     if (group_plan.query_ratio < physical_plan->query_ratio) {
       *physical_plan = group_plan;
     }
+    //printf("\n");
   }
 }
 

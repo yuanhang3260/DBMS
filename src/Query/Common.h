@@ -4,6 +4,7 @@
 #include <string>
 
 #include "Schema/SchemaType.h"
+#include "Strings/Utils.h"
 
 namespace Query {
 
@@ -63,6 +64,11 @@ struct Column {
   std::string column_name;
   int index = -1;
   Schema::FieldType type = Schema::FieldType::UNKNOWN_TYPE;
+
+  std::string AsString() const {
+    return Strings::StrCat("(", table_name, ", ", column_name, ", ",
+                           std::to_string(index), ")");
+  }
 };
 
 struct NodeValue {
@@ -103,6 +109,11 @@ struct QueryCondition {
   NodeValue value;
   bool is_const = false;
   bool const_result = false;  // only used when is_const = true
+
+  std::string AsString() const {
+    return Strings::StrCat(column.AsString(), " ", OpTypeStr(op), " ",
+                           value.AsString());
+  }
 };
 
 // INT64 can be compared with DOUBLE and CHAR. We need to unify the value type
@@ -133,6 +144,8 @@ struct PhysicalPlan {
   std::vector<QueryCondition> conditions;
 
   bool ShouldScan() const { return plan == SCAN || plan == CONST_TRUE_SCAN; }
+
+  void reset();
 };
 
 }  // namespace Query

@@ -26,6 +26,7 @@ class QueryTest: public UnitTest {
   std::shared_ptr<DB::CatalogManager> catalog_m_;
 
   std::shared_ptr<Interpreter> interpreter_;
+  std::shared_ptr<SqlQuery> query_;
 
  public:
   void InitCatalog() {
@@ -40,32 +41,58 @@ class QueryTest: public UnitTest {
     field->set_name("name");
     field->set_index(0);
     field->set_type(DB::TableField::STRING);
+    field->mutable_min_value()->set_limit_str("aaa");
+    field->mutable_max_value()->set_limit_str("zzz");
     // Add int type
     field = table_info->add_fields();
     field->set_name("age");
     field->set_index(1);
     field->set_type(DB::TableField::INT);
+    field->mutable_min_value()->set_limit_int32(0);
+    field->mutable_max_value()->set_limit_int32(9);
     // Add long int type
     field = table_info->add_fields();
     field->set_name("id");
     field->set_index(2);  // primary key
     field->set_type(DB::TableField::LONGINT);
+    field->mutable_min_value()->set_limit_int64(0);
+    field->mutable_max_value()->set_limit_int64(999);
     // Add double type
     field = table_info->add_fields();
     field->set_name("weight");
     field->set_index(3);
     field->set_type(DB::TableField::DOUBLE);
+    field->mutable_min_value()->set_limit_double(0.5);
+    field->mutable_max_value()->set_limit_double(2.0);
     // Add bool type
     field = table_info->add_fields();
     field->set_name("adult");
     field->set_index(4);
     field->set_type(DB::TableField::BOOL);
+    field->mutable_min_value()->set_limit_bool(false);
+    field->mutable_max_value()->set_limit_bool(true);
     // Add char array type
     field = table_info->add_fields();
     field->set_name("signature");
     field->set_index(5);
     field->set_type(DB::TableField::CHARARRAY);
     field->set_size(20);
+    field->mutable_min_value()->set_limit_chararray("");
+    field->mutable_max_value()->set_limit_chararray("zzzzzzz");
+
+    auto* index = table_info->mutable_primary_index();
+    index->add_index_fields(2);
+
+    index = table_info->add_indexes();
+    index->add_index_fields(0);
+    index = table_info->add_indexes();
+    index->add_index_fields(1);
+    index = table_info->add_indexes();
+    index->add_index_fields(3);
+    index = table_info->add_indexes();
+    index->add_index_fields(4);
+    index = table_info->add_indexes();
+    index->add_index_fields(5);
 
     // Create a table Host.
     table_info = catalog_.add_tables();
@@ -117,6 +144,8 @@ class QueryTest: public UnitTest {
 
     interpreter_ = std::make_shared<Interpreter>(catalog_m_.get());
     interpreter_->set_debug(true);
+
+    query_ = std::make_shared<SqlQuery>(catalog_m_.get());
   }
 
   void Test_EvaluateConst() {
@@ -364,6 +393,53 @@ class QueryTest: public UnitTest {
     interpreter_->reset();
     printf("\n");
   }
+
+  void Test_EvaluateQueryConditions() {
+    PhysicalPlan physical_plan;
+    physical_plan.plan = PhysicalPlan::SEARCH;
+
+    // id < 200
+    QueryCondition id_condition;
+    id_condition.column.table_name = kTableName;
+    id_condition.column.column_name = "id";
+    id_condition.column.index = 2;
+    id_condition.column.type = Schema::FieldType::LONGINT;
+    id_condition.op = LT;
+    id_condition.value = NodeValue::IntValue(200);
+
+    // 3 <= age < 4
+    QueryCondition age_condition_1;
+    age_condition_1.column.table_name = kTableName;
+    age_condition_1.column.column_name = "age";
+    age_condition_1.column.index = 1;
+    age_condition_1.column.type = Schema::FieldType::INT;
+    age_condition_1.op = GE;
+    age_condition_1.value = NodeValue::IntValue(3);
+
+    QueryCondition age_condition_2;
+    age_condition_2.column.table_name = kTableName;
+    age_condition_2.column.column_name = "age";
+    age_condition_2.column.index = 1;
+    age_condition_2.column.type = Schema::FieldType::INT;
+    age_condition_2.op = LT;
+    age_condition_2.value = NodeValue::DoubleValue(3.5);
+
+    // Query: id < 200
+    physical_plan.conditions.push_back(id_condition);
+    query_->EvaluateQueryConditions(&physical_plan);
+    AssertEqual(PhysicalPlan::SEARCH, physical_plan.plan);
+    AssertFloatEqual(0.2, physical_plan.query_ratio);
+
+    // Query: id < 200 AND 3 <= age < 3.5 (trick: 3.5 will be cast to 4)
+    physical_plan.conditions.clear();
+    physical_plan.conditions.push_back(id_condition);    
+    physical_plan.conditions.push_back(age_condition_1);
+    physical_plan.conditions.push_back(age_condition_2);
+    query_->EvaluateQueryConditions(&physical_plan);
+    AssertEqual(PhysicalPlan::SEARCH, physical_plan.plan);
+    AssertFloatEqual(0.1, physical_plan.query_ratio);
+    AssertEqual(2, physical_plan.conditions.size());
+  }
 };
 
 }  // namespace Storage
@@ -375,7 +451,8 @@ int main() {
   // test.Test_EvaluateConst();
   // test.Test_ColumnNodeExpr();
   // test.Test_EvaluateSingleExpr();
-  test.Test_SelectQuery();
+  // test.Test_SelectQuery();
+  test.Test_EvaluateQueryConditions();
 
   test.teardown();
 

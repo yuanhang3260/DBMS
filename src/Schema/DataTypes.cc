@@ -9,6 +9,17 @@ namespace {
 
 template<typename T>
 double EvaluateIntegerValueRatio(ValueRange<T>& range) {
+  // std::cout << "(min, max) = (" << range.min << ", " << range.max << ")\n";
+  // if (range.single_value) {
+  //   std::cout << "single_value: " << *range.single_value << std::endl;
+  // }
+  // if (range.left_value) {
+  //   std::cout << "left_value: " << *range.left_value << std::endl;
+  // }
+  // if (range.right_value) {
+  //   std::cout << "right_value: " << *range.right_value << std::endl;
+  // }
+
   if (range.min > range.max) {
     return 0;
   }
@@ -49,6 +60,17 @@ double EvaluateIntegerValueRatio(ValueRange<T>& range) {
 }
 
 double EvaluateDoubleValueRatio(ValueRange<double>& range) {
+  // std::cout << "(min, max) = (" << range.min << ", " << range.max << ")\n";
+  // if (range.single_value) {
+  //   std::cout << "single_value: " << *range.single_value << std::endl;
+  // }
+  // if (range.left_value) {
+  //   std::cout << "left_value: " << *range.left_value << std::endl;
+  // }
+  // if (range.right_value) {
+  //   std::cout << "right_value: " << *range.right_value << std::endl;
+  // }
+
   if (range.min > range.max) {
     return 0;
   }
@@ -79,6 +101,17 @@ double EvaluateDoubleValueRatio(ValueRange<double>& range) {
 }
 
 double EvaluateStringValueRatio(ValueRange<std::string>& range) {
+  // std::cout << "(min, max) = (" << range.min << ", " << range.max << ")\n";
+  // if (range.single_value) {
+  //   std::cout << "single_value: " << *range.single_value << std::endl;
+  // }
+  // if (range.left_value) {
+  //   std::cout << "left_value: " << *range.left_value << std::endl;
+  // }
+  // if (range.right_value) {
+  //   std::cout << "right_value: " << *range.right_value << std::endl;
+  // }
+
   if (range.min > range.max) {
     return 0;
   }

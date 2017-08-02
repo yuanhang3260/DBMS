@@ -281,4 +281,11 @@ void CastValueType(QueryCondition* condition) {
   }
 }
 
+void PhysicalPlan::reset() {
+  plan = NO_PLAN;
+  query_ratio = 0;
+  pop_node = NON;  // Only used when plan is POP.
+  conditions.clear();
+}
+
 }  // namespace Query

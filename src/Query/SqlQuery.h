@@ -76,6 +76,8 @@ class SqlQuery {
   std::map<std::string, std::map<std::string, ColumnRequest>> columns_;
 
   std::string error_msg_;
+
+  friend class QueryTest;
 };
 
 }
