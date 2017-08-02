@@ -556,10 +556,6 @@ bool SqlQuery::IsConstExpression(ExprTreeNode* node) {
   }  \
 
 void SqlQuery::EvaluateQueryConditions(PhysicalPlan* physical_plan) {
-  if (physical_plan->plan != PhysicalPlan::SEARCH) {
-    return;
-  }
-
   auto& conditions = physical_plan->conditions;
   if (conditions.empty()) {
     return;
@@ -729,9 +725,9 @@ void SqlQuery::EvaluateQueryConditions(PhysicalPlan* physical_plan) {
 
     // Evaluate query search ratio based on conditions.
     CHECK(!group_plan.conditions.empty(), "No condition found");
-    for (const auto& condition: group_plan.conditions) {
-      std::cout << condition.AsString() << std::endl;
-    }
+    // for (const auto& condition: group_plan.conditions) {
+    //   std::cout << condition.AsString() << std::endl;
+    // }
     double search_ratio = 1.0;
     EVALUATE_CONDITION_SEARCH_RATIO(INT, Int, int32, int32, int64)
     EVALUATE_CONDITION_SEARCH_RATIO(LONGINT, LongInt, int64, int64, int64)
@@ -741,6 +737,9 @@ void SqlQuery::EvaluateQueryConditions(PhysicalPlan* physical_plan) {
     EVALUATE_CONDITION_SEARCH_RATIO(STRING, String, str, std::string, str)
     EVALUATE_CONDITION_SEARCH_RATIO(CHARARRAY, CharArray, chararray, std::string, str)
 
+    CHECK(group_plan.plan != PhysicalPlan::NO_PLAN,
+          Strings::StrCat("No plan for conditions of column group ",
+                          group_plan.conditions.front().column.AsString()));
     group_plan.query_ratio = search_ratio;
     return group_plan;
   };
@@ -772,6 +771,7 @@ void SqlQuery::EvaluateQueryConditions(PhysicalPlan* physical_plan) {
         !table_m->IsPrimaryIndex({field_m->index()})) {
       continue;
     }
+    // Any group is direct false, the whole physical query is then skipped.
     if (group_plan.plan == PhysicalPlan::CONST_FALSE_SKIP) {
       *physical_plan = group_plan;
       break;

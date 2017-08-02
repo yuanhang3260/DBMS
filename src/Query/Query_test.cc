@@ -77,8 +77,8 @@ class QueryTest: public UnitTest {
     field->set_index(5);
     field->set_type(DB::TableField::CHARARRAY);
     field->set_size(20);
-    field->mutable_min_value()->set_limit_chararray("");
-    field->mutable_max_value()->set_limit_chararray("zzzzzzz");
+    field->mutable_min_value()->set_limit_chararray("a");
+    field->mutable_max_value()->set_limit_chararray("z");
 
     auto* index = table_info->mutable_primary_index();
     index->add_index_fields(2);
@@ -396,7 +396,6 @@ class QueryTest: public UnitTest {
 
   void Test_EvaluateQueryConditions() {
     PhysicalPlan physical_plan;
-    physical_plan.plan = PhysicalPlan::SEARCH;
 
     // id < 200
     QueryCondition id_condition;
@@ -407,14 +406,14 @@ class QueryTest: public UnitTest {
     id_condition.op = LT;
     id_condition.value = NodeValue::IntValue(200);
 
-    // 3 <= age < 4
+    // 2.5 <= age < 3.5
     QueryCondition age_condition_1;
     age_condition_1.column.table_name = kTableName;
     age_condition_1.column.column_name = "age";
     age_condition_1.column.index = 1;
     age_condition_1.column.type = Schema::FieldType::INT;
     age_condition_1.op = GE;
-    age_condition_1.value = NodeValue::IntValue(3);
+    age_condition_1.value = NodeValue::DoubleValue(2.5);
 
     QueryCondition age_condition_2;
     age_condition_2.column.table_name = kTableName;
@@ -425,20 +424,125 @@ class QueryTest: public UnitTest {
     age_condition_2.value = NodeValue::DoubleValue(3.5);
 
     // Query: id < 200
+    physical_plan.reset();
     physical_plan.conditions.push_back(id_condition);
     query_->EvaluateQueryConditions(&physical_plan);
     AssertEqual(PhysicalPlan::SEARCH, physical_plan.plan);
     AssertFloatEqual(0.2, physical_plan.query_ratio);
 
-    // Query: id < 200 AND 3 <= age < 3.5 (trick: 3.5 will be cast to 4)
-    physical_plan.conditions.clear();
-    physical_plan.conditions.push_back(id_condition);    
+    // Query: id < 200 AND 2.5 <= age < 3.5 (trick: cast to 3 <= age < 4)
+    physical_plan.reset();
+    physical_plan.conditions.push_back(id_condition);
     physical_plan.conditions.push_back(age_condition_1);
     physical_plan.conditions.push_back(age_condition_2);
     query_->EvaluateQueryConditions(&physical_plan);
     AssertEqual(PhysicalPlan::SEARCH, physical_plan.plan);
     AssertFloatEqual(0.1, physical_plan.query_ratio);
     AssertEqual(2, physical_plan.conditions.size());
+
+    // name = "snoopy"
+    QueryCondition name_condition;
+    name_condition.column.table_name = kTableName;
+    name_condition.column.column_name = "name";
+    name_condition.column.index = 0;
+    name_condition.column.type = Schema::FieldType::STRING;
+    name_condition.op = EQUAL;
+    name_condition.value = NodeValue::StringValue("snoopy");
+
+    // Query: name = "snoopy"
+    physical_plan.reset();
+    physical_plan.conditions.push_back(name_condition);
+    query_->EvaluateQueryConditions(&physical_plan);
+    AssertEqual(PhysicalPlan::SEARCH, physical_plan.plan);
+    AssertFloatEqual(1.0 / 6763724801, physical_plan.query_ratio);
+
+    // weight != 2.0
+    QueryCondition weight_condition;
+    weight_condition.column.table_name = kTableName;
+    weight_condition.column.column_name = "weight";
+    weight_condition.column.index = 3;
+    weight_condition.column.type = Schema::FieldType::DOUBLE;
+    weight_condition.op = NONEQUAL;
+    weight_condition.value = NodeValue::DoubleValue(4.0);
+
+    // Query: weight != 2.0
+    physical_plan.reset();
+    physical_plan.conditions.push_back(weight_condition);
+    query_->EvaluateQueryConditions(&physical_plan);
+    AssertEqual(PhysicalPlan::SCAN, physical_plan.plan);
+    AssertFloatEqual(1.0 , physical_plan.query_ratio);
+
+    // adult = true
+    QueryCondition adult_condition;
+    adult_condition.column.table_name = kTableName;
+    adult_condition.column.column_name = "adult";
+    adult_condition.column.index = 4;
+    adult_condition.column.type = Schema::FieldType::BOOL;
+    adult_condition.op = EQUAL;
+    adult_condition.value = NodeValue::BoolValue(true);
+
+    // Query: adult = true
+    physical_plan.reset();
+    physical_plan.conditions.push_back(adult_condition);
+    query_->EvaluateQueryConditions(&physical_plan);
+    AssertEqual(PhysicalPlan::SEARCH, physical_plan.plan);
+    AssertFloatEqual(0.5 , physical_plan.query_ratio);
+
+    // signature > "b"
+    QueryCondition sig_condition;
+    sig_condition.column.table_name = kTableName;
+    sig_condition.column.column_name = "signature";
+    sig_condition.column.index = 5;
+    sig_condition.column.type = Schema::FieldType::CHARARRAY;
+    sig_condition.op = GT;
+    sig_condition.value = NodeValue::StringValue("b");
+
+    // Query: signature > "b", search ratio over threshold.
+    physical_plan.reset();
+    physical_plan.conditions.push_back(sig_condition);
+    query_->EvaluateQueryConditions(&physical_plan);
+    AssertEqual(PhysicalPlan::SCAN, physical_plan.plan);
+    AssertFloatEqual(1.0, physical_plan.query_ratio);
+
+    // signature > "y"
+    sig_condition.value = NodeValue::StringValue("y");
+
+    // Query: signature > "y", search ratio ~= 0.04.
+    physical_plan.reset();
+    physical_plan.conditions.push_back(sig_condition);
+    query_->EvaluateQueryConditions(&physical_plan);
+    AssertEqual(PhysicalPlan::SEARCH, physical_plan.plan);
+    AssertFloatEqual(268435456.0 / 6710886401, physical_plan.query_ratio);
+
+    // age < 3
+    QueryCondition age_condition_3;
+    age_condition_3.column.table_name = kTableName;
+    age_condition_3.column.column_name = "age";
+    age_condition_3.column.index = 1;
+    age_condition_3.column.type = Schema::FieldType::INT;
+    age_condition_3.op = LT;
+    age_condition_3.value = NodeValue::IntValue(3);
+
+    // Query: 3 <= age < 4 AND age < 3 (direct false)
+    physical_plan.reset();
+    physical_plan.conditions.push_back(age_condition_3);
+    physical_plan.conditions.push_back(age_condition_1);
+    physical_plan.conditions.push_back(age_condition_2);
+    query_->EvaluateQueryConditions(&physical_plan);
+    AssertEqual(PhysicalPlan::CONST_FALSE_SKIP, physical_plan.plan);
+    AssertFloatEqual(0.0, physical_plan.query_ratio);
+
+    // Query: 3 <= age < 4 AND age <= 3 ( age == 3)
+    age_condition_3.op = LE;
+    physical_plan.reset();
+    physical_plan.conditions.push_back(age_condition_3);
+    physical_plan.conditions.push_back(age_condition_2);
+    physical_plan.conditions.push_back(age_condition_1);
+    query_->EvaluateQueryConditions(&physical_plan);
+    AssertEqual(PhysicalPlan::SEARCH, physical_plan.plan);
+    AssertFloatEqual(0.1, physical_plan.query_ratio);
+    AssertEqual(1, physical_plan.conditions.size());
+    AssertEqual(EQUAL, physical_plan.conditions.front().op);
   }
 };
 

@@ -200,16 +200,15 @@ void PageRecordsManager::Print() const {
   printf("Ending page %d\n", page_->id());
 }
 
-int PageRecordsManager::CompareRecordWithKey(const RecordBase& key,
-                                             const RecordBase& record) const {
-  if (page_type_ == TREE_NODE ||
-      file_type_ == INDEX) {
-    return RecordBase::CompareRecordsBasedOnIndex(key, record,
+int PageRecordsManager::CompareRecordWithKey(const RecordBase& record,
+                                             const RecordBase& key) const {
+  if (page_type_ == TREE_NODE || file_type_ == INDEX) {
+    return RecordBase::CompareRecordsBasedOnIndex(record, key,
                                                   ProduceIndexesToCompare());
   }
   else {
     // file_type = INDEX_DATA && page_type = TREE_LEAVE
-    return RecordBase::CompareRecordWithKey(key, record, key_indexes_);
+    return RecordBase::CompareRecordWithKey(record, key, key_indexes_);
   }
 }
 
@@ -227,7 +226,7 @@ int PageRecordsManager::SearchForKey(const RecordBase& key) const {
 
   int index = 0;
   for (; index < (int)plrecords_.size(); index++) {
-    if (CompareRecordWithKey(key, record(index)) < 0) {
+    if (CompareRecordWithKey(record(index), key) > 0) {
       break;
     }
   }

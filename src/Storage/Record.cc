@@ -190,16 +190,16 @@ bool RecordBase::RecordComparatorGt(const RecordBase& r1,
   return CompareRecordsBasedOnIndex(r1, r2, indexes) > 0;
 }
 
-int RecordBase::CompareRecordWithKey(const RecordBase& key,
-                                     const RecordBase& record,
+int RecordBase::CompareRecordWithKey(const RecordBase& record,
+                                     const RecordBase& key,
                                      const std::vector<int>& indexes) {
   CHECK(!indexes.empty(), "empty comparing indexes");
   CHECK(key.NumFields() == indexes.size(),
         "Number of key fields mismatch with indexes to compare");
   for (uint i = 0; i < indexes.size(); i++) {
     int re = RecordBase::CompareSchemaFields(
-                 key.fields_.at(i).get(),
-                 record.fields_.at(indexes[i]).get()
+                 record.fields_.at(indexes[i]).get(),
+                 key.fields_.at(i).get()
              );
     if (re < 0) {
       return -1;

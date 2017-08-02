@@ -88,8 +88,8 @@ class PageRecordsManager {
 
   // Compare key with a record. It performs comparison based on the file type
   // and page type.
-  int CompareRecordWithKey(const RecordBase& key,
-                           const RecordBase& record) const;
+  int CompareRecordWithKey(const RecordBase& record,
+                           const RecordBase& key) const;
 
   int CompareRecords(const RecordBase& r1, const RecordBase& r2) const;
 

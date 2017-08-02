@@ -337,7 +337,7 @@ bool Table::ValidateAllIndexRecords(int num_records) {
         // Load the DataRecord pointed by this rid.
         CheckLogFATAL(drecord.LoadFromMem(data_tree->Record(rid)) >= 0,
                       "Load data record failed");
-        if (Storage::RecordBase::CompareRecordWithKey(irecord, drecord,
+        if (Storage::RecordBase::CompareRecordWithKey(drecord, irecord,
                                                       key_index) != 0) {
           LogERROR("Compare index %d record failed with original data record",
                    IndexStr(key_index).c_str());

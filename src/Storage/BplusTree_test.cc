@@ -228,7 +228,7 @@ class BplusTreeTest: public UnitTest {
     ((DataRecord*)v[0].get())->ExtractKey(&key, key_indexes);
     for (uint32 i = 1; i < v.size(); i++) {
       if (RecordBase::CompareRecordWithKey(
-              key, *v[i], key_indexes) == 0) {
+              *v[i], key, key_indexes) == 0) {
         continue;
       }
       key.clear();

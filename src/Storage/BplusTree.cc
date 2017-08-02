@@ -1223,17 +1223,20 @@ int BplusTree::FetchResultsFromLeave(
     // Fetch all matching records in this leave.
     bool last_is_match = false;
     for (uint32 index = 0; index < prmanager.NumRecords(); index++) {
-      if (prmanager.CompareRecordWithKey(key, prmanager.record(index)) == 0) {
+      auto re = prmanager.CompareRecordWithKey(prmanager.record(index), key);
+      if (re < 0) {
+        continue;
+      } else if (re == 0) {
         result->push_back(prmanager.plrecords().at(index).shared_record());
         last_is_match = true;
-      }
-      else {
+      } else {
         if (leave->meta().is_overflow_page()) {
           // Overflow page must have all same records that match the key we're
           // searching for.
           LogFATAL("Overflow page stores inconsistent records!");
         }
         last_is_match = false;
+        break;
       }
     }
     // If index reaches the end of all records, check overflow page.
@@ -1286,18 +1289,18 @@ int BplusTree::RangeSearchRecords(
       bool left_match = false, right_match = false;
 
       if (op.left_key) {
-        int re = prmanager.CompareRecordWithKey(*op.left_key,
-                                                prmanager.record(index));
-        left_match = (re < 0 && op.left_open) || (re <= 0 && !op.left_open);
+        int re = prmanager.CompareRecordWithKey(prmanager.record(index),
+                                                *op.left_key);
+        left_match = (re > 0 && op.left_open) || (re >= 0 && !op.left_open);
       } else {
         left_match = true;
       }
 
       // Compare with right bound.
       if (op.right_key) {
-        int re = prmanager.CompareRecordWithKey(*op.right_key,
-                                              prmanager.record(index));
-        right_match = (re > 0 && op.right_open) || (re >= 0 && !op.right_open);
+        int re = prmanager.CompareRecordWithKey(prmanager.record(index),
+                                                *op.right_key);
+        right_match = (re < 0 && op.right_open) || (re <= 0 && !op.right_open);
 
         if (!right_match) {
           end = true;
@@ -2101,10 +2104,10 @@ bool BplusTree::UpdateIndexRecords(
     uint32 num_rids_updated = 0;
     while (leave) {
       for (; i < (int)prmanager->NumRecords(); i++) {
-        int re = prmanager->CompareRecordWithKey(key, prmanager->record(i));
-        if (re < 0) {
+        int re = prmanager->CompareRecordWithKey(prmanager->record(i), key);
+        if (re > 0) {
           break;
-        } else if (re > 0) {
+        } else if (re < 0) {
           continue;
         }
         RecordID rid = reinterpret_cast<IndexRecord*>(
@@ -2176,7 +2179,7 @@ int BplusTree::DeleteMatchedRecordsFromLeave(
     // Fetch all matching records in this leave.
     bool last_is_match = false;
     for (uint32 index = 0; index < prmanager.NumRecords(); index++) {
-      if (prmanager.CompareRecordWithKey(key, prmanager.record(index)) == 0) {
+      if (prmanager.CompareRecordWithKey(prmanager.record(index), key) == 0) {
         int slot_id = prmanager.RecordSlotID(index);
         if (result->del_mode == DB::DeleteResult::DEL_DATA) {
           // Save all records deleted from data tree.

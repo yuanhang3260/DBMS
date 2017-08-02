@@ -175,7 +175,7 @@ class TableTest: public UnitTest {
   uint32 NumExpectedMatches(const SearchOp& op) {
     int expected_matches = 0;
     for (const auto& record : puppy_records_) {
-      if (RecordBase::CompareRecordWithKey(*op.key, *record,
+      if (RecordBase::CompareRecordWithKey(*record, *op.key,
                                            op.field_indexes) == 0) {
         expected_matches++;
       }
@@ -188,9 +188,9 @@ class TableTest: public UnitTest {
     for (const auto& record : puppy_records_) {
       bool left_match = false, right_match = false;
       if (op.left_key) {
-        int re = RecordBase::CompareRecordWithKey(*op.left_key, *record,
+        int re = RecordBase::CompareRecordWithKey(*record, *op.left_key,
                                                   op.field_indexes);
-        if ((re < 0 && op.left_open) || (re <= 0 && !op.left_open)) {
+        if ((re > 0 && op.left_open) || (re >= 0 && !op.left_open)) {
           left_match = true;
         }
       } else {
@@ -198,9 +198,9 @@ class TableTest: public UnitTest {
       }
 
       if (op.right_key) {
-        int re = RecordBase::CompareRecordWithKey(*op.right_key, *record,
+        int re = RecordBase::CompareRecordWithKey(*record, *op.right_key,
                                                   op.field_indexes);
-        if ((re > 0 && op.right_open) || (re >= 0 && !op.right_open)) {
+        if ((re < 0 && op.right_open) || (re <= 0 && !op.right_open)) {
           right_match = true;
         }
       } else {
