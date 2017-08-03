@@ -225,14 +225,14 @@ void CastValueType(QueryCondition* condition) {
     if (value.type == DOUBLE) {
       // Careful, don't cast directly. Needs to check the op type.
       if (condition->op == EQUAL) {
-        if (floor(value.v_double) == value.v_double) {
+        if (floor(value.v_double) != value.v_double) {
           condition->is_const = true;
           condition->const_result = false;
         } else {
           value.v_int64 = static_cast<int64>(value.v_double);
         }
       } else if (condition->op == NONEQUAL) {
-        if (floor(value.v_double) == value.v_double) {
+        if (floor(value.v_double) != value.v_double) {
           condition->is_const = true;
           condition->const_result = true;
         } else {

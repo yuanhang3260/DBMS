@@ -591,6 +591,8 @@ void SqlQuery::EvaluateQueryConditions(PhysicalPlan* physical_plan) {
   [&] (const std::vector<const QueryCondition*>& group,
        DB::FieldInfoManager* field_m) {
     PhysicalPlan group_plan;
+    group_plan.plan = PhysicalPlan::SCAN;
+    group_plan.query_ratio = 1.0;
     const QueryCondition* equal_condition = nullptr;
     std::vector<const QueryCondition*> comparing_conditions;
 
@@ -606,6 +608,8 @@ void SqlQuery::EvaluateQueryConditions(PhysicalPlan* physical_plan) {
           group_plan.conditions.clear();
           return group_plan;
         } else {
+          group_plan.plan = PhysicalPlan::CONST_TRUE_SCAN;
+          group_plan.query_ratio = 1.0;
           continue;
         }
       }
@@ -727,17 +731,16 @@ void SqlQuery::EvaluateQueryConditions(PhysicalPlan* physical_plan) {
         group_plan.plan = PhysicalPlan::SEARCH;
         group_plan.conditions.push_back(*uplimit_conditions.front());
       }
-    } else {
-      group_plan.plan = PhysicalPlan::SCAN;
-      group_plan.query_ratio = 1.0;
-      return group_plan;
     }
 
     // Evaluate query search ratio based on conditions.
-    CHECK(!group_plan.conditions.empty(), "No condition found");
+    if (group_plan.conditions.empty()) {
+      return group_plan;
+    }
     // for (const auto& condition: group_plan.conditions) {
     //   std::cout << condition.AsString() << std::endl;
     // }
+
     double search_ratio = 1.0;
     EVALUATE_CONDITION_SEARCH_RATIO(INT, Int, int32, int32, int64)
     EVALUATE_CONDITION_SEARCH_RATIO(LONGINT, LongInt, int64, int64, int64)
@@ -767,8 +770,8 @@ void SqlQuery::EvaluateQueryConditions(PhysicalPlan* physical_plan) {
         Strings::StrCat("Couldn't find table %s",
                         conditions.begin()->column.table_name));
 
-  physical_plan->plan = PhysicalPlan::SCAN;
-  physical_plan->query_ratio = 1.0;
+  physical_plan->plan = PhysicalPlan::NO_PLAN;
+  physical_plan->query_ratio = 2.0;
   for (const auto& group : condition_groups) {
     // If this column has no index, we have to scan. Otherwise analyze this
     // group conditions and find the search range.
@@ -792,6 +795,10 @@ void SqlQuery::EvaluateQueryConditions(PhysicalPlan* physical_plan) {
     if (group_plan.plan == PhysicalPlan::CONST_FALSE_SKIP) {
       *physical_plan = group_plan;
       break;
+    }
+    if (physical_plan->plan == PhysicalPlan::CONST_TRUE_SCAN) {
+      // Const true should only be used if all conditions are const true.
+      *physical_plan = group_plan;
     }
     if (group_plan.query_ratio < physical_plan->query_ratio) {
       *physical_plan = group_plan;

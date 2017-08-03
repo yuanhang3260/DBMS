@@ -682,8 +682,8 @@ class QueryTest: public UnitTest {
     AssertTrue(node && node->valid());
     physical_plan = query->GenerateUnitPhysicalPlan(node.get());
 
-    AssertEqual(PhysicalPlan::SCAN, physical_plan->plan);
-    AssertEqual(1, physical_plan->conditions.size());
+    AssertEqual(PhysicalPlan::CONST_TRUE_SCAN, physical_plan->plan);
+    AssertEqual(0, physical_plan->conditions.size());
     interpreter_->reset();
     printf("\n");
 
