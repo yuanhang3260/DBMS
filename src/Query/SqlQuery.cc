@@ -7,7 +7,7 @@
 namespace Query {
 
 namespace {
-const double kSearchThreshold = 0.7;
+const double kIndexSearchFactor = 2;
 }
 
 SqlQuery::SqlQuery(DB::CatalogManager* catalog_m) : catalog_m_(catalog_m) {}
@@ -295,22 +295,20 @@ bool SqlQuery::GroupPhysicalQueries(ExprTreeNode* node) {
   return re;
 }
 
-PhysicalPlan* SqlQuery::EvaluateNodePhysicalPlans(ExprTreeNode* node) {
+PhysicalPlan* SqlQuery::GenerateQueryPhysicalPlan(ExprTreeNode* node) {
   CHECK(node != nullptr, "nullptr passed to EvaluatePhysicalQueryPlans");
 
   if (node->physical_query_root()) {
     // Evaluate physical query root.
-    auto physical_plan = PlanPhysicalQuery(node);
-    EvaluateQueryConditions(physical_plan);
-    return physical_plan;
+    return GenerateUnitPhysicalPlan(node);
   }
 
   const PhysicalPlan *left_plan = nullptr, *right_plan = nullptr;
   if (node->left()) {
-    left_plan = EvaluateNodePhysicalPlans(node->left());
+    left_plan = GenerateQueryPhysicalPlan(node->left());
   }
   if (node->right()) {
-    right_plan = EvaluateNodePhysicalPlans(node->right());
+    right_plan = GenerateQueryPhysicalPlan(node->right());
   }
 
   CHECK(node->type() == ExprTreeNode::OPERATOR,
@@ -393,18 +391,24 @@ PhysicalPlan* SqlQuery::EvaluateNodePhysicalPlans(ExprTreeNode* node) {
              OpTypeStr(op_node->OpType()).c_str());
   }
 
-  if (this_plan->query_ratio > kSearchThreshold) {
-    if (this_plan->plan == PhysicalPlan::SEARCH) {
-      this_plan->plan = PhysicalPlan::SCAN;
-    }
-    node->set_physical_query_root(true);
-    this_plan->query_ratio = 1.0;
-  }
+  // if (this_plan->query_ratio > kSearchThreshold) {
+  //   if (this_plan->plan == PhysicalPlan::SEARCH) {
+  //     this_plan->plan = PhysicalPlan::SCAN;
+  //   }
+  //   node->set_physical_query_root(true);
+  //   this_plan->query_ratio = 1.0;
+  // }
 
   return this_plan;
 }
 
-PhysicalPlan* SqlQuery::PlanPhysicalQuery(ExprTreeNode* node) {
+PhysicalPlan* SqlQuery::GenerateUnitPhysicalPlan(ExprTreeNode* node) {
+  auto physical_plan = PreGenerateUnitPhysicalPlan(node);
+  EvaluateQueryConditions(physical_plan);
+  return physical_plan;
+}
+
+PhysicalPlan* SqlQuery::PreGenerateUnitPhysicalPlan(ExprTreeNode* node) {
   CHECK(node->value_type() == ValueType::BOOL,
         Strings::StrCat("Expect physical query expr returns BOOL, but got %s",
                         ValueTypeStr(node->value_type()).c_str()));
@@ -419,7 +423,7 @@ PhysicalPlan* SqlQuery::PlanPhysicalQuery(ExprTreeNode* node) {
     CHECK(result.type == ValueType::BOOL,
           Strings::StrCat("Expect const expression value as BOOL, but got %s",
                           ValueTypeStr(result.type).c_str()));
-    if (node->value().v_bool) {
+    if (!result.v_bool) {
       this_plan->plan = PhysicalPlan::CONST_FALSE_SKIP;
       this_plan->query_ratio = 0.0;
     } else {
@@ -432,8 +436,8 @@ PhysicalPlan* SqlQuery::PlanPhysicalQuery(ExprTreeNode* node) {
 
     OperatorNode* op_node = dynamic_cast<OperatorNode*>(node);
     if (op_node->OpType() == AND) {
-      PhysicalPlan* left_plan = PlanPhysicalQuery(node->left());
-      PhysicalPlan* right_plan = PlanPhysicalQuery(node->right());
+      PhysicalPlan* left_plan = PreGenerateUnitPhysicalPlan(node->left());
+      PhysicalPlan* right_plan = PreGenerateUnitPhysicalPlan(node->right());
 
       if (left_plan->plan == PhysicalPlan::CONST_FALSE_SKIP ||
           right_plan->plan == PhysicalPlan::CONST_FALSE_SKIP) {
@@ -599,6 +603,7 @@ void SqlQuery::EvaluateQueryConditions(PhysicalPlan* physical_plan) {
         if (!condition->const_result) {
           group_plan.plan = PhysicalPlan::CONST_FALSE_SKIP;
           group_plan.query_ratio = 0.0;
+          group_plan.conditions.clear();
           return group_plan;
         } else {
           continue;
@@ -611,6 +616,7 @@ void SqlQuery::EvaluateQueryConditions(PhysicalPlan* physical_plan) {
           // const false;
           group_plan.plan = PhysicalPlan::CONST_FALSE_SKIP;
           group_plan.query_ratio = 0.0;
+          group_plan.conditions.clear();
           return group_plan;
         }
         equal_condition = condition;
@@ -632,6 +638,7 @@ void SqlQuery::EvaluateQueryConditions(PhysicalPlan* physical_plan) {
           // A equal == condition conficts with a non-equal condition.
           group_plan.plan = PhysicalPlan::CONST_FALSE_SKIP;
           group_plan.query_ratio = 0.0;
+          group_plan.conditions.clear();
           return group_plan;
         }
       } else {  // <, >, <=, or >= conditions
@@ -647,6 +654,7 @@ void SqlQuery::EvaluateQueryConditions(PhysicalPlan* physical_plan) {
                condition->value > equal_condition->value)) {
             group_plan.plan = PhysicalPlan::CONST_FALSE_SKIP;
             group_plan.query_ratio = 0.0;
+            group_plan.conditions.clear();
             return group_plan;
           }
         } else {
@@ -693,6 +701,7 @@ void SqlQuery::EvaluateQueryConditions(PhysicalPlan* physical_plan) {
         if (downlimit->value > uplimit->value) {
           group_plan.plan = PhysicalPlan::CONST_FALSE_SKIP;
           group_plan.query_ratio = 0.0;
+          group_plan.conditions.clear();
           return group_plan;
         } else if (downlimit->value == uplimit->value) {
           if (downlimit->op == GE && uplimit->op == LE) {
@@ -703,6 +712,7 @@ void SqlQuery::EvaluateQueryConditions(PhysicalPlan* physical_plan) {
           } else {
             group_plan.plan = PhysicalPlan::CONST_FALSE_SKIP;
             group_plan.query_ratio = 0.0;
+            group_plan.conditions.clear();
             return group_plan;
           }
         } else {
@@ -740,7 +750,15 @@ void SqlQuery::EvaluateQueryConditions(PhysicalPlan* physical_plan) {
     CHECK(group_plan.plan != PhysicalPlan::NO_PLAN,
           Strings::StrCat("No plan for conditions of column group ",
                           group_plan.conditions.front().column.AsString()));
-    group_plan.query_ratio = search_ratio;
+
+    if (search_ratio < 0) {
+      group_plan.plan = PhysicalPlan::CONST_FALSE_SKIP;
+      group_plan.query_ratio = 0.0;
+      group_plan.conditions.clear();
+    } else {
+      group_plan.plan = PhysicalPlan::SEARCH;
+      group_plan.query_ratio = search_ratio;
+    }
     return group_plan;
   };
 
@@ -765,12 +783,11 @@ void SqlQuery::EvaluateQueryConditions(PhysicalPlan* physical_plan) {
     }
 
     auto group_plan = analyze_condition_group(group, field_m);
-    // Index search ratio larger than kSearchThreshold. Searching by index will
-    // not be any cheaper than a simple scan.
-    if (group_plan.query_ratio > kSearchThreshold &&
-        !table_m->IsPrimaryIndex({field_m->index()})) {
-      continue;
+    // Index search needs to be factored.
+    if (!table_m->IsPrimaryIndex({field_m->index()})) {
+      group_plan.query_ratio *= kIndexSearchFactor;
     }
+
     // Any group is direct false, the whole physical query is then skipped.
     if (group_plan.plan == PhysicalPlan::CONST_FALSE_SKIP) {
       *physical_plan = group_plan;

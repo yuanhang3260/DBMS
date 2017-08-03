@@ -56,9 +56,10 @@ class SqlQuery {
  private:
   bool GroupPhysicalQueries(ExprTreeNode* node);
 
-  PhysicalPlan* EvaluateNodePhysicalPlans(ExprTreeNode* node);
+  PhysicalPlan* GenerateQueryPhysicalPlan(ExprTreeNode* node);
 
-  PhysicalPlan* PlanPhysicalQuery(ExprTreeNode* node);
+  PhysicalPlan* PreGenerateUnitPhysicalPlan(ExprTreeNode* node);
+  PhysicalPlan* GenerateUnitPhysicalPlan(ExprTreeNode* node);
 
   bool IsConstExpression(ExprTreeNode* node);
 

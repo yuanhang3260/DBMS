@@ -12,6 +12,10 @@ using Storage::IndexRecord;
 namespace Query {
 
 namespace {
+const double kIndexSearchFactor = 2;  // needs to match with SqlQuery.cc
+}
+
+namespace {
 const char* const kTableName = "Puppy";
 const char* const kDBName = "testDB";
 }  // namespace
@@ -404,7 +408,7 @@ class QueryTest: public UnitTest {
     id_condition.column.index = 2;
     id_condition.column.type = Schema::FieldType::LONGINT;
     id_condition.op = LT;
-    id_condition.value = NodeValue::IntValue(200);
+    id_condition.value = NodeValue::IntValue(300);
 
     // 2.5 <= age < 3.5
     QueryCondition age_condition_1;
@@ -423,21 +427,21 @@ class QueryTest: public UnitTest {
     age_condition_2.op = LT;
     age_condition_2.value = NodeValue::DoubleValue(3.5);
 
-    // Query: id < 200
+    // Query: id < 300
     physical_plan.reset();
     physical_plan.conditions.push_back(id_condition);
     query_->EvaluateQueryConditions(&physical_plan);
     AssertEqual(PhysicalPlan::SEARCH, physical_plan.plan);
-    AssertFloatEqual(0.2, physical_plan.query_ratio);
+    AssertFloatEqual(0.3, physical_plan.query_ratio);
 
-    // Query: id < 200 AND 2.5 <= age < 3.5 (trick: cast to 3 <= age < 4)
+    // Query: id < 300 AND 2.5 <= age < 3.5 (trick: cast to 3 <= age < 4)
     physical_plan.reset();
     physical_plan.conditions.push_back(id_condition);
     physical_plan.conditions.push_back(age_condition_1);
     physical_plan.conditions.push_back(age_condition_2);
     query_->EvaluateQueryConditions(&physical_plan);
     AssertEqual(PhysicalPlan::SEARCH, physical_plan.plan);
-    AssertFloatEqual(0.1, physical_plan.query_ratio);
+    AssertFloatEqual(kIndexSearchFactor * 0.1, physical_plan.query_ratio);
     AssertEqual(2, physical_plan.conditions.size());
 
     // name = "snoopy"
@@ -454,7 +458,8 @@ class QueryTest: public UnitTest {
     physical_plan.conditions.push_back(name_condition);
     query_->EvaluateQueryConditions(&physical_plan);
     AssertEqual(PhysicalPlan::SEARCH, physical_plan.plan);
-    AssertFloatEqual(1.0 / 6763724801, physical_plan.query_ratio);
+    AssertFloatEqual(kIndexSearchFactor * 1.0 / 6763724801,
+                     physical_plan.query_ratio);
 
     // weight != 2.0
     QueryCondition weight_condition;
@@ -485,8 +490,8 @@ class QueryTest: public UnitTest {
     physical_plan.reset();
     physical_plan.conditions.push_back(adult_condition);
     query_->EvaluateQueryConditions(&physical_plan);
-    AssertEqual(PhysicalPlan::SEARCH, physical_plan.plan);
-    AssertFloatEqual(0.5 , physical_plan.query_ratio);
+    AssertEqual(PhysicalPlan::SCAN, physical_plan.plan);
+    AssertFloatEqual(1.0 , physical_plan.query_ratio);
 
     // signature > "b"
     QueryCondition sig_condition;
@@ -512,7 +517,7 @@ class QueryTest: public UnitTest {
     physical_plan.conditions.push_back(sig_condition);
     query_->EvaluateQueryConditions(&physical_plan);
     AssertEqual(PhysicalPlan::SEARCH, physical_plan.plan);
-    AssertFloatEqual(268435456.0 / 6710886401, physical_plan.query_ratio);
+    AssertFloatEqual(2 * 268435456.0 / 6710886401, physical_plan.query_ratio);
 
     // age < 3
     QueryCondition age_condition_3;
@@ -540,9 +545,161 @@ class QueryTest: public UnitTest {
     physical_plan.conditions.push_back(age_condition_1);
     query_->EvaluateQueryConditions(&physical_plan);
     AssertEqual(PhysicalPlan::SEARCH, physical_plan.plan);
-    AssertFloatEqual(0.1, physical_plan.query_ratio);
+    AssertFloatEqual(2 * 0.1, physical_plan.query_ratio);
     AssertEqual(1, physical_plan.conditions.size());
     AssertEqual(EQUAL, physical_plan.conditions.front().op);
+  }
+
+  void Test_GenerateUnitPhysicalPlan() {
+    std::string expr;
+
+    expr = "SELECT * FROM Puppy WHERE Puppy.id < 200";
+    std::cout << expr << std::endl;
+    AssertTrue(interpreter_->Parse(expr));
+    auto query = interpreter_->shared_query();
+    AssertTrue(query->FinalizeParsing());
+    auto node = query->GetExprNode();
+    AssertTrue(node && node->valid());
+    auto* physical_plan = query->GenerateUnitPhysicalPlan(node.get());
+
+    AssertEqual(PhysicalPlan::SEARCH, physical_plan->plan);
+    AssertFloatEqual(0.2, physical_plan->query_ratio);
+    AssertEqual(1, physical_plan->conditions.size());
+    AssertEqual(LT, physical_plan->conditions.front().op);
+    interpreter_->reset();
+    printf("\n");
+
+    expr = "SELECT * FROM Puppy WHERE Puppy.id < 300 AND 3 <= age AND age < 4";
+    std::cout << expr << std::endl;
+    AssertTrue(interpreter_->Parse(expr));
+    query = interpreter_->shared_query();
+    AssertTrue(query->FinalizeParsing());
+    node = query->GetExprNode();
+    AssertTrue(node && node->valid());
+    physical_plan = query->GenerateUnitPhysicalPlan(node.get());
+
+    AssertEqual(PhysicalPlan::SEARCH, physical_plan->plan);
+    AssertFloatEqual(0.2, physical_plan->query_ratio);
+    AssertEqual(2, physical_plan->conditions.size());
+    AssertEqual(GE, physical_plan->conditions.front().op);
+    AssertEqual(LT, physical_plan->conditions.back().op);
+    interpreter_->reset();
+    printf("\n");
+
+    expr = "SELECT * FROM Puppy WHERE age < 4 AND 3 <= age AND age >= 4";
+    std::cout << expr << std::endl;
+    AssertTrue(interpreter_->Parse(expr));
+    query = interpreter_->shared_query();
+    AssertTrue(query->FinalizeParsing());
+    node = query->GetExprNode();
+    AssertTrue(node && node->valid());
+    physical_plan = query->GenerateUnitPhysicalPlan(node.get());
+
+    AssertEqual(PhysicalPlan::CONST_FALSE_SKIP, physical_plan->plan);
+    AssertFloatEqual(0, physical_plan->query_ratio);
+    AssertEqual(0, physical_plan->conditions.size());
+    printf("\n");
+
+    expr = "SELECT * FROM Puppy WHERE weight > 0.7 AND age = 20 AND True";
+    std::cout << expr << std::endl;
+    AssertTrue(interpreter_->Parse(expr));
+    query = interpreter_->shared_query();
+    AssertTrue(query->FinalizeParsing());
+    node = query->GetExprNode();
+    AssertTrue(node && node->valid());
+    physical_plan = query->GenerateUnitPhysicalPlan(node.get());
+
+    AssertEqual(PhysicalPlan::CONST_FALSE_SKIP, physical_plan->plan);
+    AssertFloatEqual(0, physical_plan->query_ratio);
+    AssertEqual(0, physical_plan->conditions.size());
+    interpreter_->reset();
+    printf("\n");
+
+    expr = "SELECT * FROM Puppy WHERE weight < 0.6 AND 1 + 3 = 7";
+    std::cout << expr << std::endl;
+    AssertTrue(interpreter_->Parse(expr));
+    query = interpreter_->shared_query();
+    AssertTrue(query->FinalizeParsing());
+    node = query->GetExprNode();
+    AssertTrue(node && node->valid());
+    physical_plan = query->GenerateUnitPhysicalPlan(node.get());
+
+    AssertEqual(PhysicalPlan::CONST_FALSE_SKIP, physical_plan->plan);
+    AssertFloatEqual(0, physical_plan->query_ratio);
+    AssertEqual(0, physical_plan->conditions.size());
+    interpreter_->reset();
+    printf("\n");
+
+    expr = "SELECT * FROM Puppy WHERE adult AND false";
+    std::cout << expr << std::endl;
+    AssertTrue(interpreter_->Parse(expr));
+    query = interpreter_->shared_query();
+    AssertTrue(query->FinalizeParsing());
+    node = query->GetExprNode();
+    AssertTrue(node && node->valid());
+    physical_plan = query->GenerateUnitPhysicalPlan(node.get());
+
+    AssertEqual(PhysicalPlan::CONST_FALSE_SKIP, physical_plan->plan);
+    AssertFloatEqual(0, physical_plan->query_ratio);
+    AssertEqual(0, physical_plan->conditions.size());
+    interpreter_->reset();
+    printf("\n");
+
+    expr = "SELECT * FROM Puppy WHERE signature = \"snp\" AND adult = false";
+    std::cout << expr << std::endl;
+    AssertTrue(interpreter_->Parse(expr));
+    query = interpreter_->shared_query();
+    AssertTrue(query->FinalizeParsing());
+    node = query->GetExprNode();
+    AssertTrue(node && node->valid());
+    physical_plan = query->GenerateUnitPhysicalPlan(node.get());
+
+    AssertEqual(PhysicalPlan::SEARCH, physical_plan->plan);
+    AssertEqual(1, physical_plan->conditions.size());
+    interpreter_->reset();
+    printf("\n");
+
+    expr = "SELECT * FROM Puppy WHERE age *2 + 3 > 6";
+    std::cout << expr << std::endl;
+    AssertTrue(interpreter_->Parse(expr));
+    query = interpreter_->shared_query();
+    AssertTrue(query->FinalizeParsing());
+    node = query->GetExprNode();
+    AssertTrue(node && node->valid());
+    physical_plan = query->GenerateUnitPhysicalPlan(node.get());
+
+    AssertEqual(PhysicalPlan::SCAN, physical_plan->plan);
+    AssertEqual(0, physical_plan->conditions.size());
+    interpreter_->reset();
+    printf("\n");
+
+    expr = "SELECT * FROM Puppy WHERE Puppy.id != 3.5";
+    std::cout << expr << std::endl;
+    AssertTrue(interpreter_->Parse(expr));
+    query = interpreter_->shared_query();
+    AssertTrue(query->FinalizeParsing());
+    node = query->GetExprNode();
+    AssertTrue(node && node->valid());
+    physical_plan = query->GenerateUnitPhysicalPlan(node.get());
+
+    AssertEqual(PhysicalPlan::SCAN, physical_plan->plan);
+    AssertEqual(1, physical_plan->conditions.size());
+    interpreter_->reset();
+    printf("\n");
+
+    expr = "SELECT * FROM Puppy WHERE true";
+    std::cout << expr << std::endl;
+    AssertTrue(interpreter_->Parse(expr));
+    query = interpreter_->shared_query();
+    AssertTrue(query->FinalizeParsing());
+    node = query->GetExprNode();
+    AssertTrue(node && node->valid());
+    physical_plan = query->GenerateUnitPhysicalPlan(node.get());
+
+    AssertEqual(PhysicalPlan::CONST_TRUE_SCAN, physical_plan->plan);
+    AssertEqual(0, physical_plan->conditions.size());
+    interpreter_->reset();
+    printf("\n");
   }
 };
 
@@ -556,7 +713,8 @@ int main() {
   // test.Test_ColumnNodeExpr();
   // test.Test_EvaluateSingleExpr();
   // test.Test_SelectQuery();
-  test.Test_EvaluateQueryConditions();
+  // test.Test_EvaluateQueryConditions();
+  test.Test_GenerateUnitPhysicalPlan();
 
   test.teardown();
 

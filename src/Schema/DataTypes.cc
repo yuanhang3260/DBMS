@@ -21,31 +21,31 @@ double EvaluateIntegerValueRatio(ValueRange<T>& range) {
   // }
 
   if (range.min > range.max) {
-    return 0;
+    return -1;
   }
 
   if (range.single_value) {
     if (*range.single_value >= range.min && *range.single_value <= range.max) {
       return 1.0 / (range.max - range.min + 1);
     } else {
-      return 0;
+      return -1;
     }
   } else {
-    if (!range.left_value) {
+    if (!range.left_value || *range.left_value < range.min) {
       range.set_left_value(range.min);
+      range.left_open = false;
     }
-    if (!range.right_value) {
+    if (!range.right_value || *range.right_value > range.max) {
       range.set_right_value(range.max);
+      range.right_open = false;
     }
-
-    *range.left_value = std::max(*range.left_value, range.min);
-    *range.right_value = std::min(*range.right_value, range.max);
 
     if (*range.left_value > *range.right_value) {
-      return 0;
+      return -1;
     }
-    if (*range.left_value > range.max || *range.right_value < range.min) {
-      return 0;
+    if (*range.left_value == *range.right_value &&
+        (range.left_open || range.right_open)) {
+      return -1;
     }
 
     int boundary_num = 0;
@@ -72,27 +72,27 @@ double EvaluateDoubleValueRatio(ValueRange<double>& range) {
   // }
 
   if (range.min > range.max) {
-    return 0;
+    return -1;
   }
 
   if (range.single_value) {
-    return 0;
+    return -1;
   } else {
-    if (!range.left_value) {
+    if (!range.left_value || *range.left_value < range.min) {
       range.set_left_value(range.min);
+      range.left_open = false;
     }
-    if (!range.right_value) {
+    if (!range.right_value || *range.right_value > range.max) {
       range.set_right_value(range.max);
+      range.right_open = false;
     }
-
-    *range.left_value = std::max(*range.left_value, range.min);
-    *range.right_value = std::min(*range.right_value, range.max);
 
     if (*range.left_value > *range.right_value) {
-      return 0;
+      return -1;
     }
-    if (*range.left_value > range.max || *range.right_value < range.min) {
-      return 0;
+    if (*range.left_value == *range.right_value &&
+        (range.left_open || range.right_open)) {
+      return -1;
     }
 
     return 1.0 * (*range.right_value - *range.left_value) /
@@ -154,24 +154,20 @@ double EvaluateStringValueRatio(ValueRange<std::string>& range) {
       return 1.0 / (numerise_str(range.max, prefix) -
                     numerise_str(range.min, prefix) + 1);
     } else {
-      return 0;
+      return -1;
     }
   } else {
-    if (!range.left_value) {
+    if (!range.left_value || *range.left_value < range.min) {
       range.set_left_value(range.min);
+      range.left_open = false;
     }
-    if (!range.right_value) {
+    if (!range.right_value || *range.right_value > range.max) {
       range.set_right_value(range.max);
+      range.right_open = false;
     }
-
-    *range.left_value = std::max(*range.left_value, range.min);
-    *range.right_value = std::min(*range.right_value, range.max);
 
     if (*range.left_value > *range.right_value) {
-      return 0;
-    }
-    if (*range.left_value > range.max || *range.right_value < range.min) {
-      return 0;
+      return -1;
     }
 
     uint32 prefix = longest_common_preifx({range.left_value.get(),

@@ -172,22 +172,22 @@ class DataTypesTest: public UnitTest {
 
     int_range.set_left_value(3);
     int_range.set_right_value(1);
-    AssertFloatEqual(0, IntField::EvaluateValueRatio(int_range));
+    AssertFloatEqual(-1, IntField::EvaluateValueRatio(int_range));
 
     int_range.set_left_value(-3);
     int_range.set_right_value(-1);
-    AssertFloatEqual(0, IntField::EvaluateValueRatio(int_range));
+    AssertFloatEqual(-1, IntField::EvaluateValueRatio(int_range));
 
     int_range.set_left_value(6);
     int_range.set_right_value(9);
-    AssertFloatEqual(0, IntField::EvaluateValueRatio(int_range));
+    AssertFloatEqual(-1, IntField::EvaluateValueRatio(int_range));
 
     // String
     ValueRange<std::string> str_range;
     str_range.min = "abcdefghi";
     str_range.max = "abcxyzw";
     str_range.set_single_value("abd");
-    AssertFloatEqual(0, StringField::EvaluateValueRatio(str_range));
+    AssertFloatEqual(-1, StringField::EvaluateValueRatio(str_range));
 
     str_range.set_single_value("abcmn");
     AssertFloatEqual(1.0 / 5410981784,
