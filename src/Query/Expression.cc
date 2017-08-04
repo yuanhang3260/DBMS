@@ -118,7 +118,7 @@ bool ColumnNode::Init() {
   return true;
 }
 
-NodeValue ColumnNode::Evaluate(const EvaluateArgs& arg) const {
+NodeValue ColumnNode::Evaluate(const FetchedResult::Tuple& tuple) const {
   // Make sure Init() has run successfully.
   CHECK(valid_, "Invalid ColumnNode");
 
@@ -129,14 +129,20 @@ NodeValue ColumnNode::Evaluate(const EvaluateArgs& arg) const {
   NodeValue value = value_;
 
   // Find the field from record.
-  const auto& fields = arg.record.fields();
+  const auto& it = tuple.find(column_.table_name);
+  CHECK(it != tuple.end(),
+        Strings::StrCat("Couldn't find record of table ", column_.table_name,
+                        " from the given tuple"));
+
+  const auto& table_record = it->second;
+  const auto& fields = table_record.record->fields();
   const Schema::Field* field = nullptr;
-  if (arg.record_type == Storage::DATA_RECORD) {
+  if (table_record.record_type() == Storage::DATA_RECORD) {
     field = fields.at(column_.index).get();
-  } else if (arg.record_type == Storage::INDEX_RECORD) {
+  } else if (table_record.record_type() == Storage::INDEX_RECORD) {
     int32 pos = -1;
-    for (uint32 i = 0 ; i < arg.field_indexes.size(); i++) {
-      if (arg.field_indexes.at(i) == column_.index) {
+    for (uint32 i = 0 ; i < table_record.field_indexes.size(); i++) {
+      if (table_record.field_indexes.at(i) == column_.index) {
         pos = i;
         break;
       }
@@ -151,7 +157,7 @@ NodeValue ColumnNode::Evaluate(const EvaluateArgs& arg) const {
   } else {
     // Never should pass in record types other than DATA_RECORD/INDEX_RECORD.
     LogFATAL("Invalid record type to evalute: %s",
-             Storage::RecordTypeStr(arg.record_type).c_str());
+             Storage::RecordTypeStr(table_record.record_type()).c_str());
   }
 
   // Get value from field.
@@ -453,11 +459,11 @@ ValueType OperatorNode::DeriveResultValueType(ValueType t1, ValueType t2) {
       value.v_bool = left_value.v_str op right_value.v_str;     \
     }                                                           \
 
-NodeValue OperatorNode::Evaluate(const EvaluateArgs& arg) const {
+NodeValue OperatorNode::Evaluate(const FetchedResult::Tuple& tuple) const {
   CHECK(valid_, "Invalid OperatorNode");
 
-  NodeValue left_value = left_? left_->Evaluate(arg) : NodeValue();
-  NodeValue right_value = right_? right_->Evaluate(arg) : NodeValue();
+  NodeValue left_value = left_? left_->Evaluate(tuple) : NodeValue();
+  NodeValue right_value = right_? right_->Evaluate(tuple) : NodeValue();
   NodeValue value = value_;
 
   auto types_match = [&] (ValueType type_1, ValueType type_2) {

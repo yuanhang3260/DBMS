@@ -1,6 +1,13 @@
+#include <algorithm>
 #include <math.h>
 
+#include "Strings/Utils.h"
+
 #include "Query/Common.h"
+
+namespace {
+using Storage::RecordBase;
+}
 
 namespace Query {
 
@@ -299,6 +306,168 @@ void PhysicalPlan::reset() {
   query_ratio = 0;
   pop_node = NON;  // Only used when plan is POP.
   conditions.clear();
+}
+
+Storage::RecordType ResultRecord::record_type() const {
+  if (record) {
+    return record->type();
+  }
+  return Storage::UNKNOWN_RECORDTYPE;
+}
+
+int FetchedResult::CompareBasedOnColumns(const Tuple& t1, const Tuple& t2,
+                                         const std::vector<Column>& columns) {
+  for (const Column& column : columns) {
+    auto it = t1.find(column.table_name);
+    CHECK(it != t1.end(),
+          Strings::StrCat("Coulnd't find record of table ", column.table_name,
+                          " from tuple 1"));
+    const ResultRecord& record_1 = it->second;
+
+    it = t2.find(column.table_name);
+    CHECK(it != t2.end(),
+          Strings::StrCat("Coulnd't find record of table ", column.table_name,
+                          " from tuple 2"));
+    const ResultRecord& record_2 = it->second;
+
+    CHECK(record_1.record_type() == record_2.record_type(),
+          "Comparing records with different record types");
+    int pos = -1;
+    if (record_1.record_type() == Storage::DATA_RECORD) {
+      pos = column.index;
+    } else if (record_1.record_type() == Storage::INDEX_RECORD) {
+      CHECK(record_1.field_indexes == record_2.field_indexes,
+            "Comparing index records with different index fields");
+      for (uint32 i = 0 ; i < record_1.field_indexes.size(); i++) {
+        if (record_1.field_indexes.at(i) == column.index) {
+          pos = i;
+          break;
+        }
+      }
+      CHECK(pos > 0, Strings::StrCat("Can't find required field index ",
+                                     std::to_string(column.index),
+                                     " for this index record"));
+    } else {
+      LogFATAL("Invalid record type to evalute: %s",
+               Storage::RecordTypeStr(record_1.record_type()).c_str());
+    }
+    int re = RecordBase::CompareSchemaFields(
+                record_1.record->fields().at(pos).get(),
+                record_2.record->fields().at(pos).get());
+    if (re != 0) {
+      return re;
+    }
+  }
+  return 0;
+}
+
+void FetchedResult::SortByColumns(const std::vector<Column>& columns) {
+  auto comparator = [&] (const Tuple& t1, const Tuple& t2) {
+    return CompareBasedOnColumns(t1, t2, columns);
+  };
+
+  std::sort(tuples.begin(), tuples.end(), comparator);
+}
+
+void FetchedResult::SortByColumns(const std::string& table_name,
+                                  std::vector<int>& field_indexes) {
+  std::vector<Column> columns;
+  for (int index : field_indexes) {
+    columns.emplace_back(table_name, "" /* column name doesn't matter */);
+    columns.back().index = index;
+  }
+
+  SortByColumns(columns);
+}
+
+void FetchedResult::MergeSortResults(FetchedResult& result_1,
+                                     FetchedResult& result_2,
+                                     const std::vector<Column>& columns) {
+  result_1.SortByColumns(columns);
+  result_2.SortByColumns(columns);
+
+  auto comparator = [&] (const Tuple& t1, const Tuple& t2) {
+    return CompareBasedOnColumns(t1, t2, columns);
+  };
+
+  auto iter_1 = result_1.tuples.begin();
+  auto iter_2 = result_2.tuples.begin();
+  while (iter_1 != result_1.tuples.end() && iter_1 != result_1.tuples.end()) {
+    if (comparator(*iter_1, *iter_2) <= 0) {
+      tuples.push_back(*iter_1);
+      ++iter_1;
+    } else {
+      tuples.push_back(*iter_2);
+      ++iter_2;
+    }
+  }
+
+  while (iter_1 != result_1.tuples.end()) {
+    tuples.push_back(*iter_1);
+    ++iter_1;
+  }
+  while (iter_2 != result_2.tuples.end()) {
+    tuples.push_back(*iter_2);
+    ++iter_2;
+  }
+}
+
+void FetchedResult::MergeSortResults(FetchedResult& result_1,
+                                     FetchedResult& result_2,
+                                     const std::string& table_name,
+                                     std::vector<int>& field_indexes) {
+  std::vector<Column> columns;
+  for (int index : field_indexes) {
+    columns.emplace_back(table_name, "" /* column name doesn't matter */);
+    columns.back().index = index;
+  }
+
+  MergeSortResults(result_1, result_2, columns);
+}
+
+void FetchedResult::MergeSortResultsRemoveDup(
+    FetchedResult& result_1, FetchedResult& result_2,
+    const std::vector<Column>& columns) {
+  result_1.SortByColumns(columns);
+  result_2.SortByColumns(columns);
+
+  auto comparator = [&] (const Tuple& t1, const Tuple& t2) {
+    return CompareBasedOnColumns(t1, t2, columns);
+  };
+
+  auto iter_1 = result_1.tuples.begin();
+  auto iter_2 = result_2.tuples.begin();
+  const Tuple* last_tuple = nullptr;
+  while (iter_1 != result_1.tuples.end() && iter_1 != result_1.tuples.end()) {
+    if (comparator(*iter_1, *iter_2) <= 0) {
+      if (last_tuple && comparator(*last_tuple, *iter_1) != 0) {
+        tuples.push_back(*iter_1);
+        last_tuple = &tuples.back();
+      }
+      ++iter_1;
+    } else {
+      if (last_tuple && comparator(*last_tuple, *iter_2) != 0) {
+        tuples.push_back(*iter_2);
+        last_tuple = &tuples.back();
+      }
+      ++iter_2;
+    }
+  }
+
+  while (iter_1 != result_1.tuples.end()) {
+    if (last_tuple && comparator(*last_tuple, *iter_1) != 0) {
+      tuples.push_back(*iter_1);
+      last_tuple = &tuples.back();
+    }
+    ++iter_1;
+  }
+  while (iter_2 != result_2.tuples.end()) {
+    if (last_tuple && comparator(*last_tuple, *iter_2) != 0) {
+      tuples.push_back(*iter_2);
+      last_tuple = &tuples.back();
+    }
+    ++iter_2;
+  }
 }
 
 }  // namespace Query

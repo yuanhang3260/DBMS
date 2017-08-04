@@ -70,6 +70,10 @@ class SqlQuery {
 
   void EvaluateQueryConditions(PhysicalPlan* physical_plan);
 
+  int ExecuteSelectQueryFromNode(ExprTreeNode* node);
+
+  int Do_ExecutePhysicalQuery(ExprTreeNode* node);
+
   DB::CatalogManager* catalog_m_ = nullptr;
 
   std::shared_ptr<Query::ExprTreeNode> expr_node_;

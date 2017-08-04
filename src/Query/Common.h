@@ -3,8 +3,10 @@
 
 #include <string>
 
-#include "Schema/SchemaType.h"
 #include "Strings/Utils.h"
+
+#include "Schema/SchemaType.h"
+#include "Storage/Record.h"
 
 namespace Query {
 
@@ -68,6 +70,16 @@ struct Column {
   std::string AsString() const {
     return Strings::StrCat("(", table_name, ", ", column_name, ", ",
                            std::to_string(index), ")");
+  }
+
+  bool operator<(const Column& other) {
+    if (table_name < other.table_name) {
+      return true;
+    } else if (table_name > other.table_name) {
+      return false;
+    } else {
+      return column_name < other.column_name;
+    }
   }
 };
 
@@ -137,34 +149,62 @@ struct PhysicalPlan {
     RIGHT,
   };
 
+  bool ShouldScan() const { return plan == SCAN || plan == CONST_TRUE_SCAN; }
+  static std::string PlanStr(Plan plan);
+
+  void reset();
+
   Plan plan = NO_PLAN;
   double query_ratio = 1.0;
   ExecuteNode pop_node = NON;  // Only used when plan is POP.
 
   std::vector<QueryCondition> conditions;
-
-  bool ShouldScan() const { return plan == SCAN || plan == CONST_TRUE_SCAN; }
-  static std::string PlanStr(Plan plan);
-
-  void reset();
 };
 
 struct ResultRecord {
+  ResultRecord(std::shared_ptr<Storage::RecordBase> record_,
+               const std::vector<int>& field_indexes_) :
+      record(record_),
+      field_indexes(field_indexes_) {}
+
   std::shared_ptr<Storage::RecordBase> record;
   std::vector<int> field_indexes;
 
-  Storage::RecordType record_type() const {
-    if (record) {
-      return record->type();
-    }
-    return Storage::UNKNOWN_RECORDTYPE;
-  }
+  Storage::RecordType record_type() const;
 };
 
 struct FetchedResult {
-  using ResultTuple = std::map<std::string, ResultRecord>;
+  using Tuple = std::map<std::string, ResultRecord>;
 
-  std::vecotr<ResultTuple> tuples;
+  std::vector<Tuple> tuples;
+
+  int NumTuples() const { return tuples.size(); }
+
+  static int CompareBasedOnColumns(const Tuple& t1, const Tuple& t2,
+                                   const std::vector<Column>& columns);
+
+  void SortByColumns(const std::vector<Column>& columns);
+  void SortByColumns(const std::string& table_name,
+                     std::vector<int>& field_indexes);
+
+  // Take two set of results, sort and merge them by columns.
+  void MergeSortResults(FetchedResult& result_1,
+                        FetchedResult& result_2,
+                        const std::vector<Column>& columns);
+
+  void MergeSortResults(FetchedResult& result_1,
+                        FetchedResult& result_2,
+                        const std::string& table_name,
+                        std::vector<int>& field_indexes);
+
+  void MergeSortResultsRemoveDup(FetchedResult& result_1,
+                                 FetchedResult& result_2,
+                                 const std::vector<Column>& columns);
+
+  void MergeSortResultsRemoveDup(FetchedResult& result_1,
+                                 FetchedResult& result_2,
+                                 const std::string& table_name,
+                                 std::vector<int>& field_indexes);
 };
 
 }  // namespace Query

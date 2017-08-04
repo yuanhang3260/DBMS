@@ -273,6 +273,10 @@ int SqlQuery::ExecuteSelectQuery() {
   return ExecuteSelectQueryFromNode(expr_node_.get());
 }
 
+int SqlQuery::Do_ExecutePhysicalQuery(ExprTreeNode* node) {
+  return 0;
+}
+
 int SqlQuery::ExecuteSelectQueryFromNode(ExprTreeNode* node) {
   const auto& this_plan = node->physical_plan();
   if (this_plan.plan == PhysicalPlan::CONST_FALSE_SKIP) {
@@ -292,36 +296,42 @@ int SqlQuery::ExecuteSelectQueryFromNode(ExprTreeNode* node) {
     CHECK(this_plan.plan == PhysicalPlan::POP,
           Strings::StrCat("Expect AND node plan to be POP, but got ",
                           PhysicalPlan::PlanStr(this_plan.plan)));
-    ExprTreeNode* pop_node = nullptr, other_node = nullptr;
-    if (plan.pop_node == PhysicalPlan::LEFT) {
+    ExprTreeNode *pop_node = nullptr, *other_node = nullptr;
+    if (this_plan.pop_node == PhysicalPlan::LEFT) {
       pop_node = node->left();
       other_node = node->right();
-    } else if (plan.pop_node == PhysicalPlan::RIGHT) {
+    } else if (this_plan.pop_node == PhysicalPlan::RIGHT) {
       pop_node = node->right();
       other_node = node->left();
     } else {
       LogFATAL("No pop node to fetch result for AND node");
     }
-    int re = ExecuteSelectQueryFromNode(pop_node);
-    // Evaluate the record on the other node.
-    for (const auto& tuple : pop_node->results()) {
-      EvaluateArgs evalute_args(catalog_m_, *record, Storage::INDEX_DATA, {});
-
-      NodeValue result = node->Evaluate(evalute_args);
-      if (result.v_bool) {
-        node->mutable_result.push_back(tuple);
+    ExecuteSelectQueryFromNode(pop_node);
+    if (other_node->physical_plan().plan == PhysicalPlan::CONST_TRUE_SCAN) {
+      // The other node returns const true. No need to verify. Pop all fetched
+      // tuples up.
+      *node->mutable_results() = std::move(*pop_node->mutable_results());
+    } else {
+      // Evaluate fetched tuples on the other node.
+      for (auto& tuple : pop_node->mutable_results()->tuples) {
+        NodeValue result = other_node->Evaluate(tuple);
+        if (result.v_bool) {
+          node->mutable_results()->tuples.push_back(std::move(tuple));
+        }
       }
     }
-    return re;
+    return node->results().NumTuples();
   } else if (op_node->OpType() == OR) {
     CHECK(this_plan.plan == PhysicalPlan::POP,
           Strings::StrCat("Expect OR node plan to be POP, but got ",
                           PhysicalPlan::PlanStr(this_plan.plan)));
 
-    int left_re = ExecuteSelectQueryFromNode(node->left());
-    int right_re = ExecuteSelectQueryFromNode(node->right());
-
+    ExecuteSelectQueryFromNode(node->left());
+    ExecuteSelectQueryFromNode(node->right());
+    return 0;
   }
+
+  return 0;
 }
 
 bool SqlQuery::GroupPhysicalQueries(ExprTreeNode* node) {
@@ -484,11 +494,7 @@ PhysicalPlan* SqlQuery::PreGenerateUnitPhysicalPlan(ExprTreeNode* node) {
 
   auto* this_plan = node->mutable_physical_plan();
   if (IsConstExpression(node)) {
-    Storage::RecordBase dummy_record; 
-    EvaluateArgs evalute_args(catalog_m_, dummy_record,
-                              Storage::UNKNOWN_RECORDTYPE, {});
-
-    NodeValue result = node->Evaluate(evalute_args);
+    NodeValue result = node->Evaluate(FetchedResult::Tuple());
     CHECK(result.type == ValueType::BOOL,
           Strings::StrCat("Expect const expression value as BOOL, but got %s",
                           ValueTypeStr(result.type).c_str()));

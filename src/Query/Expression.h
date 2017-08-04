@@ -14,22 +14,14 @@
 
 namespace Query {
 
-struct EvaluateArgs {
-  EvaluateArgs(DB::CatalogManager* catalog_m_,
-               const Storage::RecordBase& record_,
-               Storage::RecordType record_type_,
-               const std::vector<int> field_indexes_) :
-      catalog_m(catalog_m_),
-      record(record_),
-      record_type(record_type_),
-      field_indexes(field_indexes_) {}
-
-  DB::CatalogManager* catalog_m;
-  const Storage::RecordBase& record;
-  Storage::RecordType record_type;
-  // If record is a index record, we need to know the index nubmers.
-  const std::vector<int> field_indexes; 
-};
+// struct EvaluateArgs {
+//   EvaluateArgs(DB::CatalogManager* catalog_m_,
+//                const FetchedResult::Tuple& tuple_) :
+//       catalog_m(catalog_m_),
+//       tuple(tuple_) {}
+//   DB::CatalogManager* catalog_m;
+//   const FetchedResult::Tuple& tuple;
+// };
 
 class ExprTreeNode {
  public:
@@ -86,7 +78,7 @@ class ExprTreeNode {
   const FetchedResult& results() const { return results_; }
   FetchedResult* mutable_results() { return &results_; }
 
-  virtual NodeValue Evaluate(const EvaluateArgs& arg) const = 0;
+  virtual NodeValue Evaluate(const FetchedResult::Tuple& arg) const = 0;
 
  protected:
   NodeValue value_;
@@ -114,7 +106,9 @@ class ConstValueNode : public ExprTreeNode {
 
   void Print() const override;
 
-  NodeValue Evaluate(const EvaluateArgs& arg) const override { return value_; }
+  NodeValue Evaluate(const FetchedResult::Tuple& arg) const override {
+    return value_;
+  }
 };
 
 
@@ -128,7 +122,7 @@ class ColumnNode : public ExprTreeNode {
 
   void Print() const override;
 
-  NodeValue Evaluate(const EvaluateArgs& arg) const override;
+  NodeValue Evaluate(const FetchedResult::Tuple& arg) const override;
 
  private:
   bool Init();
@@ -149,7 +143,7 @@ class OperatorNode : public ExprTreeNode {
 
   void Print() const override;
 
-  NodeValue Evaluate(const EvaluateArgs& arg) const override;
+  NodeValue Evaluate(const FetchedResult::Tuple& arg) const override;
 
  private:
   // Init() does a lot of work to make sure the node is valid:

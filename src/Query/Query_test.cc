@@ -153,9 +153,7 @@ class QueryTest: public UnitTest {
   }
 
   void Test_EvaluateConst() {
-    EvaluateArgs evalute_args(catalog_m_.get(),
-                              *data_record_, Storage::DATA_RECORD,
-                              key_fields_);
+    FetchedResult::Tuple tuple;
 
     std::string expr;
 
@@ -164,7 +162,7 @@ class QueryTest: public UnitTest {
     AssertTrue(interpreter_->Parse(expr));
     auto node = interpreter_->shared_query()->GetExprNode();
     AssertTrue(node && node->valid());
-    auto result = node->Evaluate(evalute_args);
+    auto result = node->Evaluate(tuple);
     AssertEqual(result.type, BOOL);
     AssertFalse(result.v_bool);
     std::cout << result.AsString() << std::endl;
@@ -175,7 +173,7 @@ class QueryTest: public UnitTest {
     AssertTrue(interpreter_->Parse(expr));
     node = interpreter_->shared_query()->GetExprNode();
     AssertTrue(node && node->valid());
-    result = node->Evaluate(evalute_args);
+    result = node->Evaluate(tuple);
     AssertEqual(result.type, INT64);
     AssertEqual(-5, result.v_int64);
     std::cout << result.AsString() << std::endl;
@@ -186,7 +184,7 @@ class QueryTest: public UnitTest {
     AssertTrue(interpreter_->Parse(expr));
     node = interpreter_->shared_query()->GetExprNode();
     AssertTrue(node && node->valid());
-    result = node->Evaluate(evalute_args);
+    result = node->Evaluate(tuple);
     AssertEqual(result.type, DOUBLE);
     AssertFloatEqual(3.0, result.v_double);
     std::cout << result.AsString() << std::endl;
@@ -197,7 +195,7 @@ class QueryTest: public UnitTest {
     AssertTrue(interpreter_->Parse(expr));
     node = interpreter_->shared_query()->GetExprNode();
     AssertTrue(node && node->valid());
-    result = node->Evaluate(evalute_args);
+    result = node->Evaluate(tuple);
     AssertEqual(result.type, BOOL);
     AssertTrue(result.v_bool);
     std::cout << result.AsString() << std::endl;
@@ -254,9 +252,8 @@ class QueryTest: public UnitTest {
   }
 
   void Test_EvaluateSingleExpr() {
-    EvaluateArgs evalute_args(catalog_m_.get(),
-                              *data_record_, Storage::DATA_RECORD,
-                              key_fields_);
+    FetchedResult::Tuple tuple;
+    tuple.emplace("Puppy", ResultRecord(data_record_, {}));
 
     std::string expr;
 
@@ -266,7 +263,7 @@ class QueryTest: public UnitTest {
     auto node = interpreter_->shared_query()->GetExprNode();
     AssertTrue(node && node->valid());
 
-    auto result = node->Evaluate(evalute_args);
+    auto result = node->Evaluate(tuple);
     AssertEqual(result.type, DOUBLE);
     AssertFloatEqual(result.v_double, 0.5);
     std::cout << result.AsString() << std::endl;
@@ -278,7 +275,7 @@ class QueryTest: public UnitTest {
     node = interpreter_->shared_query()->GetExprNode();
     AssertTrue(node && node->valid());
 
-    result = node->Evaluate(evalute_args);
+    result = node->Evaluate(tuple);
     AssertEqual(result.type, BOOL);
     AssertTrue(result.v_bool);
     std::cout << result.AsString() << std::endl;
@@ -290,7 +287,7 @@ class QueryTest: public UnitTest {
     node = interpreter_->shared_query()->GetExprNode();
     AssertTrue(node && node->valid());
 
-    result = node->Evaluate(evalute_args);
+    result = node->Evaluate(tuple);
     AssertEqual(result.type, BOOL);
     AssertTrue(result.v_bool);
     std::cout << result.AsString() << std::endl;
@@ -302,16 +299,15 @@ class QueryTest: public UnitTest {
     node = interpreter_->shared_query()->GetExprNode();
     AssertTrue(node && node->valid());
 
-    result = node->Evaluate(evalute_args);
+    result = node->Evaluate(tuple);
     AssertEqual(result.type, BOOL);
     AssertTrue(result.v_bool);
     std::cout << result.AsString() << std::endl;
     printf("\n");
 
     // Test evaluation with index record.
-    EvaluateArgs evalute_args2(catalog_m_.get(),
-                               *index_record_, Storage::INDEX_RECORD,
-                               key_fields_);
+    FetchedResult::Tuple tuple2;
+    tuple2.emplace("Puppy", ResultRecord(index_record_, key_fields_));
 
     expr = "Puppy.id + 3 < 6";
     std::cout << expr << std::endl;
@@ -319,7 +315,7 @@ class QueryTest: public UnitTest {
     node = interpreter_->shared_query()->GetExprNode();
     AssertTrue(node && node->valid());
 
-    result = node->Evaluate(evalute_args2);
+    result = node->Evaluate(tuple2);
     AssertEqual(result.type, BOOL);
     AssertTrue(result.v_bool);
     std::cout << result.AsString() << std::endl;
@@ -331,7 +327,7 @@ class QueryTest: public UnitTest {
     node = interpreter_->shared_query()->GetExprNode();
     AssertTrue(node && node->valid());
 
-    result = node->Evaluate(evalute_args2);
+    result = node->Evaluate(tuple2);
     AssertEqual(result.type, DOUBLE);
     AssertFloatEqual(result.v_double, -0.5);
     std::cout << result.AsString() << std::endl;
