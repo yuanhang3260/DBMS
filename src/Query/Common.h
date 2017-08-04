@@ -144,8 +144,27 @@ struct PhysicalPlan {
   std::vector<QueryCondition> conditions;
 
   bool ShouldScan() const { return plan == SCAN || plan == CONST_TRUE_SCAN; }
+  static std::string PlanStr(Plan plan);
 
   void reset();
+};
+
+struct ResultRecord {
+  std::shared_ptr<Storage::RecordBase> record;
+  std::vector<int> field_indexes;
+
+  Storage::RecordType record_type() const {
+    if (record) {
+      return record->type();
+    }
+    return Storage::UNKNOWN_RECORDTYPE;
+  }
+};
+
+struct FetchedResult {
+  using ResultTuple = std::map<std::string, ResultRecord>;
+
+  std::vecotr<ResultTuple> tuples;
 };
 
 }  // namespace Query

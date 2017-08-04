@@ -83,6 +83,9 @@ class ExprTreeNode {
   const PhysicalPlan& physical_plan() const { return physical_plan_; }
   PhysicalPlan* mutable_physical_plan() { return &physical_plan_; }
 
+  const FetchedResult& results() const { return results_; }
+  FetchedResult* mutable_results() { return &results_; }
+
   virtual NodeValue Evaluate(const EvaluateArgs& arg) const = 0;
 
  protected:
@@ -96,6 +99,8 @@ class ExprTreeNode {
 
   bool physical_query_root_ = false;
   PhysicalPlan physical_plan_;
+
+  FetchedResult results_;
 };
 
 

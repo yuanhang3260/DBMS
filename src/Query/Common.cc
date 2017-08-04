@@ -281,6 +281,19 @@ void CastValueType(QueryCondition* condition) {
   }
 }
 
+std::string PhysicalPlan::PlanStr(Plan plan) {
+  switch (plan) {
+    case NO_PLAN: return "NO_PLAN";
+    case CONST_FALSE_SKIP: return "CONST_FALSE_SKIP";
+    case CONST_TRUE_SCAN: return "CONST_TRUE_SCAN";
+    case SCAN: return "SCAN";
+    case SEARCH: return "SEARCH";
+    case POP: return "POP";
+    default: return "UNKNOWN_PLAN_TYPE";
+  }
+  return "";
+}
+
 void PhysicalPlan::reset() {
   plan = NO_PLAN;
   query_ratio = 0;

@@ -49,6 +49,11 @@ class SqlQuery {
 
   bool FinalizeParsing();
 
+  // Generate physical plan for this query.
+  const PhysicalPlan& PrepareQueryPlan();
+  // Execute a SELECT query, returns the number of matching records.
+  int ExecuteSelectQuery();
+
   void reset();
   std::string error_msg() const;
   void set_error_msg(const std::string& error_msg);

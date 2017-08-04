@@ -252,7 +252,7 @@ bool SqlQuery::FinalizeParsing() {
   }
 
   // Check expression tree root returns bool.
-  if (!expr_node_) {
+  if (!expr_node_ || !expr_node_->valid()) {
     return false;
   }
   if (expr_node_->value().type != ValueType::BOOL) {
@@ -260,6 +260,68 @@ bool SqlQuery::FinalizeParsing() {
   }
 
   return true;
+}
+
+const PhysicalPlan& SqlQuery::PrepareQueryPlan() {
+  GroupPhysicalQueries(expr_node_.get());
+  GenerateQueryPhysicalPlan(expr_node_.get());
+  return expr_node_->physical_plan();
+}
+
+int SqlQuery::ExecuteSelectQuery() {
+  PrepareQueryPlan();
+  return ExecuteSelectQueryFromNode(expr_node_.get());
+}
+
+int SqlQuery::ExecuteSelectQueryFromNode(ExprTreeNode* node) {
+  const auto& this_plan = node->physical_plan();
+  if (this_plan.plan == PhysicalPlan::CONST_FALSE_SKIP) {
+    return 0;
+  }
+
+  if (node->physical_query_root()) {
+    return Do_ExecutePhysicalQuery(node);
+  }
+
+  CHECK(node->type() == ExprTreeNode::OPERATOR,
+        Strings::StrCat("Expect OPERATOR node, but got ",
+                        ExprTreeNode::NodeTypeStr(node->type()).c_str()));
+
+  OperatorNode* op_node = dynamic_cast<OperatorNode*>(node);
+  if (op_node->OpType() == AND) {
+    CHECK(this_plan.plan == PhysicalPlan::POP,
+          Strings::StrCat("Expect AND node plan to be POP, but got ",
+                          PhysicalPlan::PlanStr(this_plan.plan)));
+    ExprTreeNode* pop_node = nullptr, other_node = nullptr;
+    if (plan.pop_node == PhysicalPlan::LEFT) {
+      pop_node = node->left();
+      other_node = node->right();
+    } else if (plan.pop_node == PhysicalPlan::RIGHT) {
+      pop_node = node->right();
+      other_node = node->left();
+    } else {
+      LogFATAL("No pop node to fetch result for AND node");
+    }
+    int re = ExecuteSelectQueryFromNode(pop_node);
+    // Evaluate the record on the other node.
+    for (const auto& tuple : pop_node->results()) {
+      EvaluateArgs evalute_args(catalog_m_, *record, Storage::INDEX_DATA, {});
+
+      NodeValue result = node->Evaluate(evalute_args);
+      if (result.v_bool) {
+        node->mutable_result.push_back(tuple);
+      }
+    }
+    return re;
+  } else if (op_node->OpType() == OR) {
+    CHECK(this_plan.plan == PhysicalPlan::POP,
+          Strings::StrCat("Expect OR node plan to be POP, but got ",
+                          PhysicalPlan::PlanStr(this_plan.plan)));
+
+    int left_re = ExecuteSelectQueryFromNode(node->left());
+    int right_re = ExecuteSelectQueryFromNode(node->right());
+
+  }
 }
 
 bool SqlQuery::GroupPhysicalQueries(ExprTreeNode* node) {
@@ -312,7 +374,7 @@ PhysicalPlan* SqlQuery::GenerateQueryPhysicalPlan(ExprTreeNode* node) {
   }
 
   CHECK(node->type() == ExprTreeNode::OPERATOR,
-        Strings::StrCat("Expect OPERATOR node, but got %s",
+        Strings::StrCat("Expect OPERATOR node, but got ",
                         ExprTreeNode::NodeTypeStr(node->type()).c_str()));
 
   OperatorNode* op_node = dynamic_cast<OperatorNode*>(node);
@@ -320,6 +382,11 @@ PhysicalPlan* SqlQuery::GenerateQueryPhysicalPlan(ExprTreeNode* node) {
   if (op_node->OpType() == AND) {
     CHECK(left_plan != nullptr, "AND node has no left child");
     CHECK(right_plan != nullptr, "AND node has no right child");
+    CHECK(left_plan->plan != PhysicalPlan::NO_PLAN,
+          "AND node has no plan on left child");
+    CHECK(right_plan->plan != PhysicalPlan::NO_PLAN,
+          "AND node has no plan on right child");
+
     // If AND node has a child returning a direct False, this AND node also
     // returns direct False.
     if (left_plan->plan == PhysicalPlan::CONST_FALSE_SKIP ||
@@ -349,6 +416,10 @@ PhysicalPlan* SqlQuery::GenerateQueryPhysicalPlan(ExprTreeNode* node) {
   } else if (op_node->OpType() == OR) {
     CHECK(left_plan != nullptr, "OR node has no left child");
     CHECK(right_plan != nullptr, "OR node has no right child");
+    CHECK(left_plan->plan != PhysicalPlan::NO_PLAN,
+          "OR node has no plan on left child");
+    CHECK(right_plan->plan != PhysicalPlan::NO_PLAN,
+          "OR node has no plan on right child");
 
     if (left_plan->plan == PhysicalPlan::CONST_FALSE_SKIP &&
         right_plan->plan == PhysicalPlan::CONST_FALSE_SKIP) {
@@ -362,8 +433,11 @@ PhysicalPlan* SqlQuery::GenerateQueryPhysicalPlan(ExprTreeNode* node) {
     } else {
       this_plan->query_ratio = left_plan->query_ratio + right_plan->query_ratio;
       this_plan->query_ratio = std::min(1.0, this_plan->query_ratio);
-      if (left_plan->plan == PhysicalPlan::SCAN ||
-          right_plan->plan == PhysicalPlan::SCAN) {
+      if (this_plan->query_ratio >= 1.0) {
+        this_plan->plan = PhysicalPlan::SCAN;
+        node->set_physical_query_root(true);
+      } else if (left_plan->plan == PhysicalPlan::SCAN ||
+                 right_plan->plan == PhysicalPlan::SCAN) {
         this_plan->plan = PhysicalPlan::SCAN;
         node->set_physical_query_root(true);
         this_plan->query_ratio = 1.0;
@@ -374,6 +448,9 @@ PhysicalPlan* SqlQuery::GenerateQueryPhysicalPlan(ExprTreeNode* node) {
     }
   } else if (op_node->OpType() == NOT) {
     CHECK(left_plan != nullptr, "NOT node has no child expression");
+    CHECK(left_plan->plan != PhysicalPlan::NO_PLAN,
+          "NOT node has no plan on left child");
+
     if (left_plan->plan == PhysicalPlan::CONST_FALSE_SKIP) {
       this_plan->plan = PhysicalPlan::CONST_TRUE_SCAN;
       node->set_physical_query_root(true);
@@ -390,14 +467,6 @@ PhysicalPlan* SqlQuery::GenerateQueryPhysicalPlan(ExprTreeNode* node) {
     LogFATAL("Expect logical operator type, but got %s",
              OpTypeStr(op_node->OpType()).c_str());
   }
-
-  // if (this_plan->query_ratio > kSearchThreshold) {
-  //   if (this_plan->plan == PhysicalPlan::SEARCH) {
-  //     this_plan->plan = PhysicalPlan::SCAN;
-  //   }
-  //   node->set_physical_query_root(true);
-  //   this_plan->query_ratio = 1.0;
-  // }
 
   return this_plan;
 }
@@ -758,6 +827,9 @@ void SqlQuery::EvaluateQueryConditions(PhysicalPlan* physical_plan) {
       group_plan.plan = PhysicalPlan::CONST_FALSE_SKIP;
       group_plan.query_ratio = 0.0;
       group_plan.conditions.clear();
+    } else if (search_ratio > 1) {
+      group_plan.plan = PhysicalPlan::CONST_TRUE_SCAN;
+      group_plan.query_ratio = 1.0;
     } else {
       group_plan.plan = PhysicalPlan::SEARCH;
       group_plan.query_ratio = search_ratio;
@@ -771,7 +843,7 @@ void SqlQuery::EvaluateQueryConditions(PhysicalPlan* physical_plan) {
                         conditions.begin()->column.table_name));
 
   physical_plan->plan = PhysicalPlan::NO_PLAN;
-  physical_plan->query_ratio = 2.0;
+  physical_plan->query_ratio = 10.0;
   for (const auto& group : condition_groups) {
     // If this column has no index, we have to scan. Otherwise analyze this
     // group conditions and find the search range.
@@ -789,6 +861,7 @@ void SqlQuery::EvaluateQueryConditions(PhysicalPlan* physical_plan) {
     // Index search needs to be factored.
     if (!table_m->IsPrimaryIndex({field_m->index()})) {
       group_plan.query_ratio *= kIndexSearchFactor;
+      group_plan.query_ratio = std::min(1.0, group_plan.query_ratio);
     }
 
     // Any group is direct false, the whole physical query is then skipped.

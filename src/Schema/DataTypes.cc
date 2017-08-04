@@ -25,7 +25,10 @@ double EvaluateIntegerValueRatio(ValueRange<T>& range) {
   }
 
   if (range.single_value) {
-    if (*range.single_value >= range.min && *range.single_value <= range.max) {
+    if (*range.single_value == range.min && range.min == range.max) {
+      return 2;
+    } else if (*range.single_value >= range.min &&
+               *range.single_value <= range.max) {
       return 1.0 / (range.max - range.min + 1);
     } else {
       return -1;
@@ -46,6 +49,10 @@ double EvaluateIntegerValueRatio(ValueRange<T>& range) {
     if (*range.left_value == *range.right_value &&
         (range.left_open || range.right_open)) {
       return -1;
+    }
+
+    if (*range.left_value == range.min && *range.right_value == range.max) {
+      return 2;
     }
 
     int boundary_num = 0;
@@ -76,7 +83,11 @@ double EvaluateDoubleValueRatio(ValueRange<double>& range) {
   }
 
   if (range.single_value) {
-    return -1;
+    if (*range.single_value == range.min && range.min == range.max) {
+      return 2;
+    } else {
+      return 0;
+    }
   } else {
     if (!range.left_value || *range.left_value < range.min) {
       range.set_left_value(range.min);
@@ -93,6 +104,9 @@ double EvaluateDoubleValueRatio(ValueRange<double>& range) {
     if (*range.left_value == *range.right_value &&
         (range.left_open || range.right_open)) {
       return -1;
+    }
+    if (*range.left_value == range.min && *range.right_value == range.max) {
+      return 2;
     }
 
     return 1.0 * (*range.right_value - *range.left_value) /
@@ -145,7 +159,10 @@ double EvaluateStringValueRatio(ValueRange<std::string>& range) {
     };
 
   if (range.single_value) {
-    if (*range.single_value >= range.min && *range.single_value <= range.max) {
+    if (*range.single_value == range.min && range.min == range.max) {
+      return 2;
+    } else if (*range.single_value >= range.min &&
+               *range.single_value <= range.max) {
       uint32 prefix = longest_common_preifx({range.single_value.get(),
                                              &range.min,
                                              &range.max});
@@ -168,6 +185,13 @@ double EvaluateStringValueRatio(ValueRange<std::string>& range) {
 
     if (*range.left_value > *range.right_value) {
       return -1;
+    }
+    if (*range.left_value == *range.right_value &&
+        (range.left_open || range.right_open)) {
+      return -1;
+    }
+    if (*range.left_value == range.min && *range.right_value == range.max) {
+      return 2;
     }
 
     uint32 prefix = longest_common_preifx({range.left_value.get(),

@@ -701,6 +701,172 @@ class QueryTest: public UnitTest {
     interpreter_->reset();
     printf("\n");
   }
+
+  void Test_GenerateQueryPhysicalPlan() {
+    std::string expr;
+
+    expr = "SELECT * FROM Puppy WHERE Puppy.id < 200";
+    std::cout << expr << std::endl;
+    AssertTrue(interpreter_->Parse(expr));
+    auto query = interpreter_->shared_query();
+    AssertTrue(query->FinalizeParsing());
+    const auto* physical_plan = &query->PrepareQueryPlan();
+
+    AssertEqual(PhysicalPlan::SEARCH, physical_plan->plan);
+    AssertFloatEqual(0.2, physical_plan->query_ratio);
+    AssertEqual(1, physical_plan->conditions.size());
+    AssertEqual(LT, physical_plan->conditions.front().op);
+    interpreter_->reset();
+    printf("\n");
+
+    expr = "SELECT * FROM Puppy WHERE Puppy.id < 300 AND age < 1";
+    std::cout << expr << std::endl;
+    AssertTrue(interpreter_->Parse(expr));
+    query = interpreter_->shared_query();
+    AssertTrue(query->FinalizeParsing());
+    physical_plan = &query->PrepareQueryPlan();
+
+    AssertEqual(PhysicalPlan::SEARCH, physical_plan->plan);
+    AssertFloatEqual(0.1 * kIndexSearchFactor, physical_plan->query_ratio);
+    AssertEqual(1, physical_plan->conditions.size());
+    interpreter_->reset();
+    printf("\n");
+
+    expr = "SELECT * FROM Puppy WHERE true";
+    std::cout << expr << std::endl;
+    AssertTrue(interpreter_->Parse(expr));
+    query = interpreter_->shared_query();
+    AssertTrue(query->FinalizeParsing());
+    physical_plan = &query->PrepareQueryPlan();
+
+    AssertEqual(PhysicalPlan::CONST_TRUE_SCAN, physical_plan->plan);
+    AssertFloatEqual(1.0, physical_plan->query_ratio);
+    interpreter_->reset();
+    printf("\n");
+
+    expr = "SELECT * FROM Puppy WHERE NOT true";
+    std::cout << expr << std::endl;
+    AssertTrue(interpreter_->Parse(expr));
+    query = interpreter_->shared_query();
+    AssertTrue(query->FinalizeParsing());
+    physical_plan = &query->PrepareQueryPlan();
+
+    AssertEqual(PhysicalPlan::CONST_FALSE_SKIP, physical_plan->plan);
+    AssertFloatEqual(0.0, physical_plan->query_ratio);
+    interpreter_->reset();
+    printf("\n");
+
+    expr = "SELECT * FROM Puppy WHERE NOT (id < 200 AND id > 100)";
+    std::cout << expr << std::endl;
+    AssertTrue(interpreter_->Parse(expr));
+    query = interpreter_->shared_query();
+    AssertTrue(query->FinalizeParsing());
+    physical_plan = &query->PrepareQueryPlan();
+
+    AssertEqual(PhysicalPlan::SCAN, physical_plan->plan);
+    AssertFloatEqual(1.0, physical_plan->query_ratio);
+    interpreter_->reset();
+    printf("\n");
+
+    expr = "SELECT * FROM Puppy WHERE NOT (id < 200 AND id > 300)";
+    std::cout << expr << std::endl;
+    AssertTrue(interpreter_->Parse(expr));
+    query = interpreter_->shared_query();
+    AssertTrue(query->FinalizeParsing());
+    physical_plan = &query->PrepareQueryPlan();
+
+    AssertEqual(PhysicalPlan::CONST_TRUE_SCAN, physical_plan->plan);
+    AssertFloatEqual(1.0, physical_plan->query_ratio);
+    interpreter_->reset();
+    printf("\n");
+
+    expr = "SELECT * FROM Puppy WHERE adult AND NOT (age < 50)";
+    std::cout << expr << std::endl;
+    AssertTrue(interpreter_->Parse(expr));
+    query = interpreter_->shared_query();
+    AssertTrue(query->FinalizeParsing());
+    physical_plan = &query->PrepareQueryPlan();
+
+    AssertEqual(PhysicalPlan::CONST_FALSE_SKIP, physical_plan->plan);
+    AssertFloatEqual(0.0, physical_plan->query_ratio);
+    interpreter_->reset();
+    printf("\n");
+
+    expr = "SELECT * FROM Puppy WHERE age < 2 OR id < 100";
+    std::cout << expr << std::endl;
+    AssertTrue(interpreter_->Parse(expr));
+    query = interpreter_->shared_query();
+    AssertTrue(query->FinalizeParsing());
+    physical_plan = &query->PrepareQueryPlan();
+
+    AssertEqual(PhysicalPlan::POP, physical_plan->plan);
+    AssertFloatEqual(0.2 * kIndexSearchFactor + 0.1,
+                     physical_plan->query_ratio);
+    interpreter_->reset();
+    printf("\n");
+
+    expr = "SELECT * FROM Puppy WHERE age >4 OR id < 100";
+    std::cout << expr << std::endl;
+    AssertTrue(interpreter_->Parse(expr));
+    query = interpreter_->shared_query();
+    AssertTrue(query->FinalizeParsing());
+    physical_plan = &query->PrepareQueryPlan();
+
+    AssertEqual(PhysicalPlan::SCAN, physical_plan->plan);
+    AssertFloatEqual(1.0, physical_plan->query_ratio);
+    interpreter_->reset();
+    printf("\n");
+
+    expr = "SELECT * FROM Puppy WHERE age >4 OR id != 0.5";
+    std::cout << expr << std::endl;
+    AssertTrue(interpreter_->Parse(expr));
+    query = interpreter_->shared_query();
+    AssertTrue(query->FinalizeParsing());
+    physical_plan = &query->PrepareQueryPlan();
+
+    AssertEqual(PhysicalPlan::CONST_TRUE_SCAN, physical_plan->plan);
+    AssertFloatEqual(1.0, physical_plan->query_ratio);
+    interpreter_->reset();
+    printf("\n");
+
+    expr = "SELECT * FROM Puppy WHERE age > 20 OR id = 0.5";
+    std::cout << expr << std::endl;
+    AssertTrue(interpreter_->Parse(expr));
+    query = interpreter_->shared_query();
+    AssertTrue(query->FinalizeParsing());
+    physical_plan = &query->PrepareQueryPlan();
+
+    AssertEqual(PhysicalPlan::CONST_FALSE_SKIP, physical_plan->plan);
+    AssertFloatEqual(0.0, physical_plan->query_ratio);
+    interpreter_->reset();
+    printf("\n");
+
+    expr = "SELECT * FROM Puppy WHERE id = 4 OR(age > 8 AND signature < \"h\")";
+    std::cout << expr << std::endl;
+    AssertTrue(interpreter_->Parse(expr));
+    query = interpreter_->shared_query();
+    AssertTrue(query->FinalizeParsing());
+    physical_plan = &query->PrepareQueryPlan();
+
+    AssertEqual(PhysicalPlan::POP, physical_plan->plan);
+    AssertLess(0.2, physical_plan->query_ratio);
+    AssertGreater(0.21, physical_plan->query_ratio);
+    interpreter_->reset();
+    printf("\n");
+
+    expr = "SELECT * FROM Puppy WHERE id <100 OR(age > 7 OR name = \"snoopy\")";
+    std::cout << expr << std::endl;
+    AssertTrue(interpreter_->Parse(expr));
+    query = interpreter_->shared_query();
+    AssertTrue(query->FinalizeParsing());
+    physical_plan = &query->PrepareQueryPlan();
+
+    AssertEqual(PhysicalPlan::POP, physical_plan->plan);
+    AssertLess(0.5, physical_plan->query_ratio);
+    AssertGreater(0.51, physical_plan->query_ratio);
+    interpreter_->reset();
+    printf("\n");
+  }
 };
 
 }  // namespace Storage
@@ -714,7 +880,8 @@ int main() {
   // test.Test_EvaluateSingleExpr();
   // test.Test_SelectQuery();
   // test.Test_EvaluateQueryConditions();
-  test.Test_GenerateUnitPhysicalPlan();
+  // test.Test_GenerateUnitPhysicalPlan();
+  test.Test_GenerateQueryPhysicalPlan();
 
   test.teardown();
 
