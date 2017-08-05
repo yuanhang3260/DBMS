@@ -23,7 +23,7 @@ namespace Query {
 // references.
 class Interpreter {
  public:
-  explicit Interpreter(DB::CatalogManager* catalog_m);
+  explicit Interpreter(DB::Database* db);
 
   // Parse SQL query, return 0 in success.
   bool Parse();

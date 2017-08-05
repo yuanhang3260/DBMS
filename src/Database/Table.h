@@ -20,7 +20,7 @@ class Table {
  public:
   Table() = default;
   Table(const std::string& db_name, const std::string& name,
-        const TableInfoManager* table_m);
+        TableInfoManager* table_m);
 
   DEFINE_ACCESSOR(name, std::string);
 
@@ -90,7 +90,7 @@ class Table {
 
   std::string db_name_;
   std::string name_;
-  const DB::TableInfoManager* table_m_;
+  DB::TableInfoManager* table_m_;
 
   // map: file name --> B+ tree
   using TreeMap =

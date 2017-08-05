@@ -1,6 +1,7 @@
 #include "Strings/Split.h"
 #include "Strings/Utils.h"
 
+#include "Database/Database.h"
 #include "Database/Operation.h"
 #include "Query/SqlQuery.h"
 #include "Storage/Record.h"
@@ -11,7 +12,9 @@ namespace {
 const double kIndexSearchFactor = 2;
 }
 
-SqlQuery::SqlQuery(DB::CatalogManager* catalog_m) : catalog_m_(catalog_m) {}
+SqlQuery::SqlQuery(DB::Database* db) :
+    db_(db),
+    catalog_m_(db_->mutable_catalog_manager()) {}
 
 void SqlQuery::reset() {
   expr_node_.reset();
@@ -276,39 +279,49 @@ int SqlQuery::ExecuteSelectQuery() {
 
 int SqlQuery::Do_ExecutePhysicalQuery(ExprTreeNode* node) {
   const auto& physical_plan = node->physical_plan();
+  const auto& table_name = physical_plan.table_name;
   if (physical_plan.plan == PhysicalPlan::SEARCH) {
+    printf("search\n");
     CHECK(!physical_plan.conditions.empty(), "No condition to search");
     const auto& first_condition = physical_plan.conditions.front();
-    const auto& table_name = first_condition.column.table_name;
     if (first_condition.op == EQUAL) {
       DB::SearchOp search_op;
-      search_op.reset();
       search_op.field_indexes.push_back(first_condition.column.index);
-      search_op.key->AddField(
+      search_op.AddKey()->AddField(
           first_condition.value.ToSchemaField(first_condition.column.type));
 
-      // TODO: Get table and search.
-      (void)table_name;
-      (void)search_op;
+      // Get table and search.
+      auto* table = db_->GetTable(table_name);
+      CHECK(table != nullptr, "Can't get table %s", table_name.c_str())
+
+      std::vector<std::shared_ptr<Storage::RecordBase>> records;
+      table->SearchRecords(search_op, &records);
+      for (const auto& record : records) {
+        auto tuple = FetchedResult::Tuple();
+        tuple.emplace(table_name, ResultRecord(record, {}));
+        if (node->Evaluate(tuple).v_bool) {
+          node->mutable_results()->tuples.push_back(std::move(tuple));
+        }
+      }
     } else {
       DB::RangeSearchOp range_search_op;
       range_search_op.reset();
       range_search_op.field_indexes.push_back(first_condition.column.index);
       for (const auto& condition : physical_plan.conditions) {
         if (condition.op == GE) {
-          range_search_op.left_key->AddField(
+          range_search_op.AddLeftKey()->AddField(
               condition.value.ToSchemaField(condition.column.type));
           range_search_op.left_open = false;
         } else if (condition.op == GT) {
-          range_search_op.left_key->AddField(
+          range_search_op.AddLeftKey()->AddField(
               condition.value.ToSchemaField(condition.column.type));
           range_search_op.left_open = true;
         } else if (condition.op == LT) {
-          range_search_op.right_key->AddField(
+          range_search_op.AddRightKey()->AddField(
               condition.value.ToSchemaField(condition.column.type));
           range_search_op.right_open = true;
         } else if (condition.op == LE) {
-          range_search_op.right_key->AddField(
+          range_search_op.AddRightKey()->AddField(
               condition.value.ToSchemaField(condition.column.type));
           range_search_op.right_open = false;
         } else {
@@ -316,16 +329,52 @@ int SqlQuery::Do_ExecutePhysicalQuery(ExprTreeNode* node) {
         }
       }
 
-      // TODO: Get table and search.
-      (void)table_name;
-      (void)range_search_op;
+      // Get table and search.
+      auto* table = db_->GetTable(table_name);
+      CHECK(table != nullptr, "Can't get table %s", table_name.c_str())
+
+      std::vector<std::shared_ptr<Storage::RecordBase>> records;
+      table->RangeSearchRecords(range_search_op, &records);
+      for (const auto& record : records) {
+        auto tuple = FetchedResult::Tuple();
+        tuple.emplace(table_name, ResultRecord(record, {}));
+        if (node->Evaluate(tuple).v_bool) {
+          node->mutable_results()->tuples.push_back(std::move(tuple));
+        }
+      }
     }
   } else if (physical_plan.plan == PhysicalPlan::SCAN) {
-    // TODO: Scan the table and evaluate on the node.
+    printf("scan\n");
+    // Scan the table and evaluate on the node.
+    auto* table = db_->GetTable(table_name);
+    CHECK(table != nullptr, "Can't get table %s", table_name.c_str())
+
+    std::vector<std::shared_ptr<Storage::RecordBase>> records;
+    table->ScanRecords(&records);
+    for (const auto& record : records) {
+      auto tuple = FetchedResult::Tuple();
+      tuple.emplace(table_name, ResultRecord(record, { /* DataRecord */ }));
+      auto match = node->Evaluate(tuple);
+      if (!match.v_bool) {
+        continue;
+      }
+      node->mutable_results()->tuples.push_back(std::move(tuple));
+    }
   } else if (physical_plan.plan == PhysicalPlan::CONST_TRUE_SCAN) {
-    // TODO: Scan the table.
+    printf("const true scan\n");
+    // Scan the table.
+    auto* table = db_->GetTable(table_name);
+    CHECK(table != nullptr, "Can't get table %s", table_name.c_str())
+
+    std::vector<std::shared_ptr<Storage::RecordBase>> records;
+    table->ScanRecords(&records);
+    for (const auto& record : records) {
+      node->mutable_results()->tuples.push_back(FetchedResult::Tuple());
+      node->mutable_results()->tuples.back().emplace(
+          table_name, ResultRecord(record, { /* DataRecord, no index */ }));
+    }
   }
-  return 0;
+  return node->mutable_results()->tuples.size();
 }
 
 int SqlQuery::ExecuteSelectQueryFromNode(ExprTreeNode* node) {
@@ -468,6 +517,8 @@ PhysicalPlan* SqlQuery::GenerateQueryPhysicalPlan(ExprTreeNode* node) {
     CHECK(right_plan->plan != PhysicalPlan::NO_PLAN,
           "AND node has no plan on right child");
 
+    this_plan->table_name = left_plan->table_name;
+
     // If AND node has a child returning a direct False, this AND node also
     // returns direct False.
     if (left_plan->plan == PhysicalPlan::CONST_FALSE_SKIP ||
@@ -480,6 +531,8 @@ PhysicalPlan* SqlQuery::GenerateQueryPhysicalPlan(ExprTreeNode* node) {
       node->set_physical_query_root(true);
       this_plan->query_ratio = 1.0;
     } else {
+      // printf("left = %f\n", left_plan->query_ratio);
+      // printf("right = %f\n", right_plan->query_ratio);
       this_plan->query_ratio = std::min(left_plan->query_ratio,
                                         right_plan->query_ratio);
       if (left_plan->plan == PhysicalPlan::SEARCH ||
@@ -502,6 +555,8 @@ PhysicalPlan* SqlQuery::GenerateQueryPhysicalPlan(ExprTreeNode* node) {
     CHECK(right_plan->plan != PhysicalPlan::NO_PLAN,
           "OR node has no plan on right child");
 
+    this_plan->table_name = left_plan->table_name;
+
     if (left_plan->plan == PhysicalPlan::CONST_FALSE_SKIP &&
         right_plan->plan == PhysicalPlan::CONST_FALSE_SKIP) {
       this_plan->plan = PhysicalPlan::CONST_FALSE_SKIP;
@@ -513,6 +568,8 @@ PhysicalPlan* SqlQuery::GenerateQueryPhysicalPlan(ExprTreeNode* node) {
       this_plan->query_ratio = 1.0;
     } else {
       this_plan->query_ratio = left_plan->query_ratio + right_plan->query_ratio;
+      // printf("left = %f\n", left_plan->query_ratio);
+      // printf("right = %f\n", right_plan->query_ratio);
       this_plan->query_ratio = std::min(1.0, this_plan->query_ratio);
       if (this_plan->query_ratio >= 1.0) {
         this_plan->plan = PhysicalPlan::SCAN;
@@ -531,6 +588,8 @@ PhysicalPlan* SqlQuery::GenerateQueryPhysicalPlan(ExprTreeNode* node) {
     CHECK(left_plan != nullptr, "NOT node has no child expression");
     CHECK(left_plan->plan != PhysicalPlan::NO_PLAN,
           "NOT node has no plan on left child");
+
+    this_plan->table_name = left_plan->table_name;
 
     if (left_plan->plan == PhysicalPlan::CONST_FALSE_SKIP) {
       this_plan->plan = PhysicalPlan::CONST_TRUE_SCAN;
@@ -555,6 +614,12 @@ PhysicalPlan* SqlQuery::GenerateQueryPhysicalPlan(ExprTreeNode* node) {
 PhysicalPlan* SqlQuery::GenerateUnitPhysicalPlan(ExprTreeNode* node) {
   auto physical_plan = PreGenerateUnitPhysicalPlan(node);
   EvaluateQueryConditions(physical_plan);
+
+  if (physical_plan->table_name.empty()) {
+    physical_plan->table_name = DefaultTable();
+    CHECK(!physical_plan->table_name.empty(),
+          "Don't know what table to search");
+  }
   return physical_plan;
 }
 
@@ -914,7 +979,8 @@ void SqlQuery::EvaluateQueryConditions(PhysicalPlan* physical_plan) {
     return group_plan;
   };
 
-  auto* table_m = FindTable(conditions.begin()->column.table_name);
+  const auto& table_name = conditions.begin()->column.table_name;
+  auto* table_m = FindTable(table_name);
   CHECK(table_m != nullptr,
         Strings::StrCat("Couldn't find table %s",
                         conditions.begin()->column.table_name));
@@ -960,6 +1026,7 @@ void SqlQuery::EvaluateQueryConditions(PhysicalPlan* physical_plan) {
     physical_plan->plan = PhysicalPlan::SCAN;
     physical_plan->query_ratio = 1.0;
   }
+  physical_plan->table_name = table_name;
 }
 
 std::string SqlQuery::error_msg() const {

@@ -2,6 +2,7 @@
 #include "Base/MacroUtils.h"
 #include "UnitTest/UnitTest.h"
 
+#include "Database/Database.h"
 #include "Query/Interpreter.h"
 
 using Storage::RecordBase;
@@ -27,6 +28,7 @@ class QueryTest: public UnitTest {
   std::vector<int> key_fields_ = std::vector<int>{0, 2, 3};
 
   DB::DatabaseCatalog catalog_;
+  DB::Database db_;
   std::shared_ptr<DB::CatalogManager> catalog_m_;
 
   std::shared_ptr<Interpreter> interpreter_;
@@ -146,10 +148,12 @@ class QueryTest: public UnitTest {
     InitCatalog();
     InitRecordResource();
 
-    interpreter_ = std::make_shared<Interpreter>(catalog_m_.get());
+    AssertTrue(db_.SetCatalog(catalog_));
+
+    interpreter_ = std::make_shared<Interpreter>(&db_);
     interpreter_->set_debug(true);
 
-    query_ = std::make_shared<SqlQuery>(catalog_m_.get());
+    query_ = std::make_shared<SqlQuery>(&db_);
   }
 
   void Test_EvaluateConst() {
@@ -562,6 +566,7 @@ class QueryTest: public UnitTest {
     AssertFloatEqual(0.2, physical_plan->query_ratio);
     AssertEqual(1, physical_plan->conditions.size());
     AssertEqual(LT, physical_plan->conditions.front().op);
+    AssertEqual(std::string(kTableName), physical_plan->table_name);
     interpreter_->reset();
     printf("\n");
 
@@ -579,6 +584,7 @@ class QueryTest: public UnitTest {
     AssertEqual(2, physical_plan->conditions.size());
     AssertEqual(GE, physical_plan->conditions.front().op);
     AssertEqual(LT, physical_plan->conditions.back().op);
+    AssertEqual(std::string(kTableName), physical_plan->table_name);
     interpreter_->reset();
     printf("\n");
 
@@ -608,6 +614,7 @@ class QueryTest: public UnitTest {
     AssertEqual(PhysicalPlan::CONST_FALSE_SKIP, physical_plan->plan);
     AssertFloatEqual(0, physical_plan->query_ratio);
     AssertEqual(0, physical_plan->conditions.size());
+    AssertEqual(std::string(kTableName), physical_plan->table_name);
     interpreter_->reset();
     printf("\n");
 
@@ -623,6 +630,7 @@ class QueryTest: public UnitTest {
     AssertEqual(PhysicalPlan::CONST_FALSE_SKIP, physical_plan->plan);
     AssertFloatEqual(0, physical_plan->query_ratio);
     AssertEqual(0, physical_plan->conditions.size());
+    AssertEqual(std::string(kTableName), physical_plan->table_name);
     interpreter_->reset();
     printf("\n");
 
@@ -638,6 +646,7 @@ class QueryTest: public UnitTest {
     AssertEqual(PhysicalPlan::CONST_FALSE_SKIP, physical_plan->plan);
     AssertFloatEqual(0, physical_plan->query_ratio);
     AssertEqual(0, physical_plan->conditions.size());
+    AssertEqual(std::string(kTableName), physical_plan->table_name);
     interpreter_->reset();
     printf("\n");
 
@@ -652,6 +661,7 @@ class QueryTest: public UnitTest {
 
     AssertEqual(PhysicalPlan::SEARCH, physical_plan->plan);
     AssertEqual(1, physical_plan->conditions.size());
+    AssertEqual(std::string(kTableName), physical_plan->table_name);
     interpreter_->reset();
     printf("\n");
 
@@ -666,6 +676,7 @@ class QueryTest: public UnitTest {
 
     AssertEqual(PhysicalPlan::SCAN, physical_plan->plan);
     AssertEqual(0, physical_plan->conditions.size());
+    AssertEqual(std::string(kTableName), physical_plan->table_name);
     interpreter_->reset();
     printf("\n");
 
@@ -680,6 +691,7 @@ class QueryTest: public UnitTest {
 
     AssertEqual(PhysicalPlan::CONST_TRUE_SCAN, physical_plan->plan);
     AssertEqual(0, physical_plan->conditions.size());
+    AssertEqual(std::string(kTableName), physical_plan->table_name);
     interpreter_->reset();
     printf("\n");
 
@@ -694,6 +706,7 @@ class QueryTest: public UnitTest {
 
     AssertEqual(PhysicalPlan::CONST_TRUE_SCAN, physical_plan->plan);
     AssertEqual(0, physical_plan->conditions.size());
+    AssertEqual(std::string(kTableName), physical_plan->table_name);
     interpreter_->reset();
     printf("\n");
   }
@@ -712,6 +725,7 @@ class QueryTest: public UnitTest {
     AssertFloatEqual(0.2, physical_plan->query_ratio);
     AssertEqual(1, physical_plan->conditions.size());
     AssertEqual(LT, physical_plan->conditions.front().op);
+    AssertEqual(std::string(kTableName), physical_plan->table_name);
     interpreter_->reset();
     printf("\n");
 
@@ -725,6 +739,7 @@ class QueryTest: public UnitTest {
     AssertEqual(PhysicalPlan::SEARCH, physical_plan->plan);
     AssertFloatEqual(0.1 * kIndexSearchFactor, physical_plan->query_ratio);
     AssertEqual(1, physical_plan->conditions.size());
+    AssertEqual(std::string(kTableName), physical_plan->table_name);
     interpreter_->reset();
     printf("\n");
 
@@ -737,6 +752,7 @@ class QueryTest: public UnitTest {
 
     AssertEqual(PhysicalPlan::CONST_TRUE_SCAN, physical_plan->plan);
     AssertFloatEqual(1.0, physical_plan->query_ratio);
+    AssertEqual(std::string(kTableName), physical_plan->table_name);
     interpreter_->reset();
     printf("\n");
 
@@ -749,6 +765,7 @@ class QueryTest: public UnitTest {
 
     AssertEqual(PhysicalPlan::CONST_FALSE_SKIP, physical_plan->plan);
     AssertFloatEqual(0.0, physical_plan->query_ratio);
+    AssertEqual(std::string(kTableName), physical_plan->table_name);
     interpreter_->reset();
     printf("\n");
 
@@ -761,6 +778,7 @@ class QueryTest: public UnitTest {
 
     AssertEqual(PhysicalPlan::SCAN, physical_plan->plan);
     AssertFloatEqual(1.0, physical_plan->query_ratio);
+    AssertEqual(std::string(kTableName), physical_plan->table_name);
     interpreter_->reset();
     printf("\n");
 
@@ -773,6 +791,7 @@ class QueryTest: public UnitTest {
 
     AssertEqual(PhysicalPlan::CONST_TRUE_SCAN, physical_plan->plan);
     AssertFloatEqual(1.0, physical_plan->query_ratio);
+    AssertEqual(std::string(kTableName), physical_plan->table_name);
     interpreter_->reset();
     printf("\n");
 
@@ -785,6 +804,7 @@ class QueryTest: public UnitTest {
 
     AssertEqual(PhysicalPlan::CONST_FALSE_SKIP, physical_plan->plan);
     AssertFloatEqual(0.0, physical_plan->query_ratio);
+    AssertEqual(std::string(kTableName), physical_plan->table_name);
     interpreter_->reset();
     printf("\n");
 
@@ -798,6 +818,7 @@ class QueryTest: public UnitTest {
     AssertEqual(PhysicalPlan::POP, physical_plan->plan);
     AssertFloatEqual(0.2 * kIndexSearchFactor + 0.1,
                      physical_plan->query_ratio);
+    AssertEqual(std::string(kTableName), physical_plan->table_name);
     interpreter_->reset();
     printf("\n");
 
@@ -810,6 +831,7 @@ class QueryTest: public UnitTest {
 
     AssertEqual(PhysicalPlan::SCAN, physical_plan->plan);
     AssertFloatEqual(1.0, physical_plan->query_ratio);
+    AssertEqual(std::string(kTableName), physical_plan->table_name);
     interpreter_->reset();
     printf("\n");
 
@@ -822,6 +844,7 @@ class QueryTest: public UnitTest {
 
     AssertEqual(PhysicalPlan::CONST_TRUE_SCAN, physical_plan->plan);
     AssertFloatEqual(1.0, physical_plan->query_ratio);
+    AssertEqual(std::string(kTableName), physical_plan->table_name);
     interpreter_->reset();
     printf("\n");
 
@@ -834,6 +857,7 @@ class QueryTest: public UnitTest {
 
     AssertEqual(PhysicalPlan::CONST_FALSE_SKIP, physical_plan->plan);
     AssertFloatEqual(0.0, physical_plan->query_ratio);
+    AssertEqual(std::string(kTableName), physical_plan->table_name);
     interpreter_->reset();
     printf("\n");
 
@@ -847,6 +871,7 @@ class QueryTest: public UnitTest {
     AssertEqual(PhysicalPlan::POP, physical_plan->plan);
     AssertLess(0.2, physical_plan->query_ratio);
     AssertGreater(0.21, physical_plan->query_ratio);
+    AssertEqual(std::string(kTableName), physical_plan->table_name);
     interpreter_->reset();
     printf("\n");
 
@@ -860,6 +885,7 @@ class QueryTest: public UnitTest {
     AssertEqual(PhysicalPlan::POP, physical_plan->plan);
     AssertLess(0.5, physical_plan->query_ratio);
     AssertGreater(0.51, physical_plan->query_ratio);
+    AssertEqual(std::string(kTableName), physical_plan->table_name);
     interpreter_->reset();
     printf("\n");
   }

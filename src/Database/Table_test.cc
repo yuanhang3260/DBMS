@@ -231,7 +231,7 @@ class TableTest: public UnitTest {
       result.clear();
       op.reset();
       op.field_indexes.push_back(2);
-      op.key->AddField(new Schema::LongIntField(id));
+      op.AddKey()->AddField(new Schema::LongIntField(id));
       table_->SearchRecords(op, &result);
       AssertEqual(NumExpectedMatches(op), result.size());
       AssertEqual(1, result.size());
@@ -241,7 +241,7 @@ class TableTest: public UnitTest {
     result.clear();
     op.reset();
     op.field_indexes.push_back(1);
-    op.key->AddField(new Schema::IntField(5));
+    op.AddKey()->AddField(new Schema::IntField(5));
 
     table_->SearchRecords(op, &result);
     AssertEqual(NumExpectedMatches(op), result.size());
@@ -250,7 +250,7 @@ class TableTest: public UnitTest {
     result.clear();
     op.reset();
     op.field_indexes.push_back(4);
-    op.key->AddField(new Schema::BoolField(true));
+    op.AddKey()->AddField(new Schema::BoolField(true));
 
     table_->SearchRecords(op, &result);
     AssertEqual(NumExpectedMatches(op), result.size());
@@ -264,9 +264,9 @@ class TableTest: public UnitTest {
     op.reset();
     result.clear();
     op.field_indexes.push_back(2);
-    op.left_key->AddField(new Schema::LongIntField(kNumRecordsSource/3));
+    op.AddLeftKey()->AddField(new Schema::LongIntField(kNumRecordsSource/3));
     op.left_open = false;
-    op.right_key->AddField(new Schema::LongIntField(kNumRecordsSource/3 * 2));
+    op.AddRightKey()->AddField(new Schema::LongIntField(kNumRecordsSource/3 * 2));
     op.right_open = false;
 
     table_->RangeSearchRecords(op, &result);
@@ -277,7 +277,7 @@ class TableTest: public UnitTest {
     op.reset();
     result.clear();
     op.field_indexes.push_back(0);
-    op.left_key->AddField(new Schema::StringField("m"));
+    op.AddLeftKey()->AddField(new Schema::StringField("m"));
     op.left_open = false;
     op.right_key.reset();
     table_->RangeSearchRecords(op, &result);
@@ -288,8 +288,7 @@ class TableTest: public UnitTest {
     op.reset();
     result.clear();
     op.field_indexes.push_back(3);
-    op.left_key.reset();
-    op.right_key->AddField(new Schema::DoubleField(1.6));
+    op.AddRightKey()->AddField(new Schema::DoubleField(1.6));
     op.right_open = true;
     table_->RangeSearchRecords(op, &result);
     AssertEqual(NumExpectedMatches(op), result.size());
@@ -299,9 +298,9 @@ class TableTest: public UnitTest {
     op.reset();
     result.clear();
     op.field_indexes.push_back(1);
-    op.left_key->AddField(new Schema::IntField(1));
+    op.AddLeftKey()->AddField(new Schema::IntField(1));
     op.left_open = true;
-    op.right_key->AddField(new Schema::IntField(1));
+    op.AddRightKey()->AddField(new Schema::IntField(1));
     op.right_open = false;
     table_->RangeSearchRecords(op, &result);
     AssertEqual(NumExpectedMatches(op), result.size());

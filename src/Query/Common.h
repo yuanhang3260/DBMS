@@ -160,6 +160,7 @@ struct PhysicalPlan {
   Plan plan = NO_PLAN;
   double query_ratio = 1.0;
   ExecuteNode pop_node = NON;  // Only used when plan is POP.
+  std::string table_name;
 
   std::vector<QueryCondition> conditions;
 };

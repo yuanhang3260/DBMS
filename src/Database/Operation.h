@@ -14,9 +14,14 @@ struct SearchOp {
   std::vector<int32> field_indexes;
   std::shared_ptr<Storage::RecordBase> key;
 
+  Storage::RecordBase* AddKey() {
+    key.reset(new Storage::RecordBase());
+    return key.get();
+  }
+
   void reset() {
     field_indexes.clear();
-    key.reset(new Storage::RecordBase());
+    key.reset();
   }
 };
 
@@ -29,11 +34,21 @@ struct RangeSearchOp {
   std::shared_ptr<Storage::RecordBase> right_key;
   bool right_open = true;
 
+  Storage::RecordBase* AddLeftKey() {
+    left_key.reset(new Storage::RecordBase());
+    return left_key.get();
+  }
+
+  Storage::RecordBase* AddRightKey() {
+    right_key.reset(new Storage::RecordBase());
+    return right_key.get();
+  }
+
   void reset() {
     field_indexes.clear();
-    left_key.reset(new Storage::RecordBase());
+    left_key.reset();
     left_open = true;
-    right_key.reset(new Storage::RecordBase());
+    right_key.reset();
     right_open = true;
   }
 };

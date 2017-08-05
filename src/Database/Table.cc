@@ -22,7 +22,7 @@ using Storage::RecordID;
 }
 
 Table::Table(const std::string& db_name, const std::string& name,
-             const TableInfoManager* table_m) :
+             TableInfoManager* table_m) :
     db_name_(db_name),
     name_(name),
     table_m_(table_m) {

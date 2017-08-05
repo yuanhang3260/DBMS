@@ -656,7 +656,7 @@ class BplusTreeTest: public UnitTest {
     for (int i = 0; i < (int)record_resource_.size(); i++) {
       v.push_back(record_resource_[i]);
     }
-    PageRecordsManager::SortRecords(&v, key_indexes_);
+    //PageRecordsManager::SortRecords(&v, key_indexes_);
 
     // Insert first half of records.
     std::vector<std::shared_ptr<RecordBase>> v1;
@@ -667,6 +667,7 @@ class BplusTreeTest: public UnitTest {
       printf("i = %d, record size = %d\n", i, v[i]->size());
       v[i]->Print();
     }
+    PageRecordsManager::SortRecords(&v1, key_indexes_);
     table_->PreLoadData(v1);
     AssertTrue(table_->ValidateAllIndexRecords(v1.size()));
 

@@ -8,8 +8,13 @@
 
 #include "Database/Catalog_pb.h"
 #include "Database/CatalogManager.h"
+#include "Database/Database.h"
 #include "Query/Common.h"
 #include "Query/Expression.h"
+
+namespace Database {
+class Database;
+}
 
 namespace Query {
 
@@ -28,7 +33,7 @@ struct ColumnRequest {
 
 class SqlQuery {
  public:
-  SqlQuery(DB::CatalogManager* catalog_m);
+  SqlQuery(DB::Database* db);
 
   void SetExprNode(std::shared_ptr<Query::ExprTreeNode> node);
   std::shared_ptr<Query::ExprTreeNode> GetExprNode();
@@ -48,6 +53,9 @@ class SqlQuery {
   bool ColumnIsValid(const Column& column);
 
   bool FinalizeParsing();
+
+  const Query::ExprTreeNode& expr_root() const { return *expr_node_; }
+  const Query::FetchedResult& results() const { return expr_node_->results(); }
 
   // Generate physical plan for this query.
   const PhysicalPlan& PrepareQueryPlan();
@@ -74,6 +82,7 @@ class SqlQuery {
 
   int Do_ExecutePhysicalQuery(ExprTreeNode* node);
 
+  DB::Database* db_ = nullptr;
   DB::CatalogManager* catalog_m_ = nullptr;
 
   std::shared_ptr<Query::ExprTreeNode> expr_node_;

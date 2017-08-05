@@ -7,11 +7,11 @@
 
 namespace Query {
 
-Interpreter::Interpreter(DB::CatalogManager* catalog_m) :
+Interpreter::Interpreter(DB::Database* db) :
     m_scanner(*this),
     m_parser(m_scanner, *this),
     m_location(0) {
-  query_ = std::make_shared<SqlQuery>(catalog_m);
+  query_ = std::make_shared<SqlQuery>(db);
 }
 
 bool Interpreter::Parse() {
