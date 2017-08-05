@@ -1,8 +1,9 @@
 #include "Strings/Split.h"
 #include "Strings/Utils.h"
 
-#include "Storage/Record.h"
+#include "Database/Operation.h"
 #include "Query/SqlQuery.h"
+#include "Storage/Record.h"
 
 namespace Query {
 
@@ -274,6 +275,56 @@ int SqlQuery::ExecuteSelectQuery() {
 }
 
 int SqlQuery::Do_ExecutePhysicalQuery(ExprTreeNode* node) {
+  const auto& physical_plan = node->physical_plan();
+  if (physical_plan.plan == PhysicalPlan::SEARCH) {
+    CHECK(!physical_plan.conditions.empty(), "No condition to search");
+    const auto& first_condition = physical_plan.conditions.front();
+    const auto& table_name = first_condition.column.table_name;
+    if (first_condition.op == EQUAL) {
+      DB::SearchOp search_op;
+      search_op.reset();
+      search_op.field_indexes.push_back(first_condition.column.index);
+      search_op.key->AddField(
+          first_condition.value.ToSchemaField(first_condition.column.type));
+
+      // TODO: Get table and search.
+      (void)table_name;
+      (void)search_op;
+    } else {
+      DB::RangeSearchOp range_search_op;
+      range_search_op.reset();
+      range_search_op.field_indexes.push_back(first_condition.column.index);
+      for (const auto& condition : physical_plan.conditions) {
+        if (condition.op == GE) {
+          range_search_op.left_key->AddField(
+              condition.value.ToSchemaField(condition.column.type));
+          range_search_op.left_open = false;
+        } else if (condition.op == GT) {
+          range_search_op.left_key->AddField(
+              condition.value.ToSchemaField(condition.column.type));
+          range_search_op.left_open = true;
+        } else if (condition.op == LT) {
+          range_search_op.right_key->AddField(
+              condition.value.ToSchemaField(condition.column.type));
+          range_search_op.right_open = true;
+        } else if (condition.op == LE) {
+          range_search_op.right_key->AddField(
+              condition.value.ToSchemaField(condition.column.type));
+          range_search_op.right_open = false;
+        } else {
+          LogFATAL("Unexpected op %s", OpTypeStr(condition.op).c_str());
+        }
+      }
+
+      // TODO: Get table and search.
+      (void)table_name;
+      (void)range_search_op;
+    }
+  } else if (physical_plan.plan == PhysicalPlan::SCAN) {
+    // TODO: Scan the table and evaluate on the node.
+  } else if (physical_plan.plan == PhysicalPlan::CONST_TRUE_SCAN) {
+    // TODO: Scan the table.
+  }
   return 0;
 }
 
@@ -320,18 +371,38 @@ int SqlQuery::ExecuteSelectQueryFromNode(ExprTreeNode* node) {
         }
       }
     }
-    return node->results().NumTuples();
   } else if (op_node->OpType() == OR) {
     CHECK(this_plan.plan == PhysicalPlan::POP,
           Strings::StrCat("Expect OR node plan to be POP, but got ",
                           PhysicalPlan::PlanStr(this_plan.plan)));
 
-    ExecuteSelectQueryFromNode(node->left());
-    ExecuteSelectQueryFromNode(node->right());
-    return 0;
+    int left_re = ExecuteSelectQueryFromNode(node->left());
+    int right_re = ExecuteSelectQueryFromNode(node->right());
+    if (left_re <= 0 && right_re <= 0) {
+      // Is it possible?
+      return 0;
+    }
+
+    // TODO: This only applies to single table query. Sort and remove
+    // duplication based on the primary key.
+    std::string table_name;
+    if (left_re > 0) {
+      table_name = node->left()->results().tuples.begin()->begin()->first;
+    } else if (right_re > 0) {
+      table_name = node->right()->results().tuples.begin()->begin()->first;
+    }
+    auto table_m = FindTable(table_name);
+    CHECK(table_m != nullptr,
+          Strings::StrCat("Couldn't find table ", table_name));
+    node->mutable_results()->MergeSortResultsRemoveDup(
+        *node->left()->mutable_results(), *node->right()->mutable_results(),
+        table_name, table_m->PrimaryIndex());
+  } else {
+    LogFATAL("Unexpected OP type for OPERATOR node %s",
+             OpTypeStr(op_node->OpType()).c_str());
   }
 
-  return 0;
+  return node->results().NumTuples();
 }
 
 bool SqlQuery::GroupPhysicalQueries(ExprTreeNode* node) {
@@ -641,7 +712,7 @@ void SqlQuery::EvaluateQueryConditions(PhysicalPlan* physical_plan) {
   }
 
   for (auto& condition : conditions) {
-    CastValueType(&condition);
+    condition.CastValueType();
   }
 
   // Group conditions by column.
@@ -883,6 +954,11 @@ void SqlQuery::EvaluateQueryConditions(PhysicalPlan* physical_plan) {
       *physical_plan = group_plan;
     }
     //printf("\n");
+  }
+
+  if (physical_plan->plan == PhysicalPlan::NO_PLAN) {
+    physical_plan->plan = PhysicalPlan::SCAN;
+    physical_plan->query_ratio = 1.0;
   }
 }
 

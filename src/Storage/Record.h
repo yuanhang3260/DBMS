@@ -98,6 +98,7 @@ class RecordBase {
 
   // Add a new field. This method takes ownership of SchemaFieldType pointer.
   void AddField(Schema::Field* new_field);
+  void AddField(std::shared_ptr<Schema::Field> new_field);
 
   // Reset all fields to minimum.
   virtual void reset();

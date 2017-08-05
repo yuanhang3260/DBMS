@@ -161,6 +161,50 @@ OperatorType FlipOp(OperatorType op_type) {
   }
 }
 
+std::shared_ptr<Schema::Field>
+NodeValue::ToSchemaField(Schema::FieldType field_type) const {
+  if (field_type == Schema::FieldType::INT) {
+    CHECK(type == INT64,
+          Strings::StrCat("Couldn't convert ", ValueTypeStr(type),
+          " to IntField"));
+    return std::shared_ptr<Schema::Field>(new Schema::IntField(v_int64));
+  } else if (field_type == Schema::FieldType::LONGINT) {
+    CHECK(type == INT64,
+          Strings::StrCat("Couldn't convert ", ValueTypeStr(type),
+          " to LongIntField"));
+    return std::shared_ptr<Schema::Field>(new Schema::LongIntField(v_int64));
+  } else if (field_type == Schema::FieldType::DOUBLE) {
+    CHECK(type == DOUBLE,
+          Strings::StrCat("Couldn't convert ", ValueTypeStr(type),
+          " to DoubleField"));
+    return std::shared_ptr<Schema::Field>(new Schema::DoubleField(v_double));
+  } else if (field_type == Schema::FieldType::BOOL) {
+    CHECK(type == BOOL,
+          Strings::StrCat("Couldn't convert ", ValueTypeStr(type),
+          " to BoolField"));
+    return std::shared_ptr<Schema::Field>(new Schema::BoolField(v_bool));
+  } else if (field_type == Schema::FieldType::CHAR) {
+    CHECK(type == CHAR,
+          Strings::StrCat("Couldn't convert ", ValueTypeStr(type),
+          " to CharField"));
+    return std::shared_ptr<Schema::Field>(new Schema::CharField(v_char));
+  } else if (field_type == Schema::FieldType::STRING) {
+    CHECK(type == STRING,
+          Strings::StrCat("Couldn't convert ", ValueTypeStr(type),
+          " to StringField"));
+    return std::shared_ptr<Schema::Field>(new Schema::StringField(v_str));
+  } else if (field_type == Schema::FieldType::CHARARRAY) {
+    CHECK(type == STRING,
+          Strings::StrCat("Couldn't convert ", ValueTypeStr(type),
+          " to CharArrayField"));
+    return std::shared_ptr<Schema::Field>(new Schema::CharArrayField(v_str));
+  } else {
+    LogFATAL("Unexpected field type %s",
+             Schema::FieldTypeStr(field_type).c_str());
+    return nullptr;
+  }
+}
+
 bool NodeValue::operator==(const NodeValue& other) const {
   if (type != other.type) {
     LogFATAL("Comparing with value type %s with %s",
@@ -225,37 +269,36 @@ bool NodeValue::operator>=(const NodeValue& other) const {
   return !(*this < other);
 }
 
-void CastValueType(QueryCondition* condition) {
-  auto type = FromSchemaType(condition->column.type);
-  auto& value = condition->value;
+void QueryCondition::CastValueType() {
+  auto type = FromSchemaType(column.type);
   if (type == INT64) {
     if (value.type == DOUBLE) {
       // Careful, don't cast directly. Needs to check the op type.
-      if (condition->op == EQUAL) {
+      if (op == EQUAL) {
         if (floor(value.v_double) != value.v_double) {
-          condition->is_const = true;
-          condition->const_result = false;
+          is_const = true;
+          const_result = false;
         } else {
           value.v_int64 = static_cast<int64>(value.v_double);
         }
-      } else if (condition->op == NONEQUAL) {
+      } else if (op == NONEQUAL) {
         if (floor(value.v_double) != value.v_double) {
-          condition->is_const = true;
-          condition->const_result = true;
+          is_const = true;
+          const_result = true;
         } else {
           value.v_int64 = static_cast<int64>(value.v_double);
         }
-      } else if (condition->op == LT) {
+      } else if (op == LT) {
         if (floor(value.v_double) == value.v_double) {
           value.v_int64 = static_cast<int64>(value.v_double);
         } else {
           value.v_int64 = static_cast<int64>(value.v_double) + 1;
         }
-      } else if (condition->op == LE) {
+      } else if (op == LE) {
         value.v_int64 = static_cast<int64>(value.v_double);
-      } else if (condition->op == GT) {
+      } else if (op == GT) {
         value.v_int64 = static_cast<int64>(value.v_double);
-      } else if (condition->op == GE) {
+      } else if (op == GE) {
         if (floor(value.v_double) == value.v_double) {
           value.v_int64 = static_cast<int64>(value.v_double);
         } else {
@@ -320,13 +363,13 @@ int FetchedResult::CompareBasedOnColumns(const Tuple& t1, const Tuple& t2,
   for (const Column& column : columns) {
     auto it = t1.find(column.table_name);
     CHECK(it != t1.end(),
-          Strings::StrCat("Coulnd't find record of table ", column.table_name,
+          Strings::StrCat("Couldn't find record of table ", column.table_name,
                           " from tuple 1"));
     const ResultRecord& record_1 = it->second;
 
     it = t2.find(column.table_name);
     CHECK(it != t2.end(),
-          Strings::StrCat("Coulnd't find record of table ", column.table_name,
+          Strings::StrCat("Couldn't find record of table ", column.table_name,
                           " from tuple 2"));
     const ResultRecord& record_2 = it->second;
 
@@ -363,14 +406,14 @@ int FetchedResult::CompareBasedOnColumns(const Tuple& t1, const Tuple& t2,
 
 void FetchedResult::SortByColumns(const std::vector<Column>& columns) {
   auto comparator = [&] (const Tuple& t1, const Tuple& t2) {
-    return CompareBasedOnColumns(t1, t2, columns);
+    return CompareBasedOnColumns(t1, t2, columns) < 0;
   };
 
   std::sort(tuples.begin(), tuples.end(), comparator);
 }
 
 void FetchedResult::SortByColumns(const std::string& table_name,
-                                  std::vector<int>& field_indexes) {
+                                  const std::vector<int>& field_indexes) {
   std::vector<Column> columns;
   for (int index : field_indexes) {
     columns.emplace_back(table_name, "" /* column name doesn't matter */);
@@ -386,14 +429,10 @@ void FetchedResult::MergeSortResults(FetchedResult& result_1,
   result_1.SortByColumns(columns);
   result_2.SortByColumns(columns);
 
-  auto comparator = [&] (const Tuple& t1, const Tuple& t2) {
-    return CompareBasedOnColumns(t1, t2, columns);
-  };
-
   auto iter_1 = result_1.tuples.begin();
   auto iter_2 = result_2.tuples.begin();
-  while (iter_1 != result_1.tuples.end() && iter_1 != result_1.tuples.end()) {
-    if (comparator(*iter_1, *iter_2) <= 0) {
+  while (iter_1 != result_1.tuples.end() && iter_2 != result_2.tuples.end()) {
+    if (CompareBasedOnColumns(*iter_1, *iter_2, columns) <= 0) {
       tuples.push_back(*iter_1);
       ++iter_1;
     } else {
@@ -415,7 +454,7 @@ void FetchedResult::MergeSortResults(FetchedResult& result_1,
 void FetchedResult::MergeSortResults(FetchedResult& result_1,
                                      FetchedResult& result_2,
                                      const std::string& table_name,
-                                     std::vector<int>& field_indexes) {
+                                     const std::vector<int>& field_indexes) {
   std::vector<Column> columns;
   for (int index : field_indexes) {
     columns.emplace_back(table_name, "" /* column name doesn't matter */);
@@ -431,22 +470,23 @@ void FetchedResult::MergeSortResultsRemoveDup(
   result_1.SortByColumns(columns);
   result_2.SortByColumns(columns);
 
-  auto comparator = [&] (const Tuple& t1, const Tuple& t2) {
-    return CompareBasedOnColumns(t1, t2, columns);
-  };
-
   auto iter_1 = result_1.tuples.begin();
   auto iter_2 = result_2.tuples.begin();
   const Tuple* last_tuple = nullptr;
-  while (iter_1 != result_1.tuples.end() && iter_1 != result_1.tuples.end()) {
-    if (comparator(*iter_1, *iter_2) <= 0) {
-      if (last_tuple && comparator(*last_tuple, *iter_1) != 0) {
+  while (iter_1 != result_1.tuples.end() && iter_2 != result_2.tuples.end()) {
+    int re = CompareBasedOnColumns(*iter_1, *iter_2, columns);
+    if (re <= 0) {
+      if (!last_tuple ||
+          (last_tuple &&
+           CompareBasedOnColumns(*last_tuple, *iter_1, columns) != 0)) {
         tuples.push_back(*iter_1);
         last_tuple = &tuples.back();
       }
       ++iter_1;
     } else {
-      if (last_tuple && comparator(*last_tuple, *iter_2) != 0) {
+      if (!last_tuple ||
+          (last_tuple &&
+           CompareBasedOnColumns(*last_tuple, *iter_2, columns) != 0)) {
         tuples.push_back(*iter_2);
         last_tuple = &tuples.back();
       }
@@ -455,19 +495,35 @@ void FetchedResult::MergeSortResultsRemoveDup(
   }
 
   while (iter_1 != result_1.tuples.end()) {
-    if (last_tuple && comparator(*last_tuple, *iter_1) != 0) {
+    if (!last_tuple ||
+        (last_tuple &&
+         CompareBasedOnColumns(*last_tuple, *iter_1, columns)) != 0) {
       tuples.push_back(*iter_1);
       last_tuple = &tuples.back();
     }
     ++iter_1;
   }
   while (iter_2 != result_2.tuples.end()) {
-    if (last_tuple && comparator(*last_tuple, *iter_2) != 0) {
+    if (!last_tuple ||
+        (last_tuple &&
+         CompareBasedOnColumns(*last_tuple, *iter_2, columns) != 0)) {
       tuples.push_back(*iter_2);
       last_tuple = &tuples.back();
     }
     ++iter_2;
   }
+}
+
+void FetchedResult::MergeSortResultsRemoveDup(
+    FetchedResult& result_1, FetchedResult& result_2,
+    const std::string& table_name, const std::vector<int>& field_indexes) {
+  std::vector<Column> columns;
+  for (int index : field_indexes) {
+    columns.emplace_back(table_name, "" /* column name doesn't matter */);
+    columns.back().index = index;
+  }
+
+  MergeSortResultsRemoveDup(result_1, result_2, columns);
 }
 
 }  // namespace Query

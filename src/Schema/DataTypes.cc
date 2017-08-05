@@ -308,6 +308,14 @@ CharArrayField::CharArrayField(const std::string& str, int lenlimit) :
   }
 }
 
+CharArrayField::CharArrayField(const std::string& str) :
+    length_limit_(str.length()) {
+  if (!SetData(str.c_str(), str.length())) {
+    throw std::runtime_error(
+        "[Init CharArrayField Failed] - invalid lenlimit < src length");
+  }
+}
+
 CharArrayField::CharArrayField(const char* src, int length, int lenlimit) :
     length_(length),
     length_limit_(lenlimit) {

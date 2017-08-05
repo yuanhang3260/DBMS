@@ -83,6 +83,10 @@ void RecordBase::AddField(Schema::Field* new_field) {
   fields_.push_back(std::shared_ptr<Schema::Field>(new_field));
 }
 
+void RecordBase::AddField(std::shared_ptr<Schema::Field> new_field) {
+  fields_.push_back(new_field);
+}
+
 bool RecordBase::operator<(const RecordBase& other) const {
   const auto& other_fields = other.fields();
   int len = Utils::Min(fields_.size(), other_fields.size());

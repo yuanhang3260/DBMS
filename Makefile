@@ -50,6 +50,7 @@ TESTOBJ = $(OBJ_DIR)/Schema/DataTypes_test.o  \
 					$(OBJ_DIR)/Database/Table_test.o  \
 					$(OBJ_DIR)/Database/Operation_test.o  \
 					$(OBJ_DIR)/Query/Query_test.o  \
+					$(OBJ_DIR)/Query/Query_Common_test.o  \
 
 
 TESTEXE = test/BplusTree_test.out  \
@@ -62,6 +63,7 @@ TESTEXE = test/BplusTree_test.out  \
 					test/RecordPage_test.out  \
           test/Record_test.out  \
           test/Table_test.out  \
+          test/Query_Common_test.out  \
 
  LIB_DIRS = $(OBJ_DIR)/Storage  \
             $(OBJ_DIR)/Database  \

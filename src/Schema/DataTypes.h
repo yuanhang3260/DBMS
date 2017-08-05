@@ -376,6 +376,7 @@ class CharArrayField: public Field {
   CharArrayField() = default;
   CharArrayField(int lenlimit);
   CharArrayField(const std::string& str, int lenlimit);
+  CharArrayField(const std::string& str);
   CharArrayField(const char* src, int length, int lenlimit);
   ~CharArrayField();
 

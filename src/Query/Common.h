@@ -105,6 +105,9 @@ struct NodeValue {
   NodeValue static CharValue(char v);
   NodeValue static BoolValue(bool v);
 
+  std::shared_ptr<Schema::Field>
+  ToSchemaField(Schema::FieldType field_type) const;
+
   std::string AsString() const;
 
   bool operator==(const NodeValue& other) const;
@@ -126,11 +129,11 @@ struct QueryCondition {
     return Strings::StrCat(column.AsString(), " ", OpTypeStr(op), " ",
                            value.AsString());
   }
-};
 
-// INT64 can be compared with DOUBLE and CHAR. We need to unify the value type
-// with the column type.
-void CastValueType(QueryCondition* condition);
+  // INT64 can be compared with DOUBLE and CHAR. We need to unify the value type
+  // with the column type.
+  void CastValueType();
+};
 
 struct PhysicalPlan {
   enum Plan {
@@ -185,7 +188,7 @@ struct FetchedResult {
 
   void SortByColumns(const std::vector<Column>& columns);
   void SortByColumns(const std::string& table_name,
-                     std::vector<int>& field_indexes);
+                     const std::vector<int>& field_indexes);
 
   // Take two set of results, sort and merge them by columns.
   void MergeSortResults(FetchedResult& result_1,
@@ -195,7 +198,7 @@ struct FetchedResult {
   void MergeSortResults(FetchedResult& result_1,
                         FetchedResult& result_2,
                         const std::string& table_name,
-                        std::vector<int>& field_indexes);
+                        const std::vector<int>& field_indexes);
 
   void MergeSortResultsRemoveDup(FetchedResult& result_1,
                                  FetchedResult& result_2,
@@ -204,7 +207,7 @@ struct FetchedResult {
   void MergeSortResultsRemoveDup(FetchedResult& result_1,
                                  FetchedResult& result_2,
                                  const std::string& table_name,
-                                 std::vector<int>& field_indexes);
+                                 const std::vector<int>& field_indexes);
 };
 
 }  // namespace Query
