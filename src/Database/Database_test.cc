@@ -240,7 +240,7 @@ class DatabaseTest: public UnitTest {
     int expected_num = 0;
     for (const auto& record : puppy_records_) {
       auto tuple = FetchedResult::Tuple();
-      tuple.emplace(kTableName, ResultRecord(record, {}));
+      tuple.emplace(kTableName, ResultRecord(record));
       if (expr_root.Evaluate(tuple).v_bool) {
         expected_num++;
       }
@@ -326,7 +326,7 @@ class DatabaseTest: public UnitTest {
     query = interpreter_->shared_query();
     AssertTrue(query->FinalizeParsing());
     num_results = query->ExecuteSelectQuery();
-    printf("num_results = %d\n", num_results);
+    query->PrintResults();
     AssertEqual(ExpectedResultNum(query->expr_root()), num_results);
     AssertTrue(VerifyResult(query->expr_root(), query->results()));
     interpreter_->reset();
@@ -344,7 +344,7 @@ class DatabaseTest: public UnitTest {
     interpreter_->reset();
     printf("\n");
 
-    expr = "SELECT * FROM Puppy WHERE NOT id >500 OR weight < 1.0";
+    expr = "SELECT * FROM Puppy WHERE id >500 OR weight < 1.0";
     std::cout << expr << std::endl;
     AssertTrue(interpreter_->Parse(expr));
     query = interpreter_->shared_query();
@@ -362,6 +362,19 @@ class DatabaseTest: public UnitTest {
     query = interpreter_->shared_query();
     AssertTrue(query->FinalizeParsing());
     num_results = query->ExecuteSelectQuery();
+    printf("num_results = %d\n", num_results);
+    AssertEqual(ExpectedResultNum(query->expr_root()), num_results);
+    AssertTrue(VerifyResult(query->expr_root(), query->results()));
+    interpreter_->reset();
+    printf("\n");
+
+    expr = "SELECT * FROM Puppy WHERE NOT NOT NOT false";
+    std::cout << expr << std::endl;
+    AssertTrue(interpreter_->Parse(expr));
+    query = interpreter_->shared_query();
+    AssertTrue(query->FinalizeParsing());
+    num_results = query->ExecuteSelectQuery();
+    //query->PrintResults();
     printf("num_results = %d\n", num_results);
     AssertEqual(ExpectedResultNum(query->expr_root()), num_results);
     AssertTrue(VerifyResult(query->expr_root(), query->results()));

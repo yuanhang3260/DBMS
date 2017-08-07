@@ -358,20 +358,55 @@ Storage::RecordType ResultRecord::record_type() const {
   return Storage::UNKNOWN_RECORDTYPE;
 }
 
-int FetchedResult::CompareBasedOnColumns(const Tuple& t1, const Tuple& t2,
-                                         const std::vector<Column>& columns) {
+bool FetchedResult::AddTuple(const Tuple& tuple) {
+  tuples.push_back(tuple);
+  for (auto& table_record_iter : tuples.back()) {
+    auto meta_it = tuple_meta.find(table_record_iter.first);
+    if (meta_it == tuple_meta.end()) {
+      tuples.erase(tuples.end() - 1);
+      return false;
+    }
+    table_record_iter.second.meta = &meta_it->second;
+  }
+  return true;
+}
+
+bool FetchedResult::AddTuple(Tuple&& tuple) {
+  for (auto& table_record_iter : tuple) {
+    auto meta_it = tuple_meta.find(table_record_iter.first);
+    if (meta_it == tuple_meta.end()) {
+      return false;
+    }
+    table_record_iter.second.meta = &meta_it->second;
+  }
+  tuples.push_back(std::move(tuple));
+  return true;
+}
+
+
+int FetchedResult::CompareBasedOnColumns(
+    const Tuple& t1, const Tuple& t2,
+    const std::vector<Column>& columns) {
   for (const Column& column : columns) {
     auto it = t1.find(column.table_name);
     CHECK(it != t1.end(),
           Strings::StrCat("Couldn't find record of table ", column.table_name,
                           " from tuple 1"));
-    const ResultRecord& record_1 = it->second;
+    const auto& record_1 = it->second;
+    CHECK(record_1.meta != nullptr,
+          Strings::StrCat("Couldn't find record meta of table ",
+                          column.table_name,
+                          " from tuple 1"));
 
     it = t2.find(column.table_name);
     CHECK(it != t2.end(),
           Strings::StrCat("Couldn't find record of table ", column.table_name,
                           " from tuple 2"));
-    const ResultRecord& record_2 = it->second;
+    const auto& record_2 = it->second;
+    CHECK(record_2.meta != nullptr,
+          Strings::StrCat("Couldn't find record meta of table ",
+                          column.table_name,
+                          " from tuple 2"));
 
     CHECK(record_1.record_type() == record_2.record_type(),
           "Comparing records with different record types");
@@ -379,10 +414,10 @@ int FetchedResult::CompareBasedOnColumns(const Tuple& t1, const Tuple& t2,
     if (record_1.record_type() == Storage::DATA_RECORD) {
       pos = column.index;
     } else if (record_1.record_type() == Storage::INDEX_RECORD) {
-      CHECK(record_1.field_indexes == record_2.field_indexes,
+      CHECK(record_1.meta->field_indexes == record_2.meta->field_indexes,
             "Comparing index records with different index fields");
-      for (uint32 i = 0 ; i < record_1.field_indexes.size(); i++) {
-        if (record_1.field_indexes.at(i) == column.index) {
+      for (uint32 i = 0 ; i < record_1.meta->field_indexes.size(); i++) {
+        if (record_1.meta->field_indexes.at(i) == column.index) {
           pos = i;
           break;
         }

@@ -257,7 +257,7 @@ class QueryTest: public UnitTest {
 
   void Test_EvaluateSingleExpr() {
     FetchedResult::Tuple tuple;
-    tuple.emplace("Puppy", ResultRecord(data_record_, {}));
+    tuple.emplace("Puppy", ResultRecord(data_record_));
 
     std::string expr;
 
@@ -311,7 +311,10 @@ class QueryTest: public UnitTest {
 
     // Test evaluation with index record.
     FetchedResult::Tuple tuple2;
-    tuple2.emplace("Puppy", ResultRecord(index_record_, key_fields_));
+    TableRecordMeta meta;
+    meta.field_indexes = key_fields_;
+    tuple2.emplace("Puppy", ResultRecord(index_record_));
+    tuple2.at("Puppy").meta = &meta;
 
     expr = "Puppy.id + 3 < 6";
     std::cout << expr << std::endl;

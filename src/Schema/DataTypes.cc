@@ -1,3 +1,5 @@
+#include <sstream>
+
 #include "Base/Log.h"
 #include "Strings/Utils.h"
 
@@ -232,6 +234,12 @@ double LongIntField::EvaluateValueRatio(ValueRange<int64>& range) {
 // ******************************* Double *********************************** //
 double DoubleField::EvaluateValueRatio(ValueRange<double>& range) {
   return EvaluateDoubleValueRatio(range);
+}
+
+std::string DoubleField::AsString() const {
+  std::stringstream ss;
+  ss << value_;
+  return ss.str();
 }
 
 // ******************************** Bool ************************************ //

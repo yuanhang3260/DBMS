@@ -141,8 +141,8 @@ NodeValue ColumnNode::Evaluate(const FetchedResult::Tuple& tuple) const {
     field = fields.at(column_.index).get();
   } else if (table_record.record_type() == Storage::INDEX_RECORD) {
     int32 pos = -1;
-    for (uint32 i = 0 ; i < table_record.field_indexes.size(); i++) {
-      if (table_record.field_indexes.at(i) == column_.index) {
+    for (uint32 i = 0 ; i < table_record.meta->field_indexes.size(); i++) {
+      if (table_record.meta->field_indexes.at(i) == column_.index) {
         pos = i;
         break;
       }

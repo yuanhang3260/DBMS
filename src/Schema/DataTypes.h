@@ -186,7 +186,7 @@ class DoubleField: public Field {
     return value_ != other.value();
   }
 
-  std::string AsString() const override { return std::to_string(value_); }
+  std::string AsString() const override;
 
   // Dump to memory
   int DumpToMem(byte* buf) const override {

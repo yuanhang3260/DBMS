@@ -165,14 +165,17 @@ struct PhysicalPlan {
   std::vector<QueryCondition> conditions;
 };
 
+struct TableRecordMeta {
+  std::vector<int> field_indexes;
+  std::map<int, int> field_print_sizes;
+};
+
 struct ResultRecord {
-  ResultRecord(std::shared_ptr<Storage::RecordBase> record_,
-               const std::vector<int>& field_indexes_) :
-      record(record_),
-      field_indexes(field_indexes_) {}
+  ResultRecord(std::shared_ptr<Storage::RecordBase> record_) :
+      record(record_) {}
 
   std::shared_ptr<Storage::RecordBase> record;
-  std::vector<int> field_indexes;
+  TableRecordMeta* meta = nullptr;
 
   Storage::RecordType record_type() const;
 };
@@ -181,11 +184,15 @@ struct FetchedResult {
   using Tuple = std::map<std::string, ResultRecord>;
 
   std::vector<Tuple> tuples;
+  std::map<std::string, TableRecordMeta> tuple_meta;
+
+  bool AddTuple(const Tuple& tuple);
+  bool AddTuple(Tuple&& tuple);
 
   int NumTuples() const { return tuples.size(); }
 
-  static int CompareBasedOnColumns(const Tuple& t1, const Tuple& t2,
-                                   const std::vector<Column>& columns);
+  static int CompareBasedOnColumns(
+      const Tuple& t1, const Tuple& t2, const std::vector<Column>& columns);
 
   void SortByColumns(const std::vector<Column>& columns);
   void SortByColumns(const std::string& table_name,

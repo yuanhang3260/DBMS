@@ -72,9 +72,11 @@ class CommonTest: public UnitTest {
 
   void Test_SortByColumn() {
     FetchedResult result;
+    result.tuple_meta.emplace(kTableName, TableRecordMeta()); 
     for (const auto& record : data_records_) {
-      result.tuples.push_back(FetchedResult::Tuple());
-      result.tuples.back().emplace(kTableName, ResultRecord(record, {}));
+      auto tuple = FetchedResult::Tuple();
+      tuple.emplace(kTableName, ResultRecord(record));
+      result.AddTuple(std::move(tuple));
     }
 
     result.SortByColumns(kTableName, key_fields_);
@@ -88,17 +90,21 @@ class CommonTest: public UnitTest {
     std::vector<std::shared_ptr<RecordBase>> data_records_1;
     InitRecordResource(&data_records_1);
     FetchedResult result1;
+    result1.tuple_meta.emplace(kTableName, TableRecordMeta());
     for (const auto& record : data_records_1) {
-      result1.tuples.push_back(FetchedResult::Tuple());
-      result1.tuples.back().emplace(kTableName, ResultRecord(record, {}));
+      auto tuple = FetchedResult::Tuple();
+      tuple.emplace(kTableName, ResultRecord(record));
+      result1.AddTuple(std::move(tuple));
     }
 
     std::vector<std::shared_ptr<RecordBase>> data_records_2;
     InitRecordResource(&data_records_2);
     FetchedResult result2;
+    result2.tuple_meta.emplace(kTableName, TableRecordMeta());
     for (const auto& record : data_records_2) {
-      result2.tuples.push_back(FetchedResult::Tuple());
-      result2.tuples.back().emplace(kTableName, ResultRecord(record, {}));
+      auto tuple = FetchedResult::Tuple();
+      tuple.emplace(kTableName, ResultRecord(record));
+      result2.AddTuple(std::move(tuple));
     }
 
     FetchedResult result;
@@ -119,9 +125,7 @@ int main() {
   test.setup();
 
   //test.Test_SortByColumn();
-  for (int i = 0; i < 1000; i++) {
-    test.Test_MergeSortResultsRemoveDup();
-  }
+  test.Test_MergeSortResultsRemoveDup();
 
   test.teardown();
 

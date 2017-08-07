@@ -29,6 +29,11 @@ struct ColumnRequest {
   // Only used for *-expanded columns of a table, to preserve its intrinsic
   // fields order.
   uint32 sub_request_pos = 0;
+
+  // Column print size is (field print max size + 2)
+  uint32 print_width = 0;
+
+  std::string print_name;
 };
 
 class SqlQuery {
@@ -47,7 +52,7 @@ class SqlQuery {
 
   DB::TableInfoManager* FindTable(const std::string& table);
   DB::FieldInfoManager* FindTableColumn(const Column& column);
-  const ColumnRequest* FindColumnRequest(const Column& column);
+  ColumnRequest* FindColumnRequest(const Column& column);
 
   bool TableIsValid(const std::string& table);
   bool ColumnIsValid(const Column& column);
@@ -59,8 +64,12 @@ class SqlQuery {
 
   // Generate physical plan for this query.
   const PhysicalPlan& PrepareQueryPlan();
+
   // Execute a SELECT query, returns the number of matching records.
   int ExecuteSelectQuery();
+
+  // Print results.
+  void PrintResults();
 
   void reset();
   std::string error_msg() const;
