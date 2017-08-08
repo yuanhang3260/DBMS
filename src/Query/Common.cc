@@ -161,6 +161,33 @@ OperatorType FlipOp(OperatorType op_type) {
   }
 }
 
+std::string AggregationStr(AggregationType aggregation_type) {
+  switch (aggregation_type) {
+    case NO_AGGREGATION: return "NO_AGGREGATION";
+    case SUM: return "SUM";
+    case AVG: return "AVG";
+    case COUNT: return "COUNT";
+    case MAX: return "MAX";
+    case MIN: return "MIN";
+  }
+  return "NO_AGGREGATION";
+}
+
+std::string Column::DebugString() const {
+  std::string result = Strings::StrCat("(", table_name, ", ",
+                                       column_name, ", ",
+                                       std::to_string(index), ")");
+  return result;
+}
+
+std::string Column::AsString(bool use_table_prefix) const {
+  std::string result = column_name;
+  if (use_table_prefix) {
+    result = Strings::StrCat(table_name, ", ", column_name);
+  }
+  return result;
+}
+
 std::shared_ptr<Schema::Field>
 NodeValue::ToSchemaField(Schema::FieldType field_type) const {
   if (field_type == Schema::FieldType::INT) {

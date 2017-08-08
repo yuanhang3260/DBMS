@@ -19,6 +19,9 @@ SqlQuery::SqlQuery(DB::Database* db) :
 void SqlQuery::reset() {
   expr_node_.reset();
   tables_.clear();
+  columns_set_.clear();
+  columns_unknown_table_.clear();
+  star_columns_.clear();
   columns_.clear();
   columns_num_ = 0;
 }
@@ -44,21 +47,86 @@ bool SqlQuery::AddTable(const std::string& table) {
 }
 
 bool SqlQuery::AddColumn(const std::string& name) {
-  Column column;
-  if (!ParseTableColumn(name, &column)) {
+  return AddColumn(name, NO_AGGREGATION);
+}
+
+bool SqlQuery::AddColumn(const std::string& name,
+                         AggregationType aggregation_type) {
+  ColumnRequest column_request;
+  if (!ParseTableColumn(name, &column_request.column)) {
     return false;
   }
 
-  ColumnRequest column_request;
-  column_request.column = column;
+  column_request.aggregation_type = aggregation_type;
   column_request.request_pos = ++columns_num_;
 
-  auto& table_columns = columns_[column.table_name];
-  if (table_columns.find(column.column_name) != table_columns.end()) {
+  if (column_request.column.table_name.empty()) {
+    columns_unknown_table_.insert(column_request);
     return true;
   }
-  table_columns.emplace(column.column_name, column_request);
 
+  if (column_request.column.column_name == "*") {
+    star_columns_.insert(column_request);
+    return true;
+  }
+
+  columns_set_.insert(column_request);
+  return true;
+}
+
+bool SqlQuery::AddOrderByColumn(const std::string& name) {
+  return AddOrderByColumn(name, NO_AGGREGATION);
+}
+
+bool SqlQuery::AddOrderByColumn(const std::string& name,
+                                AggregationType aggregation_type) {
+  ColumnRequest new_column_request;
+  if (!ParseTableColumn(name, &new_column_request.column)) {
+    return false;
+  }
+
+  new_column_request.aggregation_type = aggregation_type;
+
+  if (new_column_request.column.column_name == "*") {
+    error_msg_ = "Can't use * column in ORDER BY column list";
+    return false;
+  }
+
+  for (const auto& column_request : order_by_columns_) {
+    if (new_column_request == column_request) {
+      return true;
+    }
+  }
+
+  order_by_columns_.push_back(new_column_request);
+  return true;
+}
+
+bool SqlQuery::AddGroupByColumn(const std::string& name) {
+  Column new_column;
+  if (!ParseTableColumn(name, &new_column)) {
+    return false;
+  }
+
+  if (new_column.column_name == "*") {
+    error_msg_ = "Can't use * column in GROUP BY column list";
+    return false;
+  }
+
+  // Check group column must be in select columns list, with no aggregation.
+  if (FindColumnRequest(new_column, NO_AGGREGATION) == nullptr) {
+    error_msg_ = Strings::StrCat("Can't find column ",
+                                 new_column.AsString(true), " in select list");
+    return false;
+  }
+
+  for (const auto& column : group_by_columns_) {
+    if (new_column == column) {
+      return true;
+    }
+  }
+
+  group_by_columns_.push_back(new_column);
   return true;
 }
 
@@ -134,52 +202,57 @@ DB::FieldInfoManager* SqlQuery::FindTableColumn(const Column& column) {
   return re;
 }
 
-ColumnRequest* SqlQuery::FindColumnRequest(const Column& column) {
-  auto iter = columns_.find(column.table_name);
-  if (iter == columns_.end()) {
-    return nullptr;
+const ColumnRequest* SqlQuery::FindColumnRequest(const Column& column) const {
+  for (const auto& column_request : columns_) {
+    if (column_request.column == column) {
+      return &column_request;
+    }
   }
+  return nullptr;
+}
 
-  auto& columns = iter->second;
-  auto column_request_iter = columns.find(column.column_name);
-  if (column_request_iter == columns.end()) {
-    return nullptr;
+const ColumnRequest* SqlQuery::FindColumnRequest(
+    const Column& column, AggregationType aggregation_type) const {
+  for (const auto& column_request : columns_) {
+    if (column_request.column == column &&
+        column_request.aggregation_type == aggregation_type) {
+      return &column_request;
+    }
   }
-
-  return &(column_request_iter->second);
+  return nullptr;
 }
 
 bool SqlQuery::FinalizeParsing() {
   // Apply default table.
   std::string default_table = DefaultTable();
-  auto iter = columns_.find("");
-  if (iter != columns_.end()) {
-    if (default_table.empty()) {
-      error_msg_ = Strings::StrCat("Default table not found.");
-      return false;
-    }
-    auto& columns = iter->second;
-    for (auto& column_request_iter : columns) {
-      column_request_iter.second.column.table_name = default_table;
-      auto& table_columns = columns_[default_table];
-      if (table_columns.find(column_request_iter.first) !=
-          table_columns.end()) {
-        continue;
-      }
-      table_columns.emplace(column_request_iter.first,
-                            column_request_iter.second);
-    }
-    columns_.erase(iter);
+  if (default_table.empty() &&
+      (!columns_unknown_table_.empty() || !order_by_columns_.empty())) {
+    error_msg_ = Strings::StrCat("Default table not found.");
+    return false;
   }
 
-  // Expand * columns
-  for (auto& columns_iter : columns_) {
-    const auto& table_name = columns_iter.first;
-    auto& columns = columns_iter.second;
-    auto iter = columns.find("*");
-    if (iter == columns.end()) {
+  for (const auto& column_request : columns_unknown_table_) {
+    ColumnRequest cr_copy = column_request;
+    cr_copy.column.table_name = default_table;
+    if (cr_copy.column.column_name == "*") {
+      star_columns_.insert(cr_copy);
+    } else {
+      columns_set_.insert(cr_copy);
+    }
+  }
+  columns_unknown_table_.clear();
+
+  for (auto& column_request : order_by_columns_) {
+    column_request.column.table_name = default_table;
+  }
+
+  // Expand * columns.
+  for (const auto& column_request : star_columns_) {
+    if (column_request.aggregation_type == AggregationType::COUNT) {
       continue;
     }
+
+    const auto& table_name = column_request.column.table_name;
     auto table_m = FindTable(table_name);
     CHECK(table_m != nullptr, Strings::StrCat("Can't find table ", table_name));
     for (uint32 i = 0; i < table_m->NumFields(); i++) {
@@ -187,48 +260,32 @@ bool SqlQuery::FinalizeParsing() {
       CHECK(field_m != nullptr,
             Strings::StrCat("Can't find field ", std::to_string(i),
                             " in table ", table_name));
-      if (columns.find(field_m->name()) != columns.end()) {
-        continue;
-      }
-      ColumnRequest column_request;
-      column_request.column.table_name = table_name;
-      column_request.column.column_name = field_m->name();
-      column_request.request_pos = iter->second.request_pos;
-      column_request.sub_request_pos = i;
-      columns.emplace(field_m->name(), column_request);
-    }
-    columns.erase(iter);
-  }
-
-  // Re-assign column request positions.
-  std::vector<ColumnRequest*> columns_list;
-  for (auto& iter : columns_) {
-    for (auto& column_request_iter : iter.second) {
-      columns_list.push_back(&column_request_iter.second);
+      ColumnRequest cr_copy = column_request;
+      cr_copy.column.table_name = table_name;
+      cr_copy.column.column_name = field_m->name();
+      cr_copy.request_pos = column_request.request_pos;
+      cr_copy.sub_request_pos = i;
+      columns_set_.insert(cr_copy);
     }
   }
+  star_columns_.clear();
 
-  auto comparator = [&] (const ColumnRequest* c1,
-                         const ColumnRequest* c2) {
-    if (c1->request_pos < c2->request_pos) {
-      return true;
-    } else if (c1->request_pos > c2->request_pos) {
-      return false;
-    } else {
-      if (c1->sub_request_pos < c2->sub_request_pos) {
-        return true;
-      } else if (c1->sub_request_pos > c2->sub_request_pos) {
-        return false;
-      } else {
-        return false;
-      }
+  // Sort columns by request order.
+  auto comparator = [&] (const ColumnRequest& c1,
+                         const ColumnRequest& c2) {
+    if (c1.request_pos != c2.request_pos) {
+      return c1.request_pos < c2.request_pos;
+    } else if (c1.sub_request_pos != c2.sub_request_pos) {
+      return c1.sub_request_pos < c2.sub_request_pos;
     }
+    return false;
   };
 
-  std::sort(columns_list.begin(), columns_list.end(), comparator);
-  for (uint32 i = 0; i < columns_list.size(); i++) {
-    columns_list.at(i)->request_pos = i;
+  for (const auto& column_request : columns_set_) {
+    columns_.push_back(column_request);
   }
+  columns_set_.clear();
+  std::sort(columns_.begin(), columns_.end(), comparator);
 
   // Check all tables and columns are valid.
   for (const auto& table_name : tables_) {
@@ -237,27 +294,50 @@ bool SqlQuery::FinalizeParsing() {
     }
   }
 
-  for (auto& iter : columns_) {
-    const auto& table_name = iter.first;
+  uint32 non_aggregate_columns = 0;
+  for (auto& column_request : columns_) {
+    const auto& table_name = column_request.column.table_name;
     if (tables_.find(table_name) == tables_.end()) {
       error_msg_ = Strings::StrCat("Table %s ", table_name.c_str(),
                                    " not in table selection list");
       return false;
     }
-    auto& columns = iter.second;
-    for (auto& column_request_iter : columns) {
-      auto field_m = FindTableColumn(column_request_iter.second.column);
-      if (field_m == nullptr) {
-        return false;
-      }
-      // Assign column field index and type.
-      column_request_iter.second.column.index = field_m->index();
-      column_request_iter.second.column.type = field_m->type();
+
+    auto field_m = FindTableColumn(column_request.column);
+    if (field_m == nullptr) {
+      return false;
+    }
+    // Assign column field index and type.
+    column_request.column.index = field_m->index();
+    column_request.column.type = field_m->type();
+
+    if (column_request.aggregation_type == NO_AGGREGATION) {
+      non_aggregate_columns++;
     }
   }
 
+  if (!group_by_columns_.empty() &&
+      non_aggregate_columns != group_by_columns_.size()) {
+    error_msg_ =
+      "GROUP BY list doesn't match all non-aggregate columns in select list ";
+    return false;
+  }
+
+  for (auto& column_request : order_by_columns_) {
+    auto field_m = FindTableColumn(column_request.column);
+    if (field_m == nullptr) {
+      return false;
+    }
+    // Assign column field index and type.
+    column_request.column.index = field_m->index();
+    column_request.column.type = field_m->type();
+  }
+
   // Check expression tree root returns bool.
-  if (!expr_node_ || !expr_node_->valid()) {
+  if (!expr_node_) {
+    expr_node_.reset(new ConstValueNode(NodeValue::BoolValue(true)));
+  }
+  if (!expr_node_->valid()) {
     return false;
   }
   if (expr_node_->value().type != ValueType::BOOL) {
@@ -275,7 +355,17 @@ const PhysicalPlan& SqlQuery::PrepareQueryPlan() {
 
 int SqlQuery::ExecuteSelectQuery() {
   PrepareQueryPlan();
-  return ExecuteSelectQueryFromNode(expr_node_.get());
+  int re = ExecuteSelectQueryFromNode(expr_node_.get());
+
+  if (!order_by_columns_.empty()) {
+    std::vector<Column> columns;
+    for (const auto& column_request : order_by_columns_) {
+      columns.push_back(column_request.column);
+    }
+    expr_node_->mutable_results()->SortByColumns(columns);
+  }
+
+  return re;
 }
 
 int SqlQuery::ExecuteSelectQueryFromNode(ExprTreeNode* node) {
@@ -995,7 +1085,7 @@ void SqlQuery::EvaluateQueryConditions(PhysicalPlan* physical_plan) {
 
     CHECK(group_plan.plan != PhysicalPlan::NO_PLAN,
           Strings::StrCat("No plan for conditions of column group ",
-                          group_plan.conditions.front().column.AsString()));
+                          group_plan.conditions.front().column.DebugString()));
 
     if (search_ratio < 0) {
       group_plan.plan = PhysicalPlan::CONST_FALSE_SKIP;
@@ -1067,41 +1157,37 @@ void SqlQuery::PrintResults() {
     return;
   }
 
-  std::vector<ColumnRequest*> columns_to_print;
-  for (auto& table_columns_iter : columns_) {
-    for (auto& column_request_iter : table_columns_iter.second) {
-      columns_to_print.push_back(&(column_request_iter.second));
-    }
-  }
-
-  auto comparator = [&] (const ColumnRequest* c1, const ColumnRequest* c2) {
-    return c1->request_pos < c2->request_pos;
-  };
-  std::sort(columns_to_print.begin(), columns_to_print.end(), comparator);
-
   // Get the print size for each column.
   for (auto& tuple : expr_node_->mutable_results()->tuples) {
-    for (auto& table_record_it : tuple) {
-      const auto& table_name = table_record_it.first;
-      auto& result_record = table_record_it.second;
-      auto* table_m = catalog_m_->FindTableByName(table_name);
-      CHECK(table_m != nullptr, "Couldn't find table %s", table_name.c_str());
-      for (uint32 i = 0; i < result_record.record->NumFields(); i++) {
-        const auto& field = result_record.record->fields().at(i);
-        auto* field_m = table_m->FindFieldByIndex(i);
-        CHECK(table_m != nullptr,
-              "Couldn't find field %d from table %s", i, table_name);
+    for (auto& column_request : columns_) {
+      const auto& it = tuple.find(column_request.column.table_name);
+      CHECK(it != tuple.end(), "Tuple doesn't have the record of table %s",
+                               column_request.column.table_name.c_str());
 
-        auto* column_request =
-            FindColumnRequest(Column(table_name, field_m->name()));
-        if (column_request == nullptr) {
-          continue;
+      const auto& result_record = it->second;
+      const auto& record = result_record.record;
+      int pos = -1;
+      if (record->type() == Storage::DATA_RECORD) {
+        pos = column_request.column.index;
+      } else if (record->type() == Storage::INDEX_RECORD) {
+        for (uint32 i = 0 ; i < result_record.meta->field_indexes.size(); i++) {
+          if (result_record.meta->field_indexes.at(i) ==
+              column_request.column.index) {
+            pos = i;
+            break;
+          }
         }
-        int print_size = field->AsString().length();
-        if (print_size > result_record.meta->field_print_sizes[i]) {
-          result_record.meta->field_print_sizes[i] = print_size;
-          column_request->print_width = print_size + 2;
-        }
+        CHECK(pos > 0, "Can't find required field index %d",
+                       column_request.column.index,
+                       " for this index record");
+      } else {
+        LogFATAL("Invalid record type to evalute: %s",
+                 Storage::RecordTypeStr(result_record.record_type()).c_str());
+      }
+      const auto& field = record->fields().at(pos);
+      uint32 print_size = field->AsString().length();
+      if (print_size + 2 > column_request.print_width) {
+        column_request.print_width = print_size + 2;
       }
     }
   }
@@ -1110,15 +1196,10 @@ void SqlQuery::PrintResults() {
   if (tables_.size() > 1) {
     use_table_prefix = true;
   }
-  for (auto& column_request : columns_to_print) {
-    column_request->print_name = column_request->column.column_name;
-    if (use_table_prefix) {
-      column_request->print_name = Strings::StrCat(
-          column_request->column.table_name, ".",
-          column_request->column.column_name);
-    }
-    if (column_request->print_name.length() + 2 > column_request->print_width) {
-      column_request->print_width = column_request->print_name.length() + 2;
+  for (auto& column_request : columns_) {
+    column_request.print_name = column_request.AsString(use_table_prefix);
+    if (column_request.print_name.length() + 2 > column_request.print_width) {
+      column_request.print_width = column_request.print_name.length() + 2;
     }
   }
 
@@ -1128,22 +1209,22 @@ void SqlQuery::PrintResults() {
       printf("%c", c);
     }
   };
-  for (const auto& column_request : columns_to_print) {
+  for (const auto& column_request : columns_) {
     printf("+");
-    print_chars('-', column_request->print_width);
+    print_chars('-', column_request.print_width);
   }
   printf("+\n");
-  for (const auto& column_request : columns_to_print) {
+  for (const auto& column_request : columns_) {
     printf("| ");
-    printf("%s", column_request->print_name.c_str());
-    int remain_space = column_request->print_width -
-                          (1 + column_request->print_name.length());
+    printf("%s", column_request.print_name.c_str());
+    int remain_space = column_request.print_width -
+                          (1 + column_request.print_name.length());
     print_chars(' ', remain_space);
   }
   printf("|\n");
-  for (const auto& column_request : columns_to_print) {
+  for (const auto& column_request : columns_) {
     printf("+");
-    for (uint32 i = 0; i < column_request->print_width; i++) {
+    for (uint32 i = 0; i < column_request.print_width; i++) {
       printf("-");
     }
   }
@@ -1151,26 +1232,26 @@ void SqlQuery::PrintResults() {
 
   // Do print.
   for (auto& tuple : expr_node_->mutable_results()->tuples) {
-    for (const auto& column_request : columns_to_print) {
-      const auto& it = tuple.find(column_request->column.table_name);
+    for (const auto& column_request : columns_) {
+      const auto& it = tuple.find(column_request.column.table_name);
       CHECK(it != tuple.end(), "Tuple doesn't have the record of table %s",
-                               column_request->column.table_name.c_str());
+                               column_request.column.table_name.c_str());
 
       const auto& result_record = it->second;
       const auto& record = result_record.record;
       int pos = -1;
       if (record->type() == Storage::DATA_RECORD) {
-        pos = column_request->column.index;
+        pos = column_request.column.index;
       } else if (record->type() == Storage::INDEX_RECORD) {
         for (uint32 i = 0 ; i < result_record.meta->field_indexes.size(); i++) {
           if (result_record.meta->field_indexes.at(i) ==
-              column_request->column.index) {
+              column_request.column.index) {
             pos = i;
             break;
           }
         }
         CHECK(pos > 0, "Can't find required field index %d",
-                       column_request->column.index,
+                       column_request.column.index,
                        " for this index record");
       } else {
         LogFATAL("Invalid record type to evalute: %s",
@@ -1180,7 +1261,7 @@ void SqlQuery::PrintResults() {
 
       printf("| ");
       printf("%s", field->AsString().c_str());
-      int remain_space = column_request->print_width -
+      int remain_space = column_request.print_width -
                           (1 + field->AsString().length());
       print_chars(' ', remain_space);
     }
@@ -1188,9 +1269,9 @@ void SqlQuery::PrintResults() {
   }
 
   // Ending.
-  for (const auto& column_request : columns_to_print) {
+  for (const auto& column_request : columns_) {
     printf("+");
-    for (uint32 i = 0; i < column_request->print_width; i++) {
+    for (uint32 i = 0; i < column_request.print_width; i++) {
       printf("-");
     }
   }
@@ -1204,6 +1285,15 @@ std::string SqlQuery::error_msg() const {
 
 void SqlQuery::set_error_msg(const std::string& error_msg) {
   error_msg_ = error_msg;
+}
+
+std::string ColumnRequest::AsString(bool use_table_prefix) const {
+  std::string result = column.AsString(use_table_prefix);
+  if (aggregation_type != NO_AGGREGATION) {
+    result = Strings::StrCat(AggregationStr(aggregation_type),
+                             "(", result, ")");
+  }
+  return result;
 }
 
 }  // namespace Query

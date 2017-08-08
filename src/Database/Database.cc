@@ -27,7 +27,7 @@ Database::Database(const std::string& name) : name_(name) {
   // Create Tables.
   for (const auto& table : catalog_.tables()) {
     auto table_m = catalog_m_->FindTableByName(table.name());
-    CHECK(table_m != nullptr, "Could't find table %s", table.name());
+    CHECK(table_m != nullptr, "Could't find table %s", table.name().c_str());
     tables_.emplace(table.name(),
                     std::unique_ptr<Table>(
                         new Table(catalog_.name(), table.name(), table_m)));

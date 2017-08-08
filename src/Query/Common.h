@@ -57,7 +57,19 @@ bool IsCompareOp(OperatorType op_type);
 bool IsLogicalOp(OperatorType op_type);
 OperatorType FlipOp(OperatorType op_type);
 
+enum AggregationType {
+  NO_AGGREGATION,
+  SUM,
+  AVG,
+  COUNT,
+  MAX,
+  MIN,
+};
+
+std::string AggregationStr(AggregationType aggregation_type);
+
 struct Column {
+
   Column() = default;
   Column(const std::string& table_name_, const std::string& column_name_):
       table_name(table_name_), column_name(column_name_) {}
@@ -67,19 +79,24 @@ struct Column {
   int index = -1;
   Schema::FieldType type = Schema::FieldType::UNKNOWN_TYPE;
 
-  std::string AsString() const {
-    return Strings::StrCat("(", table_name, ", ", column_name, ", ",
-                           std::to_string(index), ")");
+  std::string AsString(bool use_table_prefix) const;
+  std::string DebugString() const;
+
+  bool operator==(const Column& other) const {
+    return table_name == other.table_name && column_name == other.column_name;
   }
 
-  bool operator<(const Column& other) {
-    if (table_name < other.table_name) {
-      return true;
-    } else if (table_name > other.table_name) {
-      return false;
-    } else {
+  bool operator!=(const Column& other) const {
+    return !(*this == other);
+  }
+
+  bool operator<(const Column& other) const {
+    if (table_name != other.table_name) {
+      return table_name < other.table_name;
+    } else if (column_name != other.column_name) {
       return column_name < other.column_name;
     }
+    return false;
   }
 };
 
@@ -126,7 +143,7 @@ struct QueryCondition {
   bool const_result = false;  // only used when is_const = true
 
   std::string AsString() const {
-    return Strings::StrCat(column.AsString(), " ", OpTypeStr(op), " ",
+    return Strings::StrCat(column.DebugString(), " ", OpTypeStr(op), " ",
                            value.AsString());
   }
 
@@ -167,7 +184,6 @@ struct PhysicalPlan {
 
 struct TableRecordMeta {
   std::vector<int> field_indexes;
-  std::map<int, int> field_print_sizes;
 };
 
 struct ResultRecord {

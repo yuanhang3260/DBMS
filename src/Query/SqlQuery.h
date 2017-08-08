@@ -34,6 +34,24 @@ struct ColumnRequest {
   uint32 print_width = 0;
 
   std::string print_name;
+
+  AggregationType aggregation_type = NO_AGGREGATION;
+
+  bool operator==(const ColumnRequest& other) const {
+    return column == other.column &&
+           aggregation_type == other.aggregation_type;
+  }
+
+  bool operator<(const ColumnRequest& other) const {
+    if (column != other.column) {
+      return column < other.column;
+    } else if (aggregation_type != other.aggregation_type) {
+      return aggregation_type < other.aggregation_type;
+    }
+    return false;
+  }
+
+  std::string AsString(bool use_table_prefix) const;
 };
 
 class SqlQuery {
@@ -48,11 +66,18 @@ class SqlQuery {
 
   bool AddTable(const std::string& table);
   bool AddColumn(const std::string& column);
+  bool AddColumn(const std::string& column, AggregationType aggregation_type);
+  bool AddOrderByColumn(const std::string& column);
+  bool AddOrderByColumn(const std::string& column,
+                        AggregationType aggregation_type);
+  bool AddGroupByColumn(const std::string& column);
   bool ParseTableColumn(const std::string& name, Column* column);
 
   DB::TableInfoManager* FindTable(const std::string& table);
   DB::FieldInfoManager* FindTableColumn(const Column& column);
-  ColumnRequest* FindColumnRequest(const Column& column);
+  const ColumnRequest* FindColumnRequest(const Column& column) const;
+  const ColumnRequest* FindColumnRequest(
+      const Column& column, AggregationType aggregation_type) const;
 
   bool TableIsValid(const std::string& table);
   bool ColumnIsValid(const Column& column);
@@ -101,7 +126,13 @@ class SqlQuery {
 
   // Target columns.
   uint32 columns_num_ = 0;
-  std::map<std::string, std::map<std::string, ColumnRequest>> columns_;
+  std::set<ColumnRequest> columns_set_;
+  std::set<ColumnRequest> columns_unknown_table_;
+  std::set<ColumnRequest> star_columns_;
+  std::vector<ColumnRequest> columns_;
+
+  std::vector<ColumnRequest> order_by_columns_;
+  std::vector<Column> group_by_columns_;
 
   std::string error_msg_;
 

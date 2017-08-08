@@ -116,6 +116,14 @@ static Sql::Parser::symbol_type yylex(Sql::Scanner &scanner,
 %token SELECT "SELECT";
 %token FROM "FROM";
 %token WHERE "WHERE";
+%token ORDERBY "ORDER BY";
+%token GROUPBY "GROUP BY";
+
+%token SUM "SUM";
+%token COUNT "COUNT";
+%token AVG "AVG";
+%token MAX "MAX";
+%token MIN "MIN";
 
 %token LEFTPAR "leftparen";
 %token RIGHTPAR "rightparen";
@@ -126,7 +134,7 @@ static Sql::Parser::symbol_type yylex(Sql::Scanner &scanner,
 
 %start query
 
-%left SELECT FROM WHERE
+%left SELECT FROM WHERE ORDERBY
 %left OR;
 %left AND;
 %left NOT;
@@ -366,9 +374,39 @@ column_target: IDENTIFIER {
         YYABORT;
       }
     }
+    | SUM LEFTPAR IDENTIFIER RIGHTPAR {
+      if (!driver.query_->AddColumn($3, Query::AggregationType::SUM)) {
+        YYABORT;
+      }
+    }
+    | COUNT LEFTPAR IDENTIFIER RIGHTPAR {
+      if (!driver.query_->AddColumn($3, Query::AggregationType::COUNT)) {
+        YYABORT;
+      }
+    }
+    | AVG LEFTPAR IDENTIFIER RIGHTPAR {
+      if (!driver.query_->AddColumn($3, Query::AggregationType::AVG)) {
+        YYABORT;
+      }
+    }
+    | MAX LEFTPAR IDENTIFIER RIGHTPAR {
+      if (!driver.query_->AddColumn($3, Query::AggregationType::MAX)) {
+        YYABORT;
+      }
+    }
+    | MIN LEFTPAR IDENTIFIER RIGHTPAR {
+      if (!driver.query_->AddColumn($3, Query::AggregationType::MIN)) {
+        YYABORT;
+      }
+    }
     | MUL {
       // I know this is wired. Here the * is a wildcard, not multiply symbol.
       if (!driver.query_->AddColumn("*")) {
+        YYABORT;
+      }
+    }
+    | COUNT LEFTPAR MUL RIGHTPAR {
+      if (!driver.query_->AddColumn("*", Query::AggregationType::COUNT)) {
         YYABORT;
       }
     }
@@ -380,8 +418,59 @@ column_list: column_target {
 
     }
 
+order_by_column_target : IDENTIFIER {
+      if (!driver.query_->AddOrderByColumn($1)) {
+        YYABORT;
+      }
+    }
+    | SUM LEFTPAR IDENTIFIER RIGHTPAR {
+      if (!driver.query_->AddOrderByColumn($3, Query::AggregationType::SUM)) {
+        YYABORT;
+      }
+    }
+    | COUNT LEFTPAR IDENTIFIER RIGHTPAR {
+      if (!driver.query_->AddOrderByColumn($3, Query::AggregationType::COUNT)) {
+        YYABORT;
+      }
+    }
+    | AVG LEFTPAR IDENTIFIER RIGHTPAR {
+      if (!driver.query_->AddOrderByColumn($3, Query::AggregationType::AVG)) {
+        YYABORT;
+      }
+    }
+    | MAX LEFTPAR IDENTIFIER RIGHTPAR {
+      if (!driver.query_->AddOrderByColumn($3, Query::AggregationType::MAX)) {
+        YYABORT;
+      }
+    }
+    | MIN LEFTPAR IDENTIFIER RIGHTPAR {
+      if (!driver.query_->AddOrderByColumn($3, Query::AggregationType::MIN)) {
+        YYABORT;
+      }
+    }
+
+order_by_column_list : order_by_column_target {
+      
+    }
+    | order_by_column_target COMMA order_by_column_target {
+
+    }
+
+group_by_column_target : IDENTIFIER {
+      if (!driver.query_->AddGroupByColumn($1)) {
+        YYABORT;
+      }
+    }
+
+group_by_column_list : group_by_column_target {
+      
+    }
+    | group_by_column_target COMMA group_by_column_target {
+
+    }
+
 // **************************** SELECT query ******************************** //
-select_query: select_stmt from_stmt opt_where_stmt {
+select_query: select_stmt from_stmt opt_where_stmt opt_group_by_stmt opt_order_by_stmt {
       if (driver.debug()) {
         std::cout << "Query SELECT" << std::endl;
       }
@@ -409,6 +498,22 @@ opt_where_stmt: { /* nill */ }
       if (driver.debug()) {
         std::cout << "WHERE stmt parsed" << std::endl;
       }
+    }
+
+// ORDER BY statement
+opt_order_by_stmt: { /* nill */ }
+    | ORDERBY order_by_column_list {
+      // if (driver.debug()) {
+      //   std::cout << "ORDER BY " << std::endl;
+      // }
+    }
+
+// ORDER BY statement
+opt_group_by_stmt: { /* nill */ }
+    | GROUPBY group_by_column_list {
+      // if (driver.debug()) {
+      //   std::cout << "ORDER BY " << std::endl;
+      // }
     }
 
 %%

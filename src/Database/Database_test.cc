@@ -309,6 +309,17 @@ class DatabaseTest: public UnitTest {
     interpreter_->reset();
     printf("\n");
 
+    expr = "SELECT * FROM Puppy";
+    std::cout << expr << std::endl;
+    AssertTrue(interpreter_->Parse(expr));
+    query = interpreter_->shared_query();
+    AssertTrue(query->FinalizeParsing());
+    num_results = query->ExecuteSelectQuery();
+    AssertEqual(ExpectedResultNum(query->expr_root()), num_results);
+    AssertTrue(VerifyResult(query->expr_root(), query->results()));
+    interpreter_->reset();
+    printf("\n");
+
     expr = "SELECT * FROM Puppy WHERE adult AND NOT (age < 30)";
     std::cout << expr << std::endl;
     AssertTrue(interpreter_->Parse(expr));
@@ -320,7 +331,7 @@ class DatabaseTest: public UnitTest {
     interpreter_->reset();
     printf("\n");
 
-    expr = "SELECT * FROM Puppy WHERE id = 4 OR(age > 8 AND signature < \"h\")";
+    expr = "SELECT * FROM Puppy WHERE id = 4 OR(age > 8 AND signature < \"h\") ORDER BY name, id";
     std::cout << expr << std::endl;
     AssertTrue(interpreter_->Parse(expr));
     query = interpreter_->shared_query();

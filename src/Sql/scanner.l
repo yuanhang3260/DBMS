@@ -63,6 +63,15 @@ IDENTIFIER  ([a-zA-Z0-9_]+(\.[a-z0-9_\*]+)*)
 SELECT      (SELECT|select)
 FROM        (FROM|from)
 WHERE       (WHERE|where)
+ORDERBY     (ORDER\ BY|order\ by)
+GROUPBY     (GROUP\ BY|group\ by)
+
+SUM         (SUM|sum)
+COUNT       (COUNT|count)
+AVG         (AVG|avg)
+MAX         (MAX|MAX)
+MIN         (MIN|min)
+
 
 %%
 
@@ -169,7 +178,43 @@ WHERE       (WHERE|where)
 
 {WHERE}   {
             //std::cout << "==> WHERE" << std::endl;
-            return Sql::Parser::make_WHERE(Sql::location()); }
+            return Sql::Parser::make_WHERE(Sql::location());
+          }
+
+{ORDERBY} {
+            //std::cout << "==> ORDER BY" << std::endl;
+            return Sql::Parser::make_ORDERBY(Sql::location());
+          }
+
+{GROUPBY} {
+            //std::cout << "==> GROUP BY" << std::endl;
+            return Sql::Parser::make_GROUPBY(Sql::location());
+          }
+
+{COUNT}   {
+            //std::cout << "==> COUNT" << std::endl;
+            return Sql::Parser::make_COUNT(Sql::location());
+          }
+
+{SUM}     {
+            //std::cout << "==> SUM" << std::endl;
+            return Sql::Parser::make_SUM(Sql::location());
+          }
+
+{AVG}     {
+            //std::cout << "==> AVG" << std::endl;
+            return Sql::Parser::make_AVG(Sql::location());
+          }
+
+{MAX}     {
+            //std::cout << "==> MAX" << std::endl;
+            return Sql::Parser::make_MAX(Sql::location());
+          }
+
+{MIN}     {
+            //std::cout << "==> MIN" << std::endl;
+            return Sql::Parser::make_MIN(Sql::location());
+          }
 
 {IDENTIFIER}  {
                 //std::cout << "==> INDENTIFIER " << yytext << std::endl;
