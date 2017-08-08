@@ -32,14 +32,14 @@ class PageLoadedRecord {
   // reocrd can be DataRecord, IndexRecord or TreeNodeRecord, depending on
   // the specified file_type and page_type.
   bool GenerateRecordPrototype(const DB::TableInfo& schema,
-                               const std::vector<int>& key_indexes,
+                               const std::vector<uint32>& key_indexes,
                                FileType file_type,
                                PageType page_type);
 
   // Comparator
   static bool Comparator(const PageLoadedRecord& r1,
                          const PageLoadedRecord& r2,
-                         const std::vector<int>& indexes);
+                         const std::vector<uint32>& indexes);
 
   void Print() const {
     std::cout << "slot[" << slot_id_ << "] ";
@@ -82,10 +82,10 @@ class DataRecordWithRid {
 
   static bool Comparator(const DataRecordWithRid& r1,
                          const DataRecordWithRid& r2,
-                         const std::vector<int>& indexes);
+                         const std::vector<uint32>& indexes);
 
   static void Sort(std::vector<DataRecordWithRid>* records,
-                   const std::vector<int>& key_indexes);
+                   const std::vector<uint32>& key_indexes);
 };
 
 
@@ -108,10 +108,10 @@ class DataRecordRidMutation {
 
   static bool Comparator(const DataRecordRidMutation& r1,
                          const DataRecordRidMutation& r2,
-                         const std::vector<int>& indexes);
+                         const std::vector<uint32>& indexes);
 
   static void Sort(std::vector<DataRecordRidMutation>* records,
-                   const std::vector<int>& key_indexes);
+                   const std::vector<uint32>& key_indexes);
 
   static void SortByOldRid(std::vector<DataRecordRidMutation>* records);
 
@@ -126,7 +126,7 @@ class DataRecordRidMutation {
   // Group DataRecordRidMutation list by key index.
   static void GroupDataRecordRidMutations(
                     std::vector<DataRecordRidMutation>& rid_mutations,
-                    std::vector<int> key_index,
+                    std::vector<uint32> key_index,
                     std::vector<RecordGroup>* rgroups);
 };
 

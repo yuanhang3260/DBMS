@@ -165,7 +165,7 @@ int RecordBase::CompareRecords(const RecordBase& r1, const RecordBase& r2) {
 
 int RecordBase::CompareRecordsBasedOnIndex(const RecordBase& r1,
                                            const RecordBase& r2,
-                                           const std::vector<int>& indexes) {
+                                           const std::vector<uint32>& indexes) {
   CHECK(!indexes.empty(), "empty comparing indexes");
   for (uint32 i = 0; i < indexes.size(); i++) {
     int re = RecordBase::CompareSchemaFields(
@@ -184,19 +184,19 @@ int RecordBase::CompareRecordsBasedOnIndex(const RecordBase& r1,
 
 bool RecordBase::RecordComparator(const RecordBase& r1,
                                   const RecordBase& r2,
-                                  const std::vector<int>& indexes) {
+                                  const std::vector<uint32>& indexes) {
   return CompareRecordsBasedOnIndex(r1, r2, indexes) < 0;
 }
 
 bool RecordBase::RecordComparatorGt(const RecordBase& r1,
                                     const RecordBase& r2,
-                                    const std::vector<int>& indexes) {
+                                    const std::vector<uint32>& indexes) {
   return CompareRecordsBasedOnIndex(r1, r2, indexes) > 0;
 }
 
 int RecordBase::CompareRecordWithKey(const RecordBase& record,
                                      const RecordBase& key,
-                                     const std::vector<int>& indexes) {
+                                     const std::vector<uint32>& indexes) {
   CHECK(!indexes.empty(), "empty comparing indexes");
   CHECK(key.NumFields() == indexes.size(),
         "Number of key fields mismatch with indexes to compare");
@@ -335,7 +335,7 @@ void RecordBase::clear() {
 }
 
 bool RecordBase::InitRecordFields(const DB::TableInfo& schema,
-                                  const std::vector<int>& indexes) {
+                                  const std::vector<uint32>& indexes) {
   clear();
   for (int index: indexes) {
     auto type = schema.fields(index).type();
@@ -366,7 +366,7 @@ bool RecordBase::InitRecordFields(const DB::TableInfo& schema,
 
 // Check fields type match a schema.
 bool RecordBase::CheckFieldsType(const DB::TableInfo& schema,
-                                 std::vector<int> key_indexes) const {
+                                 std::vector<uint32> key_indexes) const {
   if (fields_.size() != key_indexes.size()) {
     LogERROR("Index/TreeNode record has mismatchig number of fields - "
              "key has %d indexes, record has %d",
@@ -440,13 +440,13 @@ bool RecordBase::ParseFromText(std::string str, int chararray_len_limit) {
 
 // ****************************** DataRecord ******************************** //
 bool DataRecord::ExtractKey(
-         RecordBase* key, const std::vector<int>& key_indexes) const {
+         RecordBase* key, const std::vector<uint32>& key_indexes) const {
   if (!key) {
     return false;
   }
   key->fields().clear();
-  for (int index: key_indexes) {
-    if (index > (int)fields_.size()) {
+  for (uint32 index: key_indexes) {
+    if (index > fields_.size()) {
       LogERROR("key_index %d > number of fields, won't fetch");
       continue;
     }

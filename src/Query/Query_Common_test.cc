@@ -23,7 +23,7 @@ class CommonTest: public UnitTest {
  private:
   std::vector<std::shared_ptr<RecordBase>> data_records_;
   std::vector<std::shared_ptr<RecordBase>> index_record_;
-  std::vector<int> key_fields_ = std::vector<int>{1, 2};
+  std::vector<uint32> key_fields_ = std::vector<uint32>{1, 2};
  
  public:
   void InitRecordResource(std::vector<std::shared_ptr<RecordBase>>* records) {

@@ -25,7 +25,7 @@ class QueryTest: public UnitTest {
  private:
   std::shared_ptr<RecordBase> data_record_;
   std::shared_ptr<RecordBase> index_record_;
-  std::vector<int> key_fields_ = std::vector<int>{0, 2, 3};
+  std::vector<uint32> key_fields_ = std::vector<uint32>{0, 2, 3};
 
   DB::DatabaseCatalog catalog_;
   DB::Database db_;

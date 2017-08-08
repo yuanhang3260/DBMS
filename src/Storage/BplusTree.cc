@@ -197,7 +197,7 @@ BplusTree::~BplusTree() {
 
 BplusTree::BplusTree(DB::Table* table,
                      FileType file_type,
-                     std::vector<int> key_indexes,
+                     std::vector<uint32> key_indexes,
                      bool create) :
     table_(table),
     file_type_(file_type),
@@ -714,13 +714,13 @@ RecordPage* BplusTree::FirstLeave() {
   return crt_page;
 }
 
-std::vector<int> BplusTree::IndexesToCompareLeaveRecords() const {
-  std::vector<int> indexes;
+std::vector<uint32> BplusTree::IndexesToCompareLeaveRecords() const {
+  std::vector<uint32> indexes;
   if (file_type_ == INDEX_DATA) {
     indexes = key_indexes_;
   }
   else {
-    for (int i = 0; i < (int)key_indexes_.size(); i++) {
+    for (uint32 i = 0; i < key_indexes_.size(); i++) {
       indexes.push_back(i);
     }
   }

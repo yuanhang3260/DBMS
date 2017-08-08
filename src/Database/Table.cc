@@ -29,7 +29,7 @@ Table::Table(const std::string& db_name, const std::string& name,
 }
 
 Storage::BplusTree* Table::Tree(Storage::FileType file_type,
-                                std::vector<int> key_index) {
+                                std::vector<uint32> key_index) {
   CHECK(HasIndex(key_index),
         Strings::StrCat("Index ", IndexStr(key_index), " not found"));
 
@@ -45,11 +45,11 @@ Storage::BplusTree* Table::DataTree() {
   return Tree(Storage::INDEX_DATA, DataTreeKey());
 }
 
-bool Table::HasIndex(const std::vector<int32>& index) const {
+bool Table::HasIndex(const std::vector<uint32>& index) const {
   return table_m_->HasIndex(index);
 }
 
-std::string Table::IndexStr(const std::vector<int32>& index) {
+std::string Table::IndexStr(const std::vector<uint32>& index) {
   std::vector<std::string> index_str;
   for (const auto& i : index) {
     index_str.push_back(std::to_string(i));
@@ -58,7 +58,7 @@ std::string Table::IndexStr(const std::vector<int32>& index) {
 }
 
 std::string Table::BplusTreeFileName(Storage::FileType file_type,
-                                     const std::vector<int>& key_index) {
+                                     const std::vector<uint32>& key_index) {
   // B+ tree name is //data/${db_name}/${table_name}(key).index
   std::string filename =
       Strings::StrCat(Storage::kDataDirectory, db_name_, "/", name_, "(");
@@ -91,11 +91,11 @@ std::string Table::BplusTreeFileName(Storage::FileType file_type,
   return "";
 }
 
-std::vector<int> Table::DataTreeKey() const {
+std::vector<uint32> Table::DataTreeKey() const {
   return table_m_->PrimaryIndex();
 }
 
-bool Table::IsDataFileKey(const std::vector<int>& index) const {
+bool Table::IsDataFileKey(const std::vector<uint32>& index) const {
   return table_m_->IsPrimaryIndex(index);
 }
 
@@ -109,7 +109,7 @@ bool Table::InitTrees() {
 
   // Index trees.
   for (auto field: schema().fields()) {
-    std::vector<int> key_indexes{field.index()};
+    std::vector<uint32> key_indexes{field.index()};
     if (IsDataFileKey(key_indexes)) {
       continue;
     }
@@ -178,7 +178,7 @@ bool Table::PreLoadData(
 
   // Generate Index B+ tree files.
   for (const auto& index: table_m_->table_info().indexes()) {
-    std::vector<int> key_index = TableInfoManager::MakeIndex(index);
+    std::vector<uint32> key_index = TableInfoManager::MakeIndex(index);
     if (IsDataFileKey(key_index)) {
       continue;
     }
@@ -206,7 +206,7 @@ bool Table::PreLoadData(
 
 DataRecord* Table::CreateDataRecord() {
   DataRecord* drecord = new DataRecord();
-  std::vector<int> indexes(schema().fields_size());
+  std::vector<uint32> indexes(schema().fields_size());
   for (uint32 i = 0; i < indexes.size(); i++) {
     indexes[i] = i;
   }
@@ -214,7 +214,7 @@ DataRecord* Table::CreateDataRecord() {
   return drecord;
 }
 
-IndexRecord* Table::CreateIndexRecord(const std::vector<int>& key_indexes) {
+IndexRecord* Table::CreateIndexRecord(const std::vector<uint32>& key_indexes) {
   IndexRecord* irecord = new IndexRecord();
   irecord->InitRecordFields(schema(), key_indexes);
   return irecord;
@@ -276,7 +276,7 @@ int Table::ScanRecords(std::vector<std::shared_ptr<RecordBase>>* result) {
 }
 
 int Table::ScanRecords(std::vector<std::shared_ptr<RecordBase>>* result,
-                       const std::vector<int>& key_index) {
+                       const std::vector<uint32>& key_index) {
   Storage::BplusTree* tree;
   if (IsDataFileKey(key_index)) {
     tree = DataTree();
@@ -292,14 +292,14 @@ bool Table::ValidateAllIndexRecords(int num_records) {
   CheckLogFATAL(data_tree, "Can't find data B+ tree");
 
   Storage::DataRecord drecord;
-  std::vector<int> indexes(schema().fields_size());
+  std::vector<uint32> indexes(schema().fields_size());
   for (uint32 i = 0; i < indexes.size(); i++) {
     indexes[i] = i;
   }
   drecord.InitRecordFields(schema(), indexes);
 
   for (const auto& index : table_m_->table_info().indexes()) {
-    std::vector<int> key_index = TableInfoManager::MakeIndex(index);
+    std::vector<uint32> key_index = TableInfoManager::MakeIndex(index);
     if (IsDataFileKey(key_index)) {
       continue;
     }
@@ -368,7 +368,7 @@ bool Table::UpdateIndexTrees(
   }
 
   for (const auto& index : table_m_->table_info().indexes()) {
-    std::vector<int> key_index = TableInfoManager::MakeIndex(index);
+    std::vector<uint32> key_index = TableInfoManager::MakeIndex(index);
     if (IsDataFileKey(key_index)) {
       continue;
     }
@@ -411,7 +411,7 @@ bool Table::InsertRecord(const Storage::RecordBase& record) {
   // Insert IndexRecord of the new record to index files.
   rid_mutations.clear();
   for (const auto& index : table_m_->table_info().indexes()) {
-    std::vector<int> key_index = TableInfoManager::MakeIndex(index);
+    std::vector<uint32> key_index = TableInfoManager::MakeIndex(index);
     if (IsDataFileKey(key_index)) {
       continue;
     }
@@ -433,7 +433,7 @@ bool Table::InsertRecord(const Storage::RecordBase& record) {
 
 int Table::DeleteRecord(const DeleteOp& op) {
   DeleteResult data_delete_result;
-  std::vector<int> pre_index;
+  std::vector<uint32> pre_index;
   if (op.op_cond == Query::EQUAL) {
     if (IsDataFileKey(op.field_indexes)) {
       auto data_tree = Tree(Storage::INDEX_DATA, DataTreeKey());
@@ -468,7 +468,7 @@ int Table::DeleteRecord(const DeleteOp& op) {
     // Update and delete index records in all index trees.
     printf("Begin updating index trees\n");
     for (const auto& index : table_m_->table_info().indexes()) {
-      std::vector<int> key_index = TableInfoManager::MakeIndex(index);
+      std::vector<uint32> key_index = TableInfoManager::MakeIndex(index);
       if (IsDataFileKey(key_index)) {
         continue;
       }

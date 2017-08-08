@@ -55,8 +55,8 @@ struct MergeSortOptions {
   MergeSortOptions(const std::string& db_name_,
                    uint32 txn_id_,
                    const DB::TableInfo* schema_,
-                   const std::vector<int>& key_fields_,
-                   const std::vector<int>& sort_fields_,
+                   const std::vector<uint32>& key_fields_,
+                   const std::vector<uint32>& sort_fields_,
                    FileType file_type_,
                    uint32 num_buf_pages_) :
     db_name(db_name_),
@@ -70,8 +70,8 @@ struct MergeSortOptions {
   std::string db_name;
   uint32 txn_id;
   const DB::TableInfo* schema;
-  std::vector<int> key_fields;
-  std::vector<int> sort_fields;
+  std::vector<uint32> key_fields;
+  std::vector<uint32> sort_fields;
   FileType file_type;  // data or index record?
 
   uint32 num_buf_pages = 0;
@@ -148,7 +148,7 @@ class MergeSorter {
   bool OptionsValid();
 
   MergeSortOptions opts_;
-  std::vector<int> sort_indexes_;
+  std::vector<uint32> sort_indexes_;
 };
 
 }  // Storage

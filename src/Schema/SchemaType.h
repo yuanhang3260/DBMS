@@ -25,6 +25,8 @@ class Field {
 
   virtual void reset() = 0;
 
+  virtual Field* Copy() const = 0;
+
   bool MatchesSchemaType(DB::TableField::Type type) const;
 
  protected:

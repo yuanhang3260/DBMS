@@ -332,7 +332,7 @@ void MergeSorter::ProduceSortIndexes() {
   if (opts_.file_type == INDEX_DATA) {
     sort_indexes_ = opts_.sort_fields;
   } else if (opts_.file_type == INDEX) {
-    for (int sort_field : opts_.sort_fields) {
+    for (uint32 sort_field : opts_.sort_fields) {
       for (uint32 i = 0; i < opts_.key_fields.size(); i++) {
         if (sort_field == opts_.key_fields.at(i)) {
           sort_indexes_.push_back(i);

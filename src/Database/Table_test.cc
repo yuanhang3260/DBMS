@@ -28,7 +28,7 @@ const int kNumRecordsSource = 100;
 
 class TableTest: public UnitTest {
  private:
-  std::vector<int> key_indexes_;
+  std::vector<uint32> key_indexes_;
   TableInfo schema_;
   std::shared_ptr<TableInfoManager> table_m;
   std::shared_ptr<Table> table_;
@@ -152,7 +152,7 @@ class TableTest: public UnitTest {
     AssertTrue(table_->ValidateAllIndexRecords(puppy_records_.size()));
 
     for (const auto& index: table_m->table_info().indexes()) {
-      std::vector<int> key_index = TableInfoManager::MakeIndex(index);
+      auto key_index = TableInfoManager::MakeIndex(index);
       printf("Checking tree %s\n", Table::IndexStr(key_index).c_str());
       auto file_type = table_->IsDataFileKey(key_index) ?
                            Storage::INDEX_DATA : Storage::INDEX;

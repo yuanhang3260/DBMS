@@ -722,7 +722,7 @@ void TableField::Swap(TableField* other) {
   other->mutable_name() = std::move(name_);
   name_ = std::move(name_tmp__);
 
-  int32 index_tmp__ = other->index();
+  uint32 index_tmp__ = other->index();
   other->set_index(index_);
   set_index(index_tmp__);
 
@@ -730,7 +730,7 @@ void TableField::Swap(TableField* other) {
   other->set_type(type_);
   set_type(type_tmp__);
 
-  int32 size_tmp__ = other->size();
+  uint32 size_tmp__ = other->size();
   other->set_size(size_);
   set_size(size_tmp__);
 
@@ -816,11 +816,11 @@ bool TableField::has_index() const {
   return (has_bits_[0] & 0x4) != 0;
 }
 
-int32 TableField::index() const {
+uint32 TableField::index() const {
   return index_;
 }
 
-void TableField::set_index(int32 index) {
+void TableField::set_index(uint32 index) {
   index_ = index;
   has_bits_[0] |= 0x4;
 }
@@ -854,11 +854,11 @@ bool TableField::has_size() const {
   return (has_bits_[0] & 0x10) != 0;
 }
 
-int32 TableField::size() const {
+uint32 TableField::size() const {
   return size_;
 }
 
-void TableField::set_size(int32 size) {
+void TableField::set_size(uint32 size) {
   size_ = size;
   has_bits_[0] |= 0x10;
 }
@@ -1082,7 +1082,7 @@ void Index::Swap(Index* other) {
     buf[i + sizeof(has_bits_)] = other->has_bits_[i];
   }
 
-  ::proto::RepeatedField<int32> index_fields_tmp__ = std::move(other->mutable_index_fields());
+  ::proto::RepeatedField<uint32> index_fields_tmp__ = std::move(other->mutable_index_fields());
   other->mutable_index_fields() = std::move(index_fields_);
   index_fields_ = std::move(index_fields_tmp__);
 
@@ -1121,17 +1121,17 @@ int Index::index_fields_size() const {
   return index_fields_.size();
 }
 
-int32 Index::index_fields(int index) const {
+uint32 Index::index_fields(int index) const {
   return index_fields_.Get(index);
 }
 
-void Index::set_index_fields(int index, int32 value) {
+void Index::set_index_fields(int index, uint32 value) {
   if ((int)index_fields_.size() > index) {
     index_fields_.Set(index, value);
   }
 }
 
-void Index::add_index_fields(int32 value) {
+void Index::add_index_fields(uint32 value) {
    index_fields_.Add(value);
 }
 
@@ -1139,11 +1139,11 @@ void Index::clear_index_fields() {
   index_fields_ .Clear();
 }
 
-const ::proto::RepeatedField<int32>& Index::index_fields() const {
+const ::proto::RepeatedField<uint32>& Index::index_fields() const {
   return index_fields_;
 }
 
-::proto::RepeatedField<int32>& Index::mutable_index_fields() {
+::proto::RepeatedField<uint32>& Index::mutable_index_fields() {
   return index_fields_;
 }
 
@@ -1777,16 +1777,16 @@ std::string GetProtoContent() {
 "  }\n"
 "\n"
 "  optional string name = 1;\n"
-"  optional int32 index = 2;\n"
+"  optional uint32 index = 2;\n"
 "  optional Type type = 3;\n"
-"  optional int32 size = 4;  // Only meaningful for CharArray - length limit.\n"
+"  optional uint32 size = 4;  // Only meaningful for CharArray - length limit.\n"
 "\n"
 "  optional ValueLimit min_value = 5;\n"
 "  optional ValueLimit max_value = 6;\n"
 "}\n"
 "\n"
 "message Index {\n"
-"  repeated int32 index_fields = 1;\n"
+"  repeated uint32 index_fields = 1;\n"
 "}\n"
 "\n"
 "message TableInfo {\n"

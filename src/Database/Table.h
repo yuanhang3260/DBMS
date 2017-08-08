@@ -27,18 +27,18 @@ class Table {
   const DB::TableInfo& schema() const { return table_m_->table_info(); }
 
   std::string BplusTreeFileName(Storage::FileType file_type,
-                                const std::vector<int>& key_indexes);
+                                const std::vector<uint32>& key_indexes);
 
   // Bulkload data records and generate all index files.
   bool PreLoadData(std::vector<std::shared_ptr<Storage::RecordBase>>& records);
 
-  Storage::BplusTree* Tree(Storage::FileType, std::vector<int> key_indexes);
+  Storage::BplusTree* Tree(Storage::FileType, std::vector<uint32> key_indexes);
   Storage::BplusTree* DataTree();
 
-  bool IsDataFileKey(const std::vector<int>& indexes) const;
-  std::vector<int> DataTreeKey() const;
-  bool HasIndex(const std::vector<int32>& index) const;
-  static std::string IndexStr(const std::vector<int32>& index);
+  bool IsDataFileKey(const std::vector<uint32>& indexes) const;
+  std::vector<uint32> DataTreeKey() const;
+  bool HasIndex(const std::vector<uint32>& index) const;
+  static std::string IndexStr(const std::vector<uint32>& index);
 
   bool InitTrees();
 
@@ -55,7 +55,7 @@ class Table {
   int ScanRecords(std::vector<std::shared_ptr<Storage::RecordBase>>* result);
 
   int ScanRecords(std::vector<std::shared_ptr<Storage::RecordBase>>* result,
-                  const std::vector<int>& key_indexes);
+                  const std::vector<uint32>& key_indexes);
 
   bool InsertRecord(const Storage::RecordBase& record);
 
@@ -66,7 +66,7 @@ class Table {
            std::vector<Storage::DataRecordRidMutation>& rid_mutations);
 
   Storage::DataRecord* CreateDataRecord();
-  Storage::IndexRecord* CreateIndexRecord(const std::vector<int>& key_indexes);
+  Storage::IndexRecord* CreateIndexRecord(const std::vector<uint32>& key_indexes);
 
   void FetchDataRecordsByRids(
       const std::vector<std::shared_ptr<Storage::RecordBase>>& irecords,

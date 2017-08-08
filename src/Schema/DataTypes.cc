@@ -439,4 +439,8 @@ double CharArrayField::EvaluateValueRatio(ValueRange<std::string>& range) {
   return EvaluateStringValueRatio(range);
 }
 
+Field* CharArrayField::Copy() const {
+  return new CharArrayField(AsString(), length_limit_);
+}
+
 }  // namepsace Schema

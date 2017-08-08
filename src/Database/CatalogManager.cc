@@ -103,11 +103,11 @@ FieldInfoManager* TableInfoManager::FindFieldByIndex(uint32 index) {
   return it->second;
 }
 
-std::vector<int32> TableInfoManager::PrimaryIndex() const {
+std::vector<uint32> TableInfoManager::PrimaryIndex() const {
   return idata_index_;
 }
 
-bool TableInfoManager::IsPrimaryIndex(const std::vector<int32>& index) const {
+bool TableInfoManager::IsPrimaryIndex(const std::vector<uint32>& index) const {
   if (index.size() != idata_index_.size()) {
     return false;
   }
@@ -120,15 +120,15 @@ bool TableInfoManager::IsPrimaryIndex(const std::vector<int32>& index) const {
   return true;
 }
 
-std::vector<int32> TableInfoManager::MakeIndex(const DB::Index& index) {
-  std::vector<int32> re;
+std::vector<uint32> TableInfoManager::MakeIndex(const DB::Index& index) {
+  std::vector<uint32> re;
   for (const auto& index_field : index.index_fields()) {
     re.push_back(index_field);
   }
   return re;
 }
 
-bool TableInfoManager::HasIndex(const std::vector<int32>& index) const {
+bool TableInfoManager::HasIndex(const std::vector<uint32>& index) const {
   for (const auto& table_index : table_info_->indexes()) {
     if (table_index.index_fields().size() != index.size()) {
       continue;
@@ -161,7 +161,7 @@ std::string FieldInfoManager::name() const {
   return field_->name();
 }
 
-int32 FieldInfoManager::index() const {
+uint32 FieldInfoManager::index() const {
   return field_->index();
 }
 

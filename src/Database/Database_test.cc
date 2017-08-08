@@ -34,7 +34,7 @@ class DatabaseTest: public UnitTest {
  private:
   std::vector<std::shared_ptr<RecordBase>> puppy_records_;
   std::vector<std::shared_ptr<RecordBase>> index_records_;
-  std::vector<int> key_fields_ = std::vector<int>{0, 2, 3};
+  std::vector<uint32> key_fields_ = std::vector<uint32>{0, 2, 3};
 
   DatabaseCatalog catalog_;
   std::shared_ptr<Database> db_;
@@ -208,7 +208,7 @@ class DatabaseTest: public UnitTest {
     AssertTrue(puppy_table_->ValidateAllIndexRecords(puppy_records_.size()));
 
     for (const auto& index: puppy_table_->schema().indexes()) {
-      std::vector<int> key_index = TableInfoManager::MakeIndex(index);
+      std::vector<uint32> key_index = TableInfoManager::MakeIndex(index);
       printf("Checking tree %s\n", Table::IndexStr(key_index).c_str());
       auto file_type = puppy_table_->IsDataFileKey(key_index) ?
                            Storage::INDEX_DATA : Storage::INDEX;

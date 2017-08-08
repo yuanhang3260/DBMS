@@ -26,7 +26,7 @@ const int kNumRecordsSource = 1000;
 
 class BplusTreeTest: public UnitTest {
  private:
-  std::vector<int> key_indexes_;
+  std::vector<uint32> key_indexes_;
   DB::TableInfo schema_;
   std::shared_ptr<DB::TableInfoManager> table_m;
   DB::Table* table_;
@@ -213,7 +213,7 @@ class BplusTreeTest: public UnitTest {
 
   // Traverse all records in the B+ tree (data or index tree), and verify they
   // match the original record_resource in the number of records of each key.
-  void VerifyAllRecordsInTree(BplusTree* tree, std::vector<int> key_indexes) {
+  void VerifyAllRecordsInTree(BplusTree* tree, std::vector<uint32> key_indexes) {
     std::vector<std::shared_ptr<RecordBase>> v;
     for (auto& entry: record_resource_) {
       v.push_back(entry.second);
@@ -222,7 +222,7 @@ class BplusTreeTest: public UnitTest {
 
     // Now v is sorted by the key_indexes, start_list is the beginning position
     // of each group of records that have the same key.
-    std::vector<int> start_list;
+    std::vector<uint32> start_list;
     start_list.push_back(0);
     RecordBase key;
     ((DataRecord*)v[0].get())->ExtractKey(&key, key_indexes);
@@ -261,7 +261,7 @@ class BplusTreeTest: public UnitTest {
 
     auto file_type = INDEX;
     for (const auto& field: schema_.fields()) {
-      auto key_index = std::vector<int>{field.index()};
+      auto key_index = std::vector<uint32>{field.index()};
       file_type = table_->IsDataFileKey(key_index) ? INDEX_DATA : INDEX;
       auto tree = table_->Tree(file_type, key_index);
       tree->SaveToDisk();
@@ -280,11 +280,11 @@ class BplusTreeTest: public UnitTest {
     irecord->AddField(new Schema::StringField(buf, len));
   }
 
-  void _AddIndexRecordsToLeave(RecordPage* leave, std::vector<int> rlens,
+  void _AddIndexRecordsToLeave(RecordPage* leave, std::vector<uint32> rlens,
                                std::vector<char> contents) {
     AssertEqual(rlens.size(), contents.size());
     int total_len = 0;
-    for (int i = 0; i < (int)rlens.size(); i++) {
+    for (uint32 i = 0; i < rlens.size(); i++) {
       IndexRecord irecord;
       _GenerateIndeRecord(&irecord, contents[i], rlens[i]);
       AssertTrue(irecord.InsertToRecordPage(leave) >= 0,
@@ -298,7 +298,7 @@ class BplusTreeTest: public UnitTest {
 
   void Test_SplitLeave() {
     // Create index for field "name".
-    std::vector<int> key_index{0};
+    std::vector<uint32> key_index{0};
     BplusTree tree(table_, INDEX, key_indexes_);
     std::vector<DataRecordRidMutation> rid_mutations;
 
@@ -306,7 +306,7 @@ class BplusTreeTest: public UnitTest {
       // page 1 <--> page2
       std::cout << "----- Left Smaller test 1 -----" << std::endl;
       RecordPage* leave = tree.AllocateNewPage(TREE_LEAVE);
-      _AddIndexRecordsToLeave(leave, std::vector<int>{30, 10, 40, 50, 50},
+      _AddIndexRecordsToLeave(leave, std::vector<uint32>{30, 10, 40, 50, 50},
                               std::vector<char>{'a', 'b', 'c', 'd', 'e'});
 
       PageRecordsManager prmanager(leave, schema_, key_index,
@@ -333,7 +333,7 @@ class BplusTreeTest: public UnitTest {
       // page 1 <--> page2 <--> overflow
       std::cout << "----- Left Smaller test 2 -----" << std::endl;
       RecordPage* leave = tree.AllocateNewPage(TREE_LEAVE);
-      _AddIndexRecordsToLeave(leave, std::vector<int>{10, 60, 60, 60},
+      _AddIndexRecordsToLeave(leave, std::vector<uint32>{10, 60, 60, 60},
                               std::vector<char>{'a', 'b', 'b', 'b'});
 
       PageRecordsManager prmanager(leave, schema_, key_index,
@@ -367,7 +367,7 @@ class BplusTreeTest: public UnitTest {
       std::cout << "----- Left Smaller test 3 -----" << std::endl;
       RecordPage* leave = tree.AllocateNewPage(TREE_LEAVE);
       _AddIndexRecordsToLeave(
-          leave, std::vector<int>{10, 10, 55, 55, 55, 10},
+          leave, std::vector<uint32>{10, 10, 55, 55, 55, 10},
           std::vector<char>{'a', 'a', 'b', 'b', 'b', 'c'});
 
       PageRecordsManager prmanager(leave, schema_, key_index,
@@ -408,7 +408,7 @@ class BplusTreeTest: public UnitTest {
       // page 1 <--> page2 <--> page3
       std::cout << "----- Left Smaller test 4 -----" << std::endl;
       RecordPage* leave = tree.AllocateNewPage(TREE_LEAVE);
-      _AddIndexRecordsToLeave(leave, std::vector<int>{30, 50, 50, 50, 10, 10},
+      _AddIndexRecordsToLeave(leave, std::vector<uint32>{30, 50, 50, 50, 10, 10},
                               std::vector<char>{'a', 'b', 'b', 'b', 'c', 'c'});
 
       PageRecordsManager prmanager(leave, schema_, key_index,
@@ -441,7 +441,7 @@ class BplusTreeTest: public UnitTest {
       // page 1 <--> page2
       std::cout << "----- Left Larger test 1 -----" << std::endl;
       RecordPage* leave = tree.AllocateNewPage(TREE_LEAVE);
-      _AddIndexRecordsToLeave(leave, std::vector<int>{50, 10, 40, 30, 60},
+      _AddIndexRecordsToLeave(leave, std::vector<uint32>{50, 10, 40, 30, 60},
                               std::vector<char>{'a', 'b', 'c', 'd', 'd'});
 
       PageRecordsManager prmanager(leave, schema_, key_index,
@@ -466,7 +466,7 @@ class BplusTreeTest: public UnitTest {
       // page 1 <--> page2
       std::cout << "----- Left Larger test 2 -----" << std::endl;
       RecordPage* leave = tree.AllocateNewPage(TREE_LEAVE);
-      _AddIndexRecordsToLeave(leave, std::vector<int>{50, 10, 40, 30, 60},
+      _AddIndexRecordsToLeave(leave, std::vector<uint32>{50, 10, 40, 30, 60},
                               std::vector<char>{'a', 'b', 'c', 'd', 'd'});
 
       PageRecordsManager prmanager(leave, schema_, key_index,
@@ -491,7 +491,7 @@ class BplusTreeTest: public UnitTest {
       // page 1 <--> overflow <--> page2
       std::cout << "----- Left Larger test 3 -----" << std::endl;
       RecordPage* leave = tree.AllocateNewPage(TREE_LEAVE);
-      _AddIndexRecordsToLeave(leave, std::vector<int>{50, 50, 50, 50, 10},
+      _AddIndexRecordsToLeave(leave, std::vector<uint32>{50, 50, 50, 50, 10},
                               std::vector<char>{'a', 'a', 'a', 'a', 'b'});
 
       PageRecordsManager prmanager(leave, schema_, key_index,
@@ -526,7 +526,7 @@ class BplusTreeTest: public UnitTest {
       // page 1 <--> page2 <--> page3
       std::cout << "----- Left Larger test 4 -----" << std::endl;
       RecordPage* leave = tree.AllocateNewPage(TREE_LEAVE);
-      _AddIndexRecordsToLeave(leave, std::vector<int>{20, 50, 50, 50, 30},
+      _AddIndexRecordsToLeave(leave, std::vector<uint32>{20, 50, 50, 50, 30},
                               std::vector<char>{'a', 'b', 'b', 'b', 'c'});
 
       PageRecordsManager prmanager(leave, schema_, key_index,
@@ -560,7 +560,7 @@ class BplusTreeTest: public UnitTest {
       // page 1 <--> page2 <--> overflow <--> page3
       std::cout << "----- Left Larger test 5 -----" << std::endl;
       RecordPage* leave = tree.AllocateNewPage(TREE_LEAVE);
-      _AddIndexRecordsToLeave(leave, std::vector<int>{10, 55, 55, 55, 20, 10},
+      _AddIndexRecordsToLeave(leave, std::vector<uint32>{10, 55, 55, 55, 20, 10},
                               std::vector<char>{'a', 'b', 'b', 'b', 'c', 'e'});
 
       PageRecordsManager prmanager(leave, schema_, key_index,
@@ -594,7 +594,7 @@ class BplusTreeTest: public UnitTest {
     }
   }
 
-  void Test_InsertRecord(FileType file_type_, std::vector<int> key_index) {
+  void Test_InsertRecord(FileType file_type_, std::vector<uint32> key_index) {
     BplusTree tree(table_, file_type_, key_index, true);  /* craete tree */
     for (int i = 0; i < (int)record_resource_.size(); i++) {
       printf("-------------------------------------------------------------\n");
@@ -626,7 +626,7 @@ class BplusTreeTest: public UnitTest {
     VerifyAllRecordsInTree(&tree, key_index);
   }
 
-  void Test_DeleteRecord(FileType file_type, std::vector<int> key_index) {
+  void Test_DeleteRecord(FileType file_type, std::vector<uint32> key_index) {
     // Create a tree with records.
     Test_InsertRecord(file_type, key_index);
     printf("********************** Begin Deleting *************************\n");
@@ -685,7 +685,7 @@ class BplusTreeTest: public UnitTest {
     // Consistency check of all B+ trees of both data and index.
     auto file_type = INDEX;
     for (const auto& field: schema_.fields()) {
-      auto key_indexes = std::vector<int>{field.index()};
+      auto key_indexes = std::vector<uint32>{field.index()};
       file_type = table_->IsDataFileKey(key_indexes) ? INDEX_DATA : INDEX;
       auto tree = table_->Tree(file_type, key_indexes);
       tree->SaveToDisk();
@@ -695,7 +695,8 @@ class BplusTreeTest: public UnitTest {
     }
   }
 
-  void Test_DeleteIndexRecordPre(FileType file_type, std::vector<int> key_index)
+  void Test_DeleteIndexRecordPre(FileType file_type,
+                                 std::vector<uint32> key_index)
   {
     Test_UpdateRecordID();
     printf("********************** Begin Deleting *************************\n");
@@ -738,15 +739,15 @@ class BplusTreeTest: public UnitTest {
            (int)data_del_result.rid_mutations.size());
   }
 
-  void Test_TableDeleteRecord(FileType file_type, std::vector<int> key_index)
+  void Test_TableDeleteRecord(FileType file_type, std::vector<uint32> key_index)
   {
     Test_UpdateRecordID();
     printf("********************** Begin Deleting *************************\n");
 
     // Generate delete operator.
     DB::DeleteOp op;
-    std::vector<int> ages = Utils::RandomListFromRange(0, 0);
-    for (int i = 0; i < (int)ages.size(); i++) {
+    std::vector<int32> ages = Utils::RandomListFromRange(0, 0);
+    for (uint32 i = 0; i < ages.size(); i++) {
       op.field_indexes = key_index;
       op.keys.push_back(std::make_shared<RecordBase>());
       op.keys.back()->AddField(new Schema::IntField(ages[i]));
@@ -761,7 +762,7 @@ class BplusTreeTest: public UnitTest {
 
     // Consistency check of all B+ trees.
     for (const auto& field: schema_.fields()) {
-      auto key_index = std::vector<int>{field.index()};
+      auto key_index = std::vector<uint32>{field.index()};
       file_type = table_->IsDataFileKey(key_index) ? INDEX_DATA : INDEX;
       auto tree = table_->Tree(file_type, key_index);
       tree->SaveToDisk();
@@ -812,7 +813,7 @@ class BplusTreeTest: public UnitTest {
 
       // Consistency check of all B+ trees.
       for (const auto& field: schema_.fields()) {
-        auto key_index = std::vector<int>{field.index()};
+        auto key_index = std::vector<uint32>{field.index()};
         printf("Checking tree %d\n", field.index());
         FileType file_type =
             table_->IsDataFileKey(key_index) ? INDEX_DATA : INDEX;
@@ -830,7 +831,7 @@ class BplusTreeTest: public UnitTest {
 
 int main(int argc, char** argv) {
   // FileType file_type = INDEX_DATA;
-  // std::vector<int> key_index{2};
+  // std::vector<uint32> key_index{2};
   // if (argc >= 2 && std::string(argv[1]) == "INDEX") {
   //   file_type = INDEX;
   // }

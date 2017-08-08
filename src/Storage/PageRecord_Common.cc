@@ -15,7 +15,7 @@ namespace Storage {
 // **************************** PageLoadedRecord **************************** //
 bool PageLoadedRecord::GenerateRecordPrototype(
          const DB::TableInfo& schema,
-         const std::vector<int>& key_indexes,
+         const std::vector<uint32>& key_indexes,
          FileType file_type,
          PageType page_type) {
   // Create record based on file tpye and page type
@@ -37,7 +37,7 @@ bool PageLoadedRecord::GenerateRecordPrototype(
     return false;
   }
 
-  std::vector<int> indexes;
+  std::vector<uint32> indexes;
   if (file_type == INDEX_DATA && page_type == TREE_LEAVE) {
     // DataRecord should contain all fields.
     indexes.resize(schema.fields_size());
@@ -68,7 +68,7 @@ int PageLoadedRecord::DumpToMem(byte* buf) const {
 
 bool PageLoadedRecord::Comparator(const PageLoadedRecord& r1,
                                   const PageLoadedRecord& r2,
-                                  const std::vector<int>& indexes) {
+                                  const std::vector<uint32>& indexes) {
   // TODO: Compare Rid for Index B+ tree?
   return RecordBase::RecordComparator(*r1.record_, *r2.record_, indexes);
 }
@@ -77,12 +77,12 @@ bool PageLoadedRecord::Comparator(const PageLoadedRecord& r1,
 // *************************** DataRecordWithRid **************************** //
 bool DataRecordWithRid::Comparator(const DataRecordWithRid& r1,
                                    const DataRecordWithRid& r2,
-                                   const std::vector<int>& indexes) {
+                                   const std::vector<uint32>& indexes) {
   return RecordBase::RecordComparator(*r1.record, *r2.record, indexes);
 }
 
 void DataRecordWithRid::Sort(std::vector<DataRecordWithRid>* records,
-                             const std::vector<int>& key_indexes) {
+                             const std::vector<uint32>& key_indexes) {
   auto comparator = [&key_indexes] (const DataRecordWithRid& r1,
                                     const DataRecordWithRid& r2) {
     return Comparator(r1, r2, key_indexes);
@@ -94,13 +94,13 @@ void DataRecordWithRid::Sort(std::vector<DataRecordWithRid>* records,
 // ************************ DataRecordRidMutation *************************** //
 bool DataRecordRidMutation::Comparator(const DataRecordRidMutation& r1,
                                        const DataRecordRidMutation& r2,
-                                       const std::vector<int>& indexes) {
+                                       const std::vector<uint32>& indexes) {
   return RecordBase::RecordComparator(*r1.record, *r2.record, indexes);
 }
 
 void DataRecordRidMutation::Sort(
          std::vector<DataRecordRidMutation>* records,
-         const std::vector<int>& key_indexes) {
+         const std::vector<uint32>& key_indexes) {
   auto comparator = [&key_indexes] (const DataRecordRidMutation& r1,
                                     const DataRecordRidMutation& r2) {
     return Comparator(r1, r2, key_indexes);
@@ -212,7 +212,7 @@ bool DataRecordRidMutation::Merge(std::vector<DataRecordRidMutation>& v1,
 
 void DataRecordRidMutation::GroupDataRecordRidMutations(
           std::vector<DataRecordRidMutation>& rid_mutations,
-          std::vector<int> key_index,
+          std::vector<uint32> key_index,
           std::vector<RecordGroup>* rgroups) {
   if (rid_mutations.empty()) {
     return;

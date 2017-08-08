@@ -53,10 +53,10 @@ class TableInfoManager {
   FieldInfoManager* FindFieldByName(const std::string field_name);
   FieldInfoManager* FindFieldByIndex(uint32 index);
 
-  std::vector<int32> PrimaryIndex() const;
-  bool IsPrimaryIndex(const std::vector<int32>& index) const;
-  static std::vector<int32> MakeIndex(const DB::Index& index);
-  bool HasIndex(const std::vector<int32>& index) const;
+  std::vector<uint32> PrimaryIndex() const;
+  bool IsPrimaryIndex(const std::vector<uint32>& index) const;
+  static std::vector<uint32> MakeIndex(const DB::Index& index);
+  bool HasIndex(const std::vector<uint32>& index) const;
 
  private:
   TableInfo* table_info_;
@@ -65,7 +65,7 @@ class TableInfoManager {
   std::map<int32, FieldInfoManager*> fields_by_index_;
 
   // indexes of INDEX_DATA file.
-  std::vector<int> idata_index_;
+  std::vector<uint32> idata_index_;
 };
 
 class FieldInfoManager {
@@ -77,7 +77,7 @@ class FieldInfoManager {
   TableField* mutable_field() { return field_; }
 
   std::string name() const;
-  int32 index() const;
+  uint32 index() const;
   TableField::Type type() const;
   int32 size() const;
   const ValueLimit& min_value() const { return field_->min_value(); }

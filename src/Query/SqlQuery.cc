@@ -1112,7 +1112,7 @@ void SqlQuery::EvaluateQueryConditions(PhysicalPlan* physical_plan) {
   for (const auto& group : condition_groups) {
     // If this column has no index, we have to scan. Otherwise analyze this
     // group conditions and find the search range.
-    int field_index = (*group.begin())->column.index;
+    uint32 field_index = (*group.begin())->column.index;
     auto field_m = table_m->FindFieldByIndex(field_index);
     CHECK(field_m != nullptr,
           Strings::StrCat("Couldn't find column \"",
@@ -1151,6 +1151,70 @@ void SqlQuery::EvaluateQueryConditions(PhysicalPlan* physical_plan) {
   physical_plan->table_name = table_name;
 }
 
+void SqlQuery::AggregateResults() {
+  std::vector<ColumnRequest*> aggregation_columns;
+  std::vector<Column> non_aggregation_columns;
+  std::map<std::string, uint32> extra_index;
+  for (auto& column_request : columns_) {
+    if (column_request.aggregation_type != NO_AGGREGATION) { 
+      // Give the aggregation column extra index, appending all columns of the
+      // table.
+      const auto& table_name = column_request.column.table_name;
+      auto* table_m = FindTable(column_request.column.table_name);
+      CHECK(table_m != nullptr, "Couldn't find table %s", table_name.c_str());
+      if (extra_index[table_name] == 0) {
+        extra_index[table_name] = table_m->NumFields();
+      }
+      column_request.column.index = extra_index.at(table_name);
+
+      // Update field index meta if the tabl record in result is INDEX_RECORD.
+      auto it = expr_node_->mutable_results()->tuple_meta.find(table_name);
+      CHECK(it != expr_node_->mutable_results()->tuple_meta.end(),
+            "Couldn't find table record meta for table %s", table_name);
+      if (!it->second.field_indexes.empty()) {  // index record
+        it->second.field_indexes.push_back(extra_index.at(table_name));
+      }
+
+      extra_index[table_name]++;
+
+      aggregation_columns.push_back(&column_request);
+    } else {
+      non_aggregation_columns.push_back(column_request.column);
+    }
+  }
+
+  FetchedResult result;
+  result.tuple_meta = expr_node_->results().tuple_meta;
+  expr_node_->mutable_results()->SortByColumns(non_aggregation_columns);
+
+  FetchedResult::Tuple* crt_tuple = nullptr;
+  for (auto& tuple : expr_node_->mutable_results()->tuples) {
+    if (!crt_tuple ||
+        (crt_tuple && FetchedResult::CompareBasedOnColumns(
+                          tuple, *crt_tuple, non_aggregation_columns) != 0)) {
+      result.tuples.push_back(tuple);
+      crt_tuple = &(result.tuples.back());
+
+      // Append aggregated column fields to the record.
+      for (const auto& aggregation_column : aggregation_columns) {
+        const auto& table_name = aggregation_column->column.table_name;
+        auto it = crt_tuple->find(table_name);
+        CHECK(it != crt_tuple->end(),
+              "Couldn't find record of table %s from tuple",table_name.c_str());
+        auto& table_record = it->second;
+        auto* field_m = FindTableColumn(aggregation_column->column);
+        const auto* original_field = table_record.GetField(field_m->index());
+        CHECK(original_field != nullptr,
+              "Couldn't get original field or aggregation column %s",
+              aggregation_column->AsString(true).c_str());
+        table_record.AddField(original_field->Copy());
+      }
+    } else {
+      // TODO: Do Aggregation.
+    }
+  }
+}
+
 void SqlQuery::PrintResults() {
   if (expr_node_->results().tuples.empty()) {
     printf("Empty set\n");
@@ -1165,26 +1229,7 @@ void SqlQuery::PrintResults() {
                                column_request.column.table_name.c_str());
 
       const auto& result_record = it->second;
-      const auto& record = result_record.record;
-      int pos = -1;
-      if (record->type() == Storage::DATA_RECORD) {
-        pos = column_request.column.index;
-      } else if (record->type() == Storage::INDEX_RECORD) {
-        for (uint32 i = 0 ; i < result_record.meta->field_indexes.size(); i++) {
-          if (result_record.meta->field_indexes.at(i) ==
-              column_request.column.index) {
-            pos = i;
-            break;
-          }
-        }
-        CHECK(pos > 0, "Can't find required field index %d",
-                       column_request.column.index,
-                       " for this index record");
-      } else {
-        LogFATAL("Invalid record type to evalute: %s",
-                 Storage::RecordTypeStr(result_record.record_type()).c_str());
-      }
-      const auto& field = record->fields().at(pos);
+      const auto* field = result_record.GetField(column_request.column.index);
       uint32 print_size = field->AsString().length();
       if (print_size + 2 > column_request.print_width) {
         column_request.print_width = print_size + 2;
@@ -1238,26 +1283,7 @@ void SqlQuery::PrintResults() {
                                column_request.column.table_name.c_str());
 
       const auto& result_record = it->second;
-      const auto& record = result_record.record;
-      int pos = -1;
-      if (record->type() == Storage::DATA_RECORD) {
-        pos = column_request.column.index;
-      } else if (record->type() == Storage::INDEX_RECORD) {
-        for (uint32 i = 0 ; i < result_record.meta->field_indexes.size(); i++) {
-          if (result_record.meta->field_indexes.at(i) ==
-              column_request.column.index) {
-            pos = i;
-            break;
-          }
-        }
-        CHECK(pos > 0, "Can't find required field index %d",
-                       column_request.column.index,
-                       " for this index record");
-      } else {
-        LogFATAL("Invalid record type to evalute: %s",
-                 Storage::RecordTypeStr(result_record.record_type()).c_str());
-      }
-      const auto& field = record->fields().at(pos);
+      const auto* field = result_record.GetField(column_request.column.index);
 
       printf("| ");
       printf("%s", field->AsString().c_str());

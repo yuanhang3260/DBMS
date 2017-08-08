@@ -183,7 +183,7 @@ struct PhysicalPlan {
 };
 
 struct TableRecordMeta {
-  std::vector<int> field_indexes;
+  std::vector<uint32> field_indexes;
 };
 
 struct ResultRecord {
@@ -194,6 +194,10 @@ struct ResultRecord {
   TableRecordMeta* meta = nullptr;
 
   Storage::RecordType record_type() const;
+
+  const Schema::Field* GetField(uint32 index) const;
+  // Takes ownership of the argument.
+  void AddField(Schema::Field* field);
 };
 
 struct FetchedResult {
@@ -212,7 +216,7 @@ struct FetchedResult {
 
   void SortByColumns(const std::vector<Column>& columns);
   void SortByColumns(const std::string& table_name,
-                     const std::vector<int>& field_indexes);
+                     const std::vector<uint32>& field_indexes);
 
   // Take two set of results, sort and merge them by columns.
   void MergeSortResults(FetchedResult& result_1,
@@ -222,7 +226,7 @@ struct FetchedResult {
   void MergeSortResults(FetchedResult& result_1,
                         FetchedResult& result_2,
                         const std::string& table_name,
-                        const std::vector<int>& field_indexes);
+                        const std::vector<uint32>& field_indexes);
 
   void MergeSortResultsRemoveDup(FetchedResult& result_1,
                                  FetchedResult& result_2,
@@ -231,7 +235,7 @@ struct FetchedResult {
   void MergeSortResultsRemoveDup(FetchedResult& result_1,
                                  FetchedResult& result_2,
                                  const std::string& table_name,
-                                 const std::vector<int>& field_indexes);
+                                 const std::vector<uint32>& field_indexes);
 };
 
 }  // namespace Query

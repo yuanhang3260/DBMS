@@ -107,11 +107,11 @@ class RecordBase {
 
   // Init records fields with schema and key_indexes.
   bool InitRecordFields(const DB::TableInfo& schema,
-                        const std::vector<int>& indexes);
+                        const std::vector<uint32>& indexes);
 
   // Check all fields type match a schema.
   bool CheckFieldsType(const DB::TableInfo& schema,
-                       std::vector<int> key_indexes) const;
+                       std::vector<uint32> key_indexes) const;
   bool CheckFieldsType(const DB::TableInfo& schema) const;
 
   // Parse from text of format as Print() method prints.
@@ -138,23 +138,23 @@ class RecordBase {
 
   static int CompareRecordsBasedOnIndex(const RecordBase& r1,
                                         const RecordBase& r2,
-                                        const std::vector<int>& indexes);
+                                        const std::vector<uint32>& indexes);
 
   static bool RecordComparator(const RecordBase& r1,
                                const RecordBase& r2,
-                               const std::vector<int>& indexes);
+                               const std::vector<uint32>& indexes);
 
   // Greater comparator. This can be used in containers like std::priority_queue
   // which is a max heap, to provide stable sort.
   static bool RecordComparatorGt(const RecordBase& r1,
                                  const RecordBase& r2,
-                                 const std::vector<int>& indexes);
+                                 const std::vector<uint32>& indexes);
 
   static int CompareRecords(const RecordBase& r1, const RecordBase& r2);
 
   static int CompareRecordWithKey(const RecordBase& key,
                                   const RecordBase& record,
-                                  const std::vector<int>& indexes);
+                                  const std::vector<uint32>& indexes);
 
   // Insert the record to a page and returns the record's slot id.
   int InsertToRecordPage(RecordPage* page) const;
@@ -180,7 +180,8 @@ class DataRecord: public RecordBase {
   // are given in arg field_indexes.
   // Extracted RecordKey will not allocate space for nor take ownership of the
   // data from this Record. It just maintains shared pointers to original data.
-  bool ExtractKey(RecordBase* key, const std::vector<int>& field_indexes) const;
+  bool ExtractKey(RecordBase* key,
+                  const std::vector<uint>& field_indexes) const;
 };
 
 

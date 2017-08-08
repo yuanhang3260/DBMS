@@ -18,7 +18,7 @@ class MergeSortTest: public UnitTest {
  private:
   std::vector<std::shared_ptr<RecordBase>> record_resource_;
   DB::TableInfo schema_;
-  std::vector<int> key_fields_ = std::vector<int>{0, 2, 3};
+  std::vector<uint32> key_fields_ = std::vector<uint32>{0, 2, 3};
   std::unique_ptr<MergeSorter> sorter_;
 
  public:

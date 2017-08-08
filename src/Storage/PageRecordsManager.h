@@ -17,13 +17,13 @@ class PageRecordsManager {
  public:
   PageRecordsManager(RecordPage* page,
                      const DB::TableInfo& schema,
-                     const std::vector<int>& key_indexes,
+                     const std::vector<uint32>& key_indexes,
                      FileType file_type,
                      PageType page_type);
 
   // Accessors
   DEFINE_ACCESSOR(schema, const DB::TableInfo*);
-  DEFINE_ACCESSOR(key_indexes, std::vector<int>);
+  DEFINE_ACCESSOR(key_indexes, std::vector<uint32>);
   DEFINE_ACCESSOR(page, RecordPage*);
   DEFINE_ACCESSOR_ENUM(file_type, FileType);
   DEFINE_ACCESSOR_ENUM(page_type, PageType);
@@ -57,9 +57,9 @@ class PageRecordsManager {
   // Sort a list of records based on indexes that specified key.
   static void SortRecords(
       std::vector<std::shared_ptr<RecordBase>>* records,
-      const std::vector<int>& key_indexes);
+      const std::vector<uint32>& key_indexes);
 
-  void SortByIndexes(const std::vector<int>& key_indexes);
+  void SortByIndexes(const std::vector<uint32>& key_indexes);
 
   // Load all records from a page and sort it based on key.
   bool LoadRecordsFromPage();
@@ -74,7 +74,7 @@ class PageRecordsManager {
   // tree leave of an index-data file, it should return key_indexes.
   // Otherwise the PageLoadedRecord already contains only key fields, and thus
   // each field needs to be compared one by one.
-  std::vector<int> ProduceIndexesToCompare() const;
+  std::vector<uint32> ProduceIndexesToCompare() const;
 
   // Append a new record to the plrecords list. This function is only called
   // in splitting this page. It won't take owner ship of the record passed.
@@ -121,7 +121,7 @@ class PageRecordsManager {
   std::vector<PageLoadedRecord> plrecords_;
   std::map<int32, PageLoadedRecord*> slot_plrecords_;
   const DB::TableInfo* schema_ = nullptr;
-  std::vector<int> key_indexes_;
+  std::vector<uint32> key_indexes_;
 
   FileType file_type_ = UNKNOWN_FILETYPE;
   PageType page_type_ = UNKNOW_PAGETYPE;

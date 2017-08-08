@@ -23,16 +23,16 @@ message TableField {
   }
 
   optional string name = 1;
-  optional int32 index = 2;
+  optional uint32 index = 2;
   optional Type type = 3;
-  optional int32 size = 4;  // Only meaningful for CharArray - length limit.
+  optional uint32 size = 4;  // Only meaningful for CharArray - length limit.
 
   optional ValueLimit min_value = 5;
   optional ValueLimit max_value = 6;
 }
 
 message Index {
-  repeated int32 index_fields = 1;
+  repeated uint32 index_fields = 1;
 }
 
 message TableInfo {

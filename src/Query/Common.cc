@@ -385,6 +385,33 @@ Storage::RecordType ResultRecord::record_type() const {
   return Storage::UNKNOWN_RECORDTYPE;
 }
 
+const Schema::Field* ResultRecord::GetField(uint32 index) const {
+  if (record_type() == Storage::DATA_RECORD) {
+    CHECK(index < record->NumFields(), "index %d out of range", index);
+    return record->fields().at(index).get();
+  } else if (record_type() == Storage::INDEX_RECORD) {
+    int pos = -1;
+    for (uint32 i = 0 ; i < meta->field_indexes.size(); i++) {
+      if (meta->field_indexes.at(i) == index) {
+        pos = i;
+        break;
+      }
+    }
+    CHECK(pos > 0, Strings::StrCat("Can't find required field index ",
+                                   std::to_string(index),
+                                   " for this index record"));
+    return record->fields().at(pos).get();
+  } else {
+    LogFATAL("Invalid record type to evalute: %s",
+             Storage::RecordTypeStr(record_type()).c_str());
+  }
+  return nullptr;
+}
+
+void ResultRecord::AddField(Schema::Field* field) {
+  record->AddField(field);
+}
+
 bool FetchedResult::AddTuple(const Tuple& tuple) {
   tuples.push_back(tuple);
   for (auto& table_record_iter : tuples.back()) {
@@ -409,7 +436,6 @@ bool FetchedResult::AddTuple(Tuple&& tuple) {
   tuples.push_back(std::move(tuple));
   return true;
 }
-
 
 int FetchedResult::CompareBasedOnColumns(
     const Tuple& t1, const Tuple& t2,
@@ -437,28 +463,12 @@ int FetchedResult::CompareBasedOnColumns(
 
     CHECK(record_1.record_type() == record_2.record_type(),
           "Comparing records with different record types");
-    int pos = -1;
-    if (record_1.record_type() == Storage::DATA_RECORD) {
-      pos = column.index;
-    } else if (record_1.record_type() == Storage::INDEX_RECORD) {
-      CHECK(record_1.meta->field_indexes == record_2.meta->field_indexes,
+
+    CHECK(record_1.meta->field_indexes == record_2.meta->field_indexes,
             "Comparing index records with different index fields");
-      for (uint32 i = 0 ; i < record_1.meta->field_indexes.size(); i++) {
-        if (record_1.meta->field_indexes.at(i) == column.index) {
-          pos = i;
-          break;
-        }
-      }
-      CHECK(pos > 0, Strings::StrCat("Can't find required field index ",
-                                     std::to_string(column.index),
-                                     " for this index record"));
-    } else {
-      LogFATAL("Invalid record type to evalute: %s",
-               Storage::RecordTypeStr(record_1.record_type()).c_str());
-    }
-    int re = RecordBase::CompareSchemaFields(
-                record_1.record->fields().at(pos).get(),
-                record_2.record->fields().at(pos).get());
+
+    int re = RecordBase::CompareSchemaFields(record_1.GetField(column.index),
+                                             record_2.GetField(column.index));
     if (re != 0) {
       return re;
     }
@@ -475,7 +485,7 @@ void FetchedResult::SortByColumns(const std::vector<Column>& columns) {
 }
 
 void FetchedResult::SortByColumns(const std::string& table_name,
-                                  const std::vector<int>& field_indexes) {
+                                  const std::vector<uint32>& field_indexes) {
   std::vector<Column> columns;
   for (int index : field_indexes) {
     columns.emplace_back(table_name, "" /* column name doesn't matter */);
@@ -516,7 +526,7 @@ void FetchedResult::MergeSortResults(FetchedResult& result_1,
 void FetchedResult::MergeSortResults(FetchedResult& result_1,
                                      FetchedResult& result_2,
                                      const std::string& table_name,
-                                     const std::vector<int>& field_indexes) {
+                                     const std::vector<uint32>& field_indexes) {
   std::vector<Column> columns;
   for (int index : field_indexes) {
     columns.emplace_back(table_name, "" /* column name doesn't matter */);
@@ -578,7 +588,7 @@ void FetchedResult::MergeSortResultsRemoveDup(
 
 void FetchedResult::MergeSortResultsRemoveDup(
     FetchedResult& result_1, FetchedResult& result_2,
-    const std::string& table_name, const std::vector<int>& field_indexes) {
+    const std::string& table_name, const std::vector<uint32>& field_indexes) {
   std::vector<Column> columns;
   for (int index : field_indexes) {
     columns.emplace_back(table_name, "" /* column name doesn't matter */);

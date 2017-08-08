@@ -15,7 +15,7 @@ namespace Storage {
 // ************************** PageRecordsManager **************************** //
 PageRecordsManager::PageRecordsManager(RecordPage* page,
                                        const DB::TableInfo& schema,
-                                       const std::vector<int>& key_indexes,
+                                       const std::vector<uint32>& key_indexes,
                                        FileType file_type,
                                        PageType page_type) :
     page_(page),
@@ -34,7 +34,7 @@ PageRecordsManager::PageRecordsManager(RecordPage* page,
 
 void PageRecordsManager::SortRecords(
          std::vector<std::shared_ptr<RecordBase>>* records,
-         const std::vector<int>& key_indexes) {
+         const std::vector<uint32>& key_indexes) {
   for (uint32 i : key_indexes) {
     if (i >= records->at(0)->NumFields()) {
       LogERROR("key index = %d, records only has %d fields",
@@ -50,7 +50,7 @@ void PageRecordsManager::SortRecords(
   std::stable_sort(records->begin(), records->end(), comparator);
 }
 
-void PageRecordsManager::SortByIndexes(const std::vector<int>& key_indexes) {
+void PageRecordsManager::SortByIndexes(const std::vector<uint32>& key_indexes) {
   auto comparator = std::bind(PageLoadedRecord::Comparator,
                               std::placeholders::_1, std::placeholders::_2,
                               key_indexes);
@@ -107,8 +107,8 @@ bool PageRecordsManager::InsertRecordToPage(const RecordBase* record) {
   return false;
 }
 
-std::vector<int> PageRecordsManager::ProduceIndexesToCompare() const {
-  std::vector<int> indexes;
+std::vector<uint32> PageRecordsManager::ProduceIndexesToCompare() const {
+  std::vector<uint32> indexes;
   if (file_type_ == INDEX_DATA &&
       page_type_ == TREE_LEAVE) {
     indexes = key_indexes_;
@@ -126,11 +126,11 @@ bool PageRecordsManager::CheckSort() const {
     return true;
   }
 
-  std::vector<int> check_indexes = ProduceIndexesToCompare();
+  std::vector<uint32> check_indexes = ProduceIndexesToCompare();
   for (uint32 i = 0; i < plrecords_.size() - 1; i++) {
     const auto& r1 = plrecords_.at(i);
     const auto& r2 = plrecords_.at(i + 1);
-    for (int index: check_indexes) {
+    for (uint32 index: check_indexes) {
       int re = RecordBase::CompareSchemaFields(
                    r1.record().fields().at(index).get(),
                    r2.record().fields().at(index).get());

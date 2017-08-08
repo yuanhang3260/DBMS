@@ -135,30 +135,7 @@ NodeValue ColumnNode::Evaluate(const FetchedResult::Tuple& tuple) const {
                         " from the given tuple"));
 
   const auto& table_record = it->second;
-  const auto& fields = table_record.record->fields();
-  const Schema::Field* field = nullptr;
-  if (table_record.record_type() == Storage::DATA_RECORD) {
-    field = fields.at(column_.index).get();
-  } else if (table_record.record_type() == Storage::INDEX_RECORD) {
-    int32 pos = -1;
-    for (uint32 i = 0 ; i < table_record.meta->field_indexes.size(); i++) {
-      if (table_record.meta->field_indexes.at(i) == column_.index) {
-        pos = i;
-        break;
-      }
-    }
-    // Check if the field is in the index record. This should be assured by
-    // the expression evaluator system. It should never pass in index records
-    // that don't contain all table column fields that the expression requires.
-    CHECK(pos > 0, Strings::StrCat("Can't find required field index ",
-                                   std::to_string(column_.index),
-                                   " for this index record"));
-    field = fields.at(pos).get();
-  } else {
-    // Never should pass in record types other than DATA_RECORD/INDEX_RECORD.
-    LogFATAL("Invalid record type to evalute: %s",
-             Storage::RecordTypeStr(table_record.record_type()).c_str());
-  }
+  const Schema::Field* field = table_record.GetField(column_.index);
 
   // Get value from field.
   switch (column_.type) {

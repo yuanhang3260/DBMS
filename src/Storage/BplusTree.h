@@ -65,7 +65,7 @@ class BplusTree {
   // Contruct B+ tree from an existing file.
   BplusTree(DB::Table* table,
             FileType file_type,
-            std::vector<int> key_indexes,
+            std::vector<uint32> key_indexes,
             bool create=false);
 
   // Destructor
@@ -74,7 +74,7 @@ class BplusTree {
   // Accessors
   DEFINE_ACCESSOR(file, FILE*);
   DEFINE_ACCESSOR(table, DB::Table*);
-  DEFINE_ACCESSOR(key_indexes, std::vector<int>);
+  DEFINE_ACCESSOR(key_indexes, std::vector<uint32>);
   DEFINE_ACCESSOR_ENUM(file_type, FileType);
   BplusTreeHeaderPage* meta() { return header_.get(); }
   RecordPage* root();
@@ -100,7 +100,7 @@ class BplusTree {
 
   // Produce indexes to compare records. For INDEX-DATA file, they are key
   // indexes; For INDEX file, they are [0, 1, 2 ... (num_keys-1)]
-  std::vector<int> IndexesToCompareLeaveRecords() const;
+  std::vector<uint32> IndexesToCompareLeaveRecords() const;
 
   // BulkLoading data. Input is a list of Record consisting of various fields
   // defined in Schema/DataTypes. These records must have been sorted based
@@ -361,7 +361,7 @@ class BplusTree {
   FileType file_type_ = UNKNOWN_FILETYPE;
 
   // Index of fields in key.
-  std::vector<int> key_indexes_;
+  std::vector<uint32> key_indexes_;
 
   // Header page contains meta data of this B+ tree.
   std::unique_ptr<BplusTreeHeaderPage> header_;

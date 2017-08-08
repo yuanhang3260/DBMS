@@ -19,7 +19,7 @@ class RecordTest: public UnitTest {
   std::map<int, std::shared_ptr<TreeNodeRecord>> treenoderecord_resource;
   const int kNumRecordsSource = 1000;
   DB::TableInfo schema;
-  std::vector<int> key_indexes = std::vector<int>{1, 0};
+  std::vector<uint32> key_indexes = std::vector<uint32>{1, 0};
 
  public:
   enum RecordType {
@@ -261,7 +261,7 @@ class RecordTest: public UnitTest {
       records[i]->Print();
     }
 
-    PageRecordsManager::SortRecords(&records, std::vector<int>{4, 0});
+    PageRecordsManager::SortRecords(&records, std::vector<uint32>{4, 0});
     std::cout << "After sorting:" << std::endl;
     for (int i = 0; i < 10; i++) {
       records[i]->Print();

@@ -154,8 +154,8 @@ class TableField: public ::proto::Message {
 
   // "index" = 2
   bool has_index() const;
-  int32 index() const;
-  void set_index(int32 index);
+  uint32 index() const;
+  void set_index(uint32 index);
   void clear_index();
 
   // "type" = 3
@@ -166,8 +166,8 @@ class TableField: public ::proto::Message {
 
   // "size" = 4
   bool has_size() const;
-  int32 size() const;
-  void set_size(int32 size);
+  uint32 size() const;
+  void set_size(uint32 size);
   void clear_size();
 
   // "min_value" = 5
@@ -191,9 +191,9 @@ class TableField: public ::proto::Message {
   char has_bits_[1];
   // message fields
   std::string name_ = "";
-  int32 index_ = 0;
+  uint32 index_ = 0;
   TableField::Type type_ = TableField::UNKNOWN_TYPE;
-  int32 size_ = 0;
+  uint32 size_ = 0;
   ValueLimit* min_value_ = nullptr;
   ValueLimit* max_value_ = nullptr;
 
@@ -232,18 +232,18 @@ class Index: public ::proto::Message {
 
   // "index_fields" = 1
   int index_fields_size() const;
-  int32 index_fields(int index) const;
-  void set_index_fields(int index, int32 value);
-  void add_index_fields(int32 value);
+  uint32 index_fields(int index) const;
+  void set_index_fields(int index, uint32 value);
+  void add_index_fields(uint32 value);
   void clear_index_fields();
-  const ::proto::RepeatedField<int32>& index_fields() const;
-  ::proto::RepeatedField<int32>& mutable_index_fields();
+  const ::proto::RepeatedField<uint32>& index_fields() const;
+  ::proto::RepeatedField<uint32>& mutable_index_fields();
 
  private:
   // has bits
   char has_bits_[1];
   // message fields
-  ::proto::RepeatedField<int32> index_fields_;
+  ::proto::RepeatedField<uint32> index_fields_;
 
   // InitAsDefaultInstance()
   void InitAsDefaultInstance() override;

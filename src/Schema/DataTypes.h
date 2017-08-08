@@ -85,6 +85,8 @@ class IntField: public Field {
 
   static double EvaluateValueRatio(ValueRange<int>& range);
 
+  Field* Copy() const override { return new IntField(value_); }
+
  private:
   int value_ = LONG_MIN;
 };
@@ -146,6 +148,8 @@ class LongIntField: public Field {
   void reset() override { value_ = LLONG_MIN; }
 
   static double EvaluateValueRatio(ValueRange<int64>& range);
+
+  Field* Copy() const override { return new LongIntField(value_); }
 
  private:
   int64 value_ = LLONG_MIN;
@@ -209,6 +213,8 @@ class DoubleField: public Field {
 
   static double EvaluateValueRatio(ValueRange<double>& range);
 
+  Field* Copy() const override { return new DoubleField(value_); }
+
  private:
   double value_ = -DBL_MAX;
 };
@@ -270,6 +276,8 @@ class BoolField: public Field {
   void reset() override { value_ = false; }
 
   static double EvaluateValueRatio(ValueRange<bool>& range);
+
+  Field* Copy() const override { return new BoolField(value_); }
 
  private:
   bool value_ = false;
@@ -333,6 +341,8 @@ class CharField: public Field {
 
   static double EvaluateValueRatio(ValueRange<char>& range);
 
+  Field* Copy() const override { return new CharField(value_); }
+
  private:
   char value_ = 0;
 };
@@ -365,6 +375,8 @@ class StringField: public Field {
   void reset() override { value_.clear(); }
 
   static double EvaluateValueRatio(ValueRange<std::string>& range);
+
+  Field* Copy() const override { return new StringField(value_); }
 
  private:
   std::string value_;
@@ -405,6 +417,8 @@ class CharArrayField: public Field {
   void reset() override;
 
   static double EvaluateValueRatio(ValueRange<std::string>& range);
+
+  Field* Copy() const override;
 
  private:
   char* value_ = nullptr;

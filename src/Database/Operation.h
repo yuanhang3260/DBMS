@@ -11,7 +11,7 @@
 namespace DB {
 
 struct SearchOp {
-  std::vector<int32> field_indexes;
+  std::vector<uint32> field_indexes;
   std::shared_ptr<Storage::RecordBase> key;
 
   Storage::RecordBase* AddKey() {
@@ -26,7 +26,7 @@ struct SearchOp {
 };
 
 struct RangeSearchOp {
-  std::vector<int32> field_indexes;
+  std::vector<uint32> field_indexes;
 
   std::shared_ptr<Storage::RecordBase> left_key;
   bool left_open = true;
@@ -54,7 +54,7 @@ struct RangeSearchOp {
 };
 
 struct DeleteOp {
-  std::vector<int32> field_indexes;
+  std::vector<uint32> field_indexes;
   std::vector<std::shared_ptr<Storage::RecordBase>> keys;
   Query::OperatorType op_cond = Query::EQUAL;
 };

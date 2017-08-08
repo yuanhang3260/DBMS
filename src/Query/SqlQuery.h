@@ -93,6 +93,9 @@ class SqlQuery {
   // Execute a SELECT query, returns the number of matching records.
   int ExecuteSelectQuery();
 
+  // Aggregate rows if there is SUM(), AVG(), COUNT(), etc.
+  void AggregateResults();
+
   // Print results.
   void PrintResults();
 
