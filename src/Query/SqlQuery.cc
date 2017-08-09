@@ -22,8 +22,11 @@ void SqlQuery::reset() {
   columns_set_.clear();
   columns_unknown_table_.clear();
   star_columns_.clear();
+  order_by_columns_.clear();
+  group_by_columns_.clear();
   columns_.clear();
   columns_num_ = 0;
+  aggregated_columns_num_ = 0;
 }
 
 void SqlQuery::SetExprNode(std::shared_ptr<Query::ExprTreeNode> node) {
@@ -58,6 +61,9 @@ bool SqlQuery::AddColumn(const std::string& name,
   }
 
   column_request.aggregation_type = aggregation_type;
+  if (aggregation_type != NO_AGGREGATION) {
+    aggregated_columns_num_++;
+  }
   column_request.request_pos = ++columns_num_;
 
   if (column_request.column.table_name.empty()) {
@@ -110,13 +116,6 @@ bool SqlQuery::AddGroupByColumn(const std::string& name) {
 
   if (new_column.column_name == "*") {
     error_msg_ = "Can't use * column in GROUP BY column list";
-    return false;
-  }
-
-  // Check group column must be in select columns list, with no aggregation.
-  if (FindColumnRequest(new_column, NO_AGGREGATION) == nullptr) {
-    error_msg_ = Strings::StrCat("Can't find column ",
-                                 new_column.AsString(true), " in select list");
     return false;
   }
 
@@ -214,6 +213,7 @@ const ColumnRequest* SqlQuery::FindColumnRequest(const Column& column) const {
 const ColumnRequest* SqlQuery::FindColumnRequest(
     const Column& column, AggregationType aggregation_type) const {
   for (const auto& column_request : columns_) {
+    std::cout << column_request.AsString(true) << std::endl;
     if (column_request.column == column &&
         column_request.aggregation_type == aggregation_type) {
       return &column_request;
@@ -227,7 +227,7 @@ bool SqlQuery::FinalizeParsing() {
   std::string default_table = DefaultTable();
   if (default_table.empty() &&
       (!columns_unknown_table_.empty() || !order_by_columns_.empty())) {
-    error_msg_ = Strings::StrCat("Default table not found.");
+    error_msg_ = "Default table not found.";
     return false;
   }
 
@@ -243,7 +243,23 @@ bool SqlQuery::FinalizeParsing() {
   columns_unknown_table_.clear();
 
   for (auto& column_request : order_by_columns_) {
-    column_request.column.table_name = default_table;
+    if (column_request.column.table_name.empty()) {
+      if (default_table.empty()) {
+        error_msg_ = "Default table not found for order by column.";
+        return false;
+      }
+      column_request.column.table_name = default_table;
+    }
+  }
+
+  for (auto& column : group_by_columns_) {
+    if (column.table_name.empty()) {
+      if (default_table.empty()) {
+        error_msg_ = "Default table not found for order by column.";
+        return false;
+      }
+      column.table_name = default_table;
+    }
   }
 
   // Expand * columns.
@@ -325,6 +341,17 @@ bool SqlQuery::FinalizeParsing() {
     }
   }
 
+  // Check group column must be in select columns list, with no aggregation.
+  for (const auto& column : group_by_columns_) {
+    if (FindColumnRequest(column, NO_AGGREGATION) == nullptr) {
+      error_msg_ = Strings::StrCat("Can't find group_by column ",
+                                   column.DebugString(), " in select list");
+      return false;
+    }
+  }
+
+  // If group_by_columns is empty, the result will be automatically grouped
+  // by all non_aggregate_columns in the select list.
   if (!group_by_columns_.empty() &&
       non_aggregate_columns != group_by_columns_.size()) {
     error_msg_ =
@@ -365,6 +392,10 @@ const PhysicalPlan& SqlQuery::PrepareQueryPlan() {
 int SqlQuery::ExecuteSelectQuery() {
   PrepareQueryPlan();
   int re = ExecuteSelectQueryFromNode(expr_node_.get());
+
+  if (aggregated_columns_num_ > 0) {
+    AggregateResults();
+  }
 
   if (!order_by_columns_.empty()) {
     std::vector<Column> columns;
@@ -418,7 +449,7 @@ int SqlQuery::ExecuteSelectQueryFromNode(ExprTreeNode* node) {
       for (auto& tuple : pop_node->mutable_results()->tuples) {
         NodeValue result = other_node->Evaluate(tuple);
         if (result.v_bool) {
-          node->mutable_results()->tuples.push_back(std::move(tuple));
+          node->mutable_results()->AddTuple(std::move(tuple));
         }
       }
     }
@@ -1199,35 +1230,45 @@ void SqlQuery::AggregateResults() {
   result.tuple_meta = expr_node_->results().tuple_meta;
   expr_node_->mutable_results()->SortByColumns(non_aggregation_columns);
 
-  FetchedResult::Tuple* crt_tuple = nullptr;
-  uint32 group_size = 0;
-  for (const auto& tuple : expr_node_->mutable_results()->tuples) {
-    if (!crt_tuple ||
-        (crt_tuple && FetchedResult::CompareBasedOnColumns(
-                          tuple, *crt_tuple, non_aggregation_columns) != 0)) {
-      // Calculate AVG() columns for last group.
-      for (const auto& aggregation_column : aggregation_columns) {
-        if (aggregation_column->aggregation_type != AVG) {
-          continue;
-        }
-        const auto& table_name = aggregation_column->column.table_name;
-        auto it = crt_tuple->find(table_name);
-        CHECK(it != crt_tuple->end(),
-              "Couldn't find record of table %s from tuple",table_name.c_str());
-        auto& aggregated_record = it->second;
-        auto* aggregated_field =
-            aggregated_record.MutableField(aggregation_column->column.index);
-        CalculateAvg(aggregated_field, group_size);
+  // Help function to calculate AVG() columns for a tuple.
+  auto cal_avg = [&] (FetchedResult::Tuple* agg_tuple, uint32 group_size) {
+    if (!agg_tuple) {
+      return;
+    }
+    for (const auto& aggregation_column : aggregation_columns) {
+      if (aggregation_column->aggregation_type != AVG) {
+        continue;
       }
+      const auto& table_name = aggregation_column->column.table_name;
+      auto it = agg_tuple->find(table_name);
+      CHECK(it != agg_tuple->end(),
+            "Couldn't find record of table %s from tuple",
+            table_name.c_str());
+      auto& aggregated_record = it->second;
+      auto* aggregated_field =
+          aggregated_record.MutableField(aggregation_column->column.index);
+      CalculateAvg(aggregated_field, group_size);
+    }
+  };
 
-      result.tuples.push_back(tuple);
-      crt_tuple = &(result.tuples.back());
+  FetchedResult::Tuple* agg_tuple = nullptr;
+  uint32 group_size = 0;
+  for (auto& tuple : expr_node_->mutable_results()->tuples) {
+    if (!agg_tuple ||
+        (agg_tuple && FetchedResult::CompareBasedOnColumns(
+                          tuple, *agg_tuple, non_aggregation_columns) != 0)) {
+      // Calculate AVG() columns for last group.
+      cal_avg(agg_tuple, group_size);
+
+      // New group.
+      result.AddTuple(std::move(tuple));
+      agg_tuple = &(result.tuples.back());
 
       // Append aggregated column fields to the record.
       for (const auto& aggregation_column : aggregation_columns) {
         const auto& table_name = aggregation_column->column.table_name;
-        auto it = crt_tuple->find(table_name);
-        CHECK(it != crt_tuple->end(),
+        auto it = agg_tuple->find(table_name);
+        CHECK(it != agg_tuple->end(),
               "Couldn't find record of table %s from tuple",table_name.c_str());
         auto& table_record = it->second;
 
@@ -1248,8 +1289,8 @@ void SqlQuery::AggregateResults() {
       for (const auto& aggregation_column : aggregation_columns) {
         // Find aggregated field.
         const auto& table_name = aggregation_column->column.table_name;
-        auto it = crt_tuple->find(table_name);
-        CHECK(it != crt_tuple->end(),
+        auto it = agg_tuple->find(table_name);
+        CHECK(it != agg_tuple->end(),
               "Couldn't find record of table %s from tuple",table_name.c_str());
         auto& aggregated_record = it->second;
         auto* aggregated_field =
@@ -1279,6 +1320,10 @@ void SqlQuery::AggregateResults() {
       group_size++;
     }
   }
+  // Calculate AVG() columns for the last group.
+  cal_avg(agg_tuple, group_size);
+
+  *expr_node_->mutable_results() = std::move(result);
 }
 
 void SqlQuery::PrintResults() {

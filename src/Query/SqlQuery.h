@@ -129,6 +129,7 @@ class SqlQuery {
 
   // Target columns.
   uint32 columns_num_ = 0;
+  uint32 aggregated_columns_num_ = 0;
   std::set<ColumnRequest> columns_set_;
   std::set<ColumnRequest> columns_unknown_table_;
   std::set<ColumnRequest> star_columns_;

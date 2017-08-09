@@ -134,7 +134,7 @@ static Sql::Parser::symbol_type yylex(Sql::Scanner &scanner,
 
 %start query
 
-%left SELECT FROM WHERE ORDERBY
+%left SELECT FROM WHERE ORDERBY GROUPBY
 %left OR;
 %left AND;
 %left NOT;

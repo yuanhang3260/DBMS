@@ -385,10 +385,19 @@ class DatabaseTest: public UnitTest {
     query = interpreter_->shared_query();
     AssertTrue(query->FinalizeParsing());
     num_results = query->ExecuteSelectQuery();
-    //query->PrintResults();
     printf("num_results = %d\n", num_results);
     AssertEqual(ExpectedResultNum(query->expr_root()), num_results);
     AssertTrue(VerifyResult(query->expr_root(), query->results()));
+    interpreter_->reset();
+    printf("\n");
+
+    expr = "SELECT age, AVG(weight) FROM Puppy WHERE true GROUP BY age";
+    std::cout << expr << std::endl;
+    AssertTrue(interpreter_->Parse(expr));
+    query = interpreter_->shared_query();
+    AssertTrue(query->FinalizeParsing());
+    num_results = query->ExecuteSelectQuery();
+    query->PrintResults();
     interpreter_->reset();
     printf("\n");
   }

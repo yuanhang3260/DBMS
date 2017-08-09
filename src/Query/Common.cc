@@ -223,7 +223,7 @@ void AggregateField(AggregationType aggregation_type,
           Schema::FieldTypeStr(field_type).c_str());
   }
   
-  switch (field_type) {
+  switch (aggregation_type) {
     case SUM:
     case AVG:
       if (field_type == Schema::FieldType::INT) {
@@ -360,7 +360,7 @@ std::string Column::DebugString() const {
 std::string Column::AsString(bool use_table_prefix) const {
   std::string result = column_name;
   if (use_table_prefix) {
-    result = Strings::StrCat(table_name, ", ", column_name);
+    result = Strings::StrCat(table_name, ". ", column_name);
   }
   return result;
 }
@@ -732,7 +732,7 @@ void FetchedResult::MergeSortResultsRemoveDup(
       if (!last_tuple ||
           (last_tuple &&
            CompareBasedOnColumns(*last_tuple, *iter_1, columns) != 0)) {
-        tuples.push_back(*iter_1);
+        AddTuple(std::move(*iter_1));
         last_tuple = &tuples.back();
       }
       ++iter_1;
@@ -740,7 +740,7 @@ void FetchedResult::MergeSortResultsRemoveDup(
       if (!last_tuple ||
           (last_tuple &&
            CompareBasedOnColumns(*last_tuple, *iter_2, columns) != 0)) {
-        tuples.push_back(*iter_2);
+        AddTuple(std::move(*iter_2));
         last_tuple = &tuples.back();
       }
       ++iter_2;
@@ -751,7 +751,7 @@ void FetchedResult::MergeSortResultsRemoveDup(
     if (!last_tuple ||
         (last_tuple &&
          CompareBasedOnColumns(*last_tuple, *iter_1, columns)) != 0) {
-      tuples.push_back(*iter_1);
+      AddTuple(std::move(*iter_1));
       last_tuple = &tuples.back();
     }
     ++iter_1;
@@ -760,7 +760,7 @@ void FetchedResult::MergeSortResultsRemoveDup(
     if (!last_tuple ||
         (last_tuple &&
          CompareBasedOnColumns(*last_tuple, *iter_2, columns) != 0)) {
-      tuples.push_back(*iter_2);
+      AddTuple(std::move(*iter_2));
       last_tuple = &tuples.back();
     }
     ++iter_2;

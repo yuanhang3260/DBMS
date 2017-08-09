@@ -1277,7 +1277,6 @@ int BplusTree::RangeSearchRecords(
 
   result->clear();
 
-  std::set<Storage::RecordID> rid_set;
   bool end = false;
   while (leave) {
     PageRecordsManager prmanager(leave, schema(), key_indexes_,
