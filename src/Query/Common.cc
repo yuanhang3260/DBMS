@@ -173,6 +173,183 @@ std::string AggregationStr(AggregationType aggregation_type) {
   return "NO_AGGREGATION";
 }
 
+bool IsFieldAggregationValid(AggregationType aggregation_type,
+                             Schema::FieldType field_type) {
+  switch (aggregation_type) {
+    case SUM:
+    case AVG:
+      if (field_type == Schema::FieldType::INT ||
+          field_type == Schema::FieldType::LONGINT ||
+          field_type == Schema::FieldType::DOUBLE) {
+        return true;
+      } else {
+        return false;
+      }
+      break;
+    case MAX:
+    case MIN:
+      if (field_type != Schema::FieldType::BOOL) {
+        return true;
+      } else {
+        return false;
+      }
+      break;
+    case COUNT:
+      return true;
+    default:
+      return false;
+  }
+  return false;
+}
+
+#define CAST_FIELDS(schema_field)  \
+    auto* cast_aggregated_field =  \
+        dynamic_cast<Schema::schema_field*>(aggregated_field);  \
+    const auto* cast_original_field =  \
+        dynamic_cast<const Schema::schema_field*>(original_field);  \
+
+void AggregateField(AggregationType aggregation_type,
+                    Schema::Field* aggregated_field,
+                    const Schema::Field* original_field) {
+  auto field_type = aggregated_field->type();
+  if (original_field) {
+    CHECK(field_type == original_field->type(),
+          "Aggregating field type %s with %s",
+          Schema::FieldTypeStr(field_type).c_str(),
+          Schema::FieldTypeStr(original_field->type()).c_str());
+  } else {
+    CHECK(aggregation_type == COUNT && field_type == Schema::FieldType::INT,
+          "Expect INT aggregation type for COUNT, but got %s",
+          Schema::FieldTypeStr(field_type).c_str());
+  }
+  
+  switch (field_type) {
+    case SUM:
+    case AVG:
+      if (field_type == Schema::FieldType::INT) {
+        CAST_FIELDS(IntField);
+        *cast_aggregated_field += *cast_original_field;
+      } else if (field_type == Schema::FieldType::LONGINT) {
+        CAST_FIELDS(LongIntField);
+        *cast_aggregated_field += *cast_original_field;
+      } else if (field_type == Schema::FieldType::DOUBLE) {
+        CAST_FIELDS(DoubleField);
+        *cast_aggregated_field += *cast_original_field;
+      }
+      break;
+    case MAX: {
+      if (field_type == Schema::FieldType::INT) {
+        CAST_FIELDS(IntField);
+        if (cast_original_field->value() > cast_aggregated_field->value()) {
+          cast_aggregated_field->set_value(cast_original_field->value());
+        }
+      } else if (field_type == Schema::FieldType::LONGINT) {
+        CAST_FIELDS(LongIntField);
+        if (cast_original_field->value() > cast_aggregated_field->value()) {
+          cast_aggregated_field->set_value(cast_original_field->value());
+        }
+      } else if (field_type == Schema::FieldType::DOUBLE) {
+        CAST_FIELDS(DoubleField);
+        if (cast_original_field->value() > cast_aggregated_field->value()) {
+          cast_aggregated_field->set_value(cast_original_field->value());
+        }
+      } else if (field_type == Schema::FieldType::BOOL) {
+        CAST_FIELDS(BoolField);
+        if (cast_original_field->value() > cast_aggregated_field->value()) {
+          cast_aggregated_field->set_value(cast_original_field->value());
+        }
+      } else if (field_type == Schema::FieldType::CHAR) {
+        CAST_FIELDS(CharField);
+        if (cast_original_field->value() > cast_aggregated_field->value()) {
+          cast_aggregated_field->set_value(cast_original_field->value());
+        }
+      } else if (field_type == Schema::FieldType::STRING) {
+        CAST_FIELDS(StringField);
+        if (cast_original_field->value() > cast_aggregated_field->value()) {
+          cast_aggregated_field->set_value(cast_original_field->value());
+        }
+      }  else if (field_type == Schema::FieldType::CHARARRAY) {
+        CAST_FIELDS(CharArrayField);
+        if (cast_original_field->AsString() >
+            cast_aggregated_field->AsString()) {
+          cast_aggregated_field->SetData(cast_original_field->value(),
+                                         cast_original_field->valid_length());
+        }
+      }
+      break;
+    }
+    case MIN: {
+      if (field_type == Schema::FieldType::INT) {
+        CAST_FIELDS(IntField);
+        if (cast_original_field->value() < cast_aggregated_field->value()) {
+          cast_aggregated_field->set_value(cast_original_field->value());
+        }
+      } else if (field_type == Schema::FieldType::LONGINT) {
+        CAST_FIELDS(LongIntField);
+        if (cast_original_field->value() < cast_aggregated_field->value()) {
+          cast_aggregated_field->set_value(cast_original_field->value());
+        }
+      } else if (field_type == Schema::FieldType::DOUBLE) {
+        CAST_FIELDS(DoubleField);
+        if (cast_original_field->value() < cast_aggregated_field->value()) {
+          cast_aggregated_field->set_value(cast_original_field->value());
+        }
+      } else if (field_type == Schema::FieldType::BOOL) {
+        CAST_FIELDS(BoolField);
+        if (cast_original_field->value() < cast_aggregated_field->value()) {
+          cast_aggregated_field->set_value(cast_original_field->value());
+        }
+      } else if (field_type == Schema::FieldType::CHAR) {
+        CAST_FIELDS(CharField);
+        if (cast_original_field->value() < cast_aggregated_field->value()) {
+          cast_aggregated_field->set_value(cast_original_field->value());
+        }
+      } else if (field_type == Schema::FieldType::STRING) {
+        CAST_FIELDS(StringField);
+        if (cast_original_field->value() < cast_aggregated_field->value()) {
+          cast_aggregated_field->set_value(cast_original_field->value());
+        }
+      }  else if (field_type == Schema::FieldType::CHARARRAY) {
+        CAST_FIELDS(CharArrayField);
+        if (cast_original_field->AsString() <
+            cast_aggregated_field->AsString()) {
+          cast_aggregated_field->SetData(cast_original_field->value(),
+                                         cast_original_field->valid_length());
+        }
+      }
+      break;
+    }
+    case COUNT: {
+      auto* cast_aggregated_field =
+        dynamic_cast<Schema::IntField*>(aggregated_field);
+      cast_aggregated_field->Inc(1);
+      break;
+    }
+    default:
+      break;
+  }
+}
+
+void CalculateAvg(Schema::Field* aggregated_field, uint32 group_size) {
+  auto field_type = aggregated_field->type();
+  if (field_type == Schema::FieldType::INT) {
+    auto* cast_aggregated_field =
+        dynamic_cast<Schema::IntField*>(aggregated_field);
+    cast_aggregated_field->set_value(
+        cast_aggregated_field->value() / group_size);
+  } else if (field_type == Schema::FieldType::LONGINT) {
+    auto* cast_aggregated_field =
+        dynamic_cast<Schema::LongIntField*>(aggregated_field);
+    cast_aggregated_field->set_value(
+        cast_aggregated_field->value() / group_size);
+  } else if (field_type == Schema::FieldType::DOUBLE) {
+    auto* cast_aggregated_field =
+        dynamic_cast<Schema::DoubleField*>(aggregated_field);
+    cast_aggregated_field->set_value(
+        cast_aggregated_field->value() / group_size);
+  }
+}
+
 std::string Column::DebugString() const {
   std::string result = Strings::StrCat("(", table_name, ", ",
                                        column_name, ", ",
@@ -406,6 +583,10 @@ const Schema::Field* ResultRecord::GetField(uint32 index) const {
              Storage::RecordTypeStr(record_type()).c_str());
   }
   return nullptr;
+}
+
+Schema::Field* ResultRecord::MutableField(uint32 index) {
+  return const_cast<Schema::Field*>(GetField(index));
 }
 
 void ResultRecord::AddField(Schema::Field* field) {

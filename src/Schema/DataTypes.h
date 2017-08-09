@@ -62,6 +62,11 @@ class IntField: public Field {
     return value_ != other.value();
   }
 
+  IntField& operator+=(const IntField& other) {
+    value_ += other.value_;
+    return *this;
+  }
+
   std::string AsString() const override { return std::to_string(value_); }
 
   // Dump to memory
@@ -86,6 +91,8 @@ class IntField: public Field {
   static double EvaluateValueRatio(ValueRange<int>& range);
 
   Field* Copy() const override { return new IntField(value_); }
+
+  void Inc(int inc) { value_ += inc; }
 
  private:
   int value_ = LONG_MIN;
@@ -126,6 +133,11 @@ class LongIntField: public Field {
     return value_ != other.value();
   }
 
+  LongIntField& operator+=(const LongIntField& other) {
+    value_ += other.value_;
+    return *this;
+  }
+
   std::string AsString() const override { return std::to_string(value_); }
 
   // Dump to memory
@@ -150,6 +162,8 @@ class LongIntField: public Field {
   static double EvaluateValueRatio(ValueRange<int64>& range);
 
   Field* Copy() const override { return new LongIntField(value_); }
+
+  void Inc(int inc) { value_ += inc; }
 
  private:
   int64 value_ = LLONG_MIN;
@@ -188,6 +202,11 @@ class DoubleField: public Field {
 
   bool operator!=(const DoubleField& other) const {
     return value_ != other.value();
+  }
+
+  DoubleField& operator+=(const DoubleField& other) {
+    value_ += other.value_;
+    return *this;
   }
 
   std::string AsString() const override;
@@ -398,7 +417,10 @@ class CharArrayField: public Field {
   int length() const override {
     return length_limit_;
   }
-  const char* value() { return value_; }
+  int valid_length() const {
+    return length_;
+  }
+  const char* value() const { return value_; }
 
   // Comparable
   bool operator<(const CharArrayField& other) const;

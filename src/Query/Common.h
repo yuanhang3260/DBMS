@@ -10,8 +10,6 @@
 
 namespace Query {
 
-class OperatorNode;
-
 // We use a different representation of value type enum other than
 // DB::TableField::Type. This enum is specific for Sql query parser/evaluator.
 //
@@ -67,6 +65,14 @@ enum AggregationType {
 };
 
 std::string AggregationStr(AggregationType aggregation_type);
+bool IsFieldAggregationValid(AggregationType aggregation_type,
+                             Schema::FieldType field_type);
+
+void AggregateField(AggregationType aggregation_type,
+                    Schema::Field* aggregated_field,
+                    const Schema::Field* original_field);
+
+void CalculateAvg(Schema::Field* aggregated_field, uint32 group_size);
 
 struct Column {
 
@@ -196,6 +202,7 @@ struct ResultRecord {
   Storage::RecordType record_type() const;
 
   const Schema::Field* GetField(uint32 index) const;
+  Schema::Field* MutableField(uint32 index);
   // Takes ownership of the argument.
   void AddField(Schema::Field* field);
 };

@@ -313,6 +313,15 @@ bool SqlQuery::FinalizeParsing() {
 
     if (column_request.aggregation_type == NO_AGGREGATION) {
       non_aggregate_columns++;
+    } else {
+      if (!IsFieldAggregationValid(column_request.aggregation_type,
+                                   field_m->type())) {
+        error_msg_ = Strings::StrCat(
+            "Can't use ", AggregationStr(column_request.aggregation_type),
+            " on field ", column_request.column.DebugString(),
+            " with type ", Schema::FieldTypeStr(column_request.column.type));
+        return false;
+      }
     }
   }
 
@@ -1166,11 +1175,14 @@ void SqlQuery::AggregateResults() {
         extra_index[table_name] = table_m->NumFields();
       }
       column_request.column.index = extra_index.at(table_name);
+      if (column_request.aggregation_type != COUNT) {
+        column_request.column.type = Schema::FieldType::INT;
+      }
 
-      // Update field index meta if the tabl record in result is INDEX_RECORD.
+      // Update field index meta if the table record in result is INDEX_RECORD.
       auto it = expr_node_->mutable_results()->tuple_meta.find(table_name);
       CHECK(it != expr_node_->mutable_results()->tuple_meta.end(),
-            "Couldn't find table record meta for table %s", table_name);
+            "Couldn't find table record meta for table %s", table_name.c_str());
       if (!it->second.field_indexes.empty()) {  // index record
         it->second.field_indexes.push_back(extra_index.at(table_name));
       }
@@ -1188,10 +1200,26 @@ void SqlQuery::AggregateResults() {
   expr_node_->mutable_results()->SortByColumns(non_aggregation_columns);
 
   FetchedResult::Tuple* crt_tuple = nullptr;
-  for (auto& tuple : expr_node_->mutable_results()->tuples) {
+  uint32 group_size = 0;
+  for (const auto& tuple : expr_node_->mutable_results()->tuples) {
     if (!crt_tuple ||
         (crt_tuple && FetchedResult::CompareBasedOnColumns(
                           tuple, *crt_tuple, non_aggregation_columns) != 0)) {
+      // Calculate AVG() columns for last group.
+      for (const auto& aggregation_column : aggregation_columns) {
+        if (aggregation_column->aggregation_type != AVG) {
+          continue;
+        }
+        const auto& table_name = aggregation_column->column.table_name;
+        auto it = crt_tuple->find(table_name);
+        CHECK(it != crt_tuple->end(),
+              "Couldn't find record of table %s from tuple",table_name.c_str());
+        auto& aggregated_record = it->second;
+        auto* aggregated_field =
+            aggregated_record.MutableField(aggregation_column->column.index);
+        CalculateAvg(aggregated_field, group_size);
+      }
+
       result.tuples.push_back(tuple);
       crt_tuple = &(result.tuples.back());
 
@@ -1202,15 +1230,53 @@ void SqlQuery::AggregateResults() {
         CHECK(it != crt_tuple->end(),
               "Couldn't find record of table %s from tuple",table_name.c_str());
         auto& table_record = it->second;
-        auto* field_m = FindTableColumn(aggregation_column->column);
-        const auto* original_field = table_record.GetField(field_m->index());
-        CHECK(original_field != nullptr,
-              "Couldn't get original field or aggregation column %s",
-              aggregation_column->AsString(true).c_str());
-        table_record.AddField(original_field->Copy());
+
+        if (aggregation_column->aggregation_type != COUNT) {
+          auto* field_m = FindTableColumn(aggregation_column->column);
+          const auto* original_field = table_record.GetField(field_m->index());
+          CHECK(original_field != nullptr,
+                "Couldn't get original field or aggregation column %s",
+                aggregation_column->AsString(true).c_str());
+          table_record.AddField(original_field->Copy());
+        } else {
+          table_record.AddField(new Schema::IntField(1));
+        }
       }
+      group_size = 1;
     } else {
-      // TODO: Do Aggregation.
+      // Do aggregation.
+      for (const auto& aggregation_column : aggregation_columns) {
+        // Find aggregated field.
+        const auto& table_name = aggregation_column->column.table_name;
+        auto it = crt_tuple->find(table_name);
+        CHECK(it != crt_tuple->end(),
+              "Couldn't find record of table %s from tuple",table_name.c_str());
+        auto& aggregated_record = it->second;
+        auto* aggregated_field =
+            aggregated_record.MutableField(aggregation_column->column.index);
+        CHECK(aggregated_field != nullptr,
+              "Couldn't get aggregated column %s",
+              aggregation_column->AsString(true).c_str());
+
+        // Find original field.
+        const Schema::Field* original_field = nullptr;
+        if (aggregation_column->aggregation_type != COUNT) {
+          auto it2 = tuple.find(table_name);
+          CHECK(it2 != tuple.end(),
+                "Couldn't find record of table %s from tuple",
+                table_name.c_str());
+          auto& table_record = it2->second;
+          auto* field_m = FindTableColumn(aggregation_column->column);
+          original_field = table_record.GetField(field_m->index());
+          CHECK(original_field != nullptr,
+                "Couldn't get original field of aggregation column %s",
+                aggregation_column->AsString(true).c_str());
+        }
+
+        AggregateField(aggregation_column->aggregation_type,
+                       aggregated_field, original_field);
+      }
+      group_size++;
     }
   }
 }
