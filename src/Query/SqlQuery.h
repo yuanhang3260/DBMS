@@ -1,5 +1,5 @@
-#ifndef QUERY_SQL_QUERY_
-#define QUERY_SQL_QUERY_
+#ifndef QUERY_SQL_QUERY_H_
+#define QUERY_SQL_QUERY_H_
 
 #include <map>
 #include <memory>
@@ -61,8 +61,10 @@ class SqlQuery {
   void SetExprNode(std::shared_ptr<Query::ExprTreeNode> node);
   std::shared_ptr<Query::ExprTreeNode> GetExprNode();
 
+  DB::Database* GetDB() { return db_; }
   const std::set<std::string>& tables() const { return tables_; }
   std::string DefaultTable() const;
+  FetchedResult::TupleMeta* mutable_tuple_meta();
 
   bool AddTable(const std::string& table);
   bool AddColumn(const std::string& column);
@@ -85,7 +87,7 @@ class SqlQuery {
   bool FinalizeParsing();
 
   const Query::ExprTreeNode& expr_root() const { return *expr_node_; }
-  const Query::FetchedResult& results() const { return expr_node_->results(); }
+  const Query::FetchedResult& results() const { return results_; }
 
   // Generate physical plan for this query.
   const PhysicalPlan& PrepareQueryPlan();
@@ -110,19 +112,20 @@ class SqlQuery {
 
   PhysicalPlan* PreGenerateUnitPhysicalPlan(ExprTreeNode* node);
   PhysicalPlan* GenerateUnitPhysicalPlan(ExprTreeNode* node);
-
-  bool IsConstExpression(ExprTreeNode* node);
-
   void EvaluateQueryConditions(PhysicalPlan* physical_plan);
 
+  void CreateIteratorsRecursive(ExprTreeNode* node);
+
   int ExecuteSelectQueryFromNode(ExprTreeNode* node);
+
+  bool IsConstExpression(ExprTreeNode* node);
 
   int Do_ExecutePhysicalQuery(ExprTreeNode* node);
 
   DB::Database* db_ = nullptr;
   DB::CatalogManager* catalog_m_ = nullptr;
 
-  std::shared_ptr<Query::ExprTreeNode> expr_node_;
+  std::shared_ptr<ExprTreeNode> expr_node_;
 
   // Target tables.
   std::set<std::string> tables_;
@@ -138,6 +141,12 @@ class SqlQuery {
   std::vector<ColumnRequest> order_by_columns_;
   std::vector<Column> group_by_columns_;
 
+  // Meta data for each table's record in the result.
+  FetchedResult::TupleMeta tuple_meta_;
+
+  // Final result.
+  FetchedResult results_;
+
   std::string error_msg_;
 
   friend class QueryTest;
@@ -145,4 +154,4 @@ class SqlQuery {
 
 }
 
-#endif  // QUERY_SQL_QUERY_
+#endif  // QUERY_SQL_QUERY_H_

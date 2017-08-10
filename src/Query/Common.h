@@ -1,5 +1,5 @@
-#ifndef QUERY_COMMON_
-#define QUERY_COMMON_
+#ifndef QUERY_COMMON_H_
+#define QUERY_COMMON_H_
 
 #include <string>
 
@@ -209,14 +209,19 @@ struct ResultRecord {
 
 struct FetchedResult {
   using Tuple = std::map<std::string, ResultRecord>;
+  using TupleMeta = std::map<std::string, TableRecordMeta>;
 
   std::vector<Tuple> tuples;
-  std::map<std::string, TableRecordMeta> tuple_meta;
+  TupleMeta* tuple_meta;
 
   bool AddTuple(const Tuple& tuple);
   bool AddTuple(Tuple&& tuple);
 
+  static bool AddTupleMeta(Tuple* tuple, TupleMeta* meta);
+
   int NumTuples() const { return tuples.size(); }
+
+  void reset();
 
   static int CompareBasedOnColumns(
       const Tuple& t1, const Tuple& t2, const std::vector<Column>& columns);
@@ -247,4 +252,4 @@ struct FetchedResult {
 
 }  // namespace Query
 
-#endif  // QUERY_COMMON_
+#endif  // QUERY_COMMON_H_

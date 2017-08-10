@@ -24,6 +24,7 @@ class CommonTest: public UnitTest {
   std::vector<std::shared_ptr<RecordBase>> data_records_;
   std::vector<std::shared_ptr<RecordBase>> index_record_;
   std::vector<uint32> key_fields_ = std::vector<uint32>{1, 2};
+  std::map<std::string, TableRecordMeta> tuple_meta_;
  
  public:
   void InitRecordResource(std::vector<std::shared_ptr<RecordBase>>* records) {
@@ -72,7 +73,7 @@ class CommonTest: public UnitTest {
 
   void Test_SortByColumn() {
     FetchedResult result;
-    result.tuple_meta.emplace(kTableName, TableRecordMeta()); 
+    result.tuple_meta = &tuple_meta_;
     for (const auto& record : data_records_) {
       auto tuple = FetchedResult::Tuple();
       tuple.emplace(kTableName, ResultRecord(record));
@@ -90,7 +91,7 @@ class CommonTest: public UnitTest {
     std::vector<std::shared_ptr<RecordBase>> data_records_1;
     InitRecordResource(&data_records_1);
     FetchedResult result1;
-    result1.tuple_meta.emplace(kTableName, TableRecordMeta());
+    result1.tuple_meta = &tuple_meta_;
     for (const auto& record : data_records_1) {
       auto tuple = FetchedResult::Tuple();
       tuple.emplace(kTableName, ResultRecord(record));
@@ -100,7 +101,7 @@ class CommonTest: public UnitTest {
     std::vector<std::shared_ptr<RecordBase>> data_records_2;
     InitRecordResource(&data_records_2);
     FetchedResult result2;
-    result2.tuple_meta.emplace(kTableName, TableRecordMeta());
+    result2.tuple_meta = &tuple_meta_;
     for (const auto& record : data_records_2) {
       auto tuple = FetchedResult::Tuple();
       tuple.emplace(kTableName, ResultRecord(record));

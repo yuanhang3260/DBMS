@@ -369,7 +369,7 @@ bool RecordBase::CheckFieldsType(const DB::TableInfo& schema,
                                  std::vector<uint32> key_indexes) const {
   if (fields_.size() != key_indexes.size()) {
     LogERROR("Index/TreeNode record has mismatchig number of fields - "
-             "key has %d indexes, record has %d",
+             "key has %d fields, record has %d fields",
              key_indexes.size(), fields_.size());
     return false;
   }

@@ -9,6 +9,7 @@
 
 #include "Database/CatalogManager.h"
 #include "Query/Common.h"
+#include "Query/Iterator.h"
 #include "Schema/SchemaType.h"
 #include "Storage/Record.h"
 
@@ -80,6 +81,10 @@ class ExprTreeNode {
 
   virtual NodeValue Evaluate(const FetchedResult::Tuple& arg) const = 0;
 
+  // Takes ownership of iterator.
+  void SetIterator(Iterator* iterator) { tuple_iter_.reset(iterator); }
+  Iterator* GetIterator() { return tuple_iter_.get(); }
+
  protected:
   NodeValue value_;
   bool valid_ = true;
@@ -93,6 +98,7 @@ class ExprTreeNode {
   PhysicalPlan physical_plan_;
 
   FetchedResult results_;
+  std::shared_ptr<Iterator> tuple_iter_;
 };
 
 

@@ -596,8 +596,8 @@ void ResultRecord::AddField(Schema::Field* field) {
 bool FetchedResult::AddTuple(const Tuple& tuple) {
   tuples.push_back(tuple);
   for (auto& table_record_iter : tuples.back()) {
-    auto meta_it = tuple_meta.find(table_record_iter.first);
-    if (meta_it == tuple_meta.end()) {
+    auto meta_it = tuple_meta->find(table_record_iter.first);
+    if (meta_it == tuple_meta->end()) {
       tuples.erase(tuples.end() - 1);
       return false;
     }
@@ -607,14 +607,21 @@ bool FetchedResult::AddTuple(const Tuple& tuple) {
 }
 
 bool FetchedResult::AddTuple(Tuple&& tuple) {
-  for (auto& table_record_iter : tuple) {
-    auto meta_it = tuple_meta.find(table_record_iter.first);
-    if (meta_it == tuple_meta.end()) {
+  if (!AddTupleMeta(&tuple, tuple_meta)) {
+    return false;
+  }
+  tuples.push_back(std::move(tuple));
+  return true;
+}
+
+bool FetchedResult::AddTupleMeta(Tuple* tuple, TupleMeta* meta) {
+  for (auto& table_record_iter : *tuple) {
+    auto meta_it = meta->find(table_record_iter.first);
+    if (meta_it == meta->end()) {
       return false;
     }
     table_record_iter.second.meta = &meta_it->second;
   }
-  tuples.push_back(std::move(tuple));
   return true;
 }
 
@@ -777,6 +784,11 @@ void FetchedResult::MergeSortResultsRemoveDup(
   }
 
   MergeSortResultsRemoveDup(result_1, result_2, columns);
+}
+
+void FetchedResult::reset() {
+  tuple_meta = nullptr;
+  tuples.clear();
 }
 
 }  // namespace Query

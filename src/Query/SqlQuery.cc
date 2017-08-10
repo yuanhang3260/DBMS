@@ -27,6 +27,8 @@ void SqlQuery::reset() {
   columns_.clear();
   columns_num_ = 0;
   aggregated_columns_num_ = 0;
+
+  results_.reset();
 }
 
 void SqlQuery::SetExprNode(std::shared_ptr<Query::ExprTreeNode> node) {
@@ -386,12 +388,27 @@ bool SqlQuery::FinalizeParsing() {
 const PhysicalPlan& SqlQuery::PrepareQueryPlan() {
   GroupPhysicalQueries(expr_node_.get());
   GenerateQueryPhysicalPlan(expr_node_.get());
+  CreateIteratorsRecursive(expr_node_.get());
   return expr_node_->physical_plan();
 }
 
 int SqlQuery::ExecuteSelectQuery() {
   PrepareQueryPlan();
-  int re = ExecuteSelectQueryFromNode(expr_node_.get());
+
+  // Static query.
+  // ExecuteSelectQueryFromNode(expr_node_.get());
+  // results_ = std::move(*expr_node_->mutable_results());
+
+  // Use iterator in fly.
+  results_.tuple_meta = &tuple_meta_;
+  auto* iter = expr_node_->GetIterator();
+  while (true) {
+    auto tuple = iter->GetNextTuple();
+    if (!tuple) {
+      break;
+    }
+    results_.AddTuple(std::move(*tuple));
+  }
 
   if (aggregated_columns_num_ > 0) {
     AggregateResults();
@@ -402,14 +419,15 @@ int SqlQuery::ExecuteSelectQuery() {
     for (const auto& column_request : order_by_columns_) {
       columns.push_back(column_request.column);
     }
-    expr_node_->mutable_results()->SortByColumns(columns);
+    results_.SortByColumns(columns);
   }
 
-  return re;
+  return results_.NumTuples();
 }
 
 int SqlQuery::ExecuteSelectQueryFromNode(ExprTreeNode* node) {
   const auto& this_plan = node->physical_plan();
+  const std::string& table_name = this_plan.table_name;
   if (this_plan.plan == PhysicalPlan::CONST_FALSE_SKIP) {
     return 0;
   }
@@ -444,8 +462,7 @@ int SqlQuery::ExecuteSelectQueryFromNode(ExprTreeNode* node) {
       *node->mutable_results() = std::move(*pop_node->mutable_results());
     } else {
       // Evaluate fetched tuples on the other node.
-      node->mutable_results()->tuple_meta =
-          pop_node->mutable_results()->tuple_meta;
+      node->mutable_results()->tuple_meta = &tuple_meta_;
       for (auto& tuple : pop_node->mutable_results()->tuples) {
         NodeValue result = other_node->Evaluate(tuple);
         if (result.v_bool) {
@@ -467,16 +484,7 @@ int SqlQuery::ExecuteSelectQueryFromNode(ExprTreeNode* node) {
 
     // TODO: This only applies to single table query. Sort and remove
     // duplication based on the primary key.
-    std::string table_name;
-    if (left_re > 0) {
-      table_name = node->left()->results().tuples.begin()->begin()->first;
-      node->mutable_results()->tuple_meta =
-          node->left()->mutable_results()->tuple_meta;
-    } else if (right_re > 0) {
-      table_name = node->right()->results().tuples.begin()->begin()->first;
-      node->mutable_results()->tuple_meta =
-          node->right()->mutable_results()->tuple_meta;
-    }
+    node->mutable_results()->tuple_meta = &tuple_meta_;
     auto table_m = FindTable(table_name);
     CHECK(table_m != nullptr,
           Strings::StrCat("Couldn't find table ", table_name));
@@ -494,6 +502,10 @@ int SqlQuery::ExecuteSelectQueryFromNode(ExprTreeNode* node) {
 
 int SqlQuery::Do_ExecutePhysicalQuery(ExprTreeNode* node) {
   const auto& physical_plan = node->physical_plan();
+  if (physical_plan.plan == PhysicalPlan::CONST_FALSE_SKIP) {
+    return 0;
+  }
+
   const auto& table_name = physical_plan.table_name;
   if (physical_plan.plan == PhysicalPlan::SEARCH) {
     printf("search\n");
@@ -510,7 +522,8 @@ int SqlQuery::Do_ExecutePhysicalQuery(ExprTreeNode* node) {
       CHECK(table != nullptr, "Can't get table %s", table_name.c_str());
 
       // Add table record meta.
-      node->mutable_results()->tuple_meta.emplace(table_name,TableRecordMeta());
+      tuple_meta_.emplace(table_name, TableRecordMeta());
+      node->mutable_results()->tuple_meta = &tuple_meta_;
 
       std::vector<std::shared_ptr<Storage::RecordBase>> records;
       table->SearchRecords(search_op, &records);
@@ -552,7 +565,8 @@ int SqlQuery::Do_ExecutePhysicalQuery(ExprTreeNode* node) {
       CHECK(table != nullptr, "Can't get table %s", table_name.c_str());
 
       // Add table record meta.
-      node->mutable_results()->tuple_meta.emplace(table_name,TableRecordMeta());
+      tuple_meta_.emplace(table_name, TableRecordMeta());
+      node->mutable_results()->tuple_meta = &tuple_meta_;
 
       std::vector<std::shared_ptr<Storage::RecordBase>> records;
       table->SearchRecords(range_search_op, &records);
@@ -571,7 +585,8 @@ int SqlQuery::Do_ExecutePhysicalQuery(ExprTreeNode* node) {
     CHECK(table != nullptr, "Can't get table %s", table_name.c_str());
 
     // Add table record meta.
-    node->mutable_results()->tuple_meta.emplace(table_name,TableRecordMeta());
+    tuple_meta_.emplace(table_name, TableRecordMeta());
+    node->mutable_results()->tuple_meta = &tuple_meta_;
 
     std::vector<std::shared_ptr<Storage::RecordBase>> records;
     table->ScanRecords(&records);
@@ -591,7 +606,8 @@ int SqlQuery::Do_ExecutePhysicalQuery(ExprTreeNode* node) {
     CHECK(table != nullptr, "Can't get table %s", table_name.c_str());
 
     // Add table record meta.
-    node->mutable_results()->tuple_meta.emplace(table_name,TableRecordMeta());
+    tuple_meta_.emplace(table_name, TableRecordMeta());
+    node->mutable_results()->tuple_meta = &tuple_meta_;
 
     std::vector<std::shared_ptr<Storage::RecordBase>> records;
     table->ScanRecords(&records);
@@ -635,6 +651,34 @@ bool SqlQuery::GroupPhysicalQueries(ExprTreeNode* node) {
   }
 
   return re;
+}
+
+void SqlQuery::CreateIteratorsRecursive(ExprTreeNode* node) {
+  if (node->physical_query_root()) {
+    node->SetIterator(new PhysicalQueryIterator(this, node));
+    return;
+  }
+
+  CHECK(node->type() == ExprTreeNode::OPERATOR,
+        Strings::StrCat("Expect OPERATOR node, but got ",
+                        ExprTreeNode::NodeTypeStr(node->type()).c_str()));
+
+  OperatorNode* op_node = dynamic_cast<OperatorNode*>(node);
+  if (op_node->OpType() == AND) {
+    node->SetIterator(new AndNodeIterator(this, node));
+  } else if (op_node->OpType() == OR) {
+    node->SetIterator(new OrNodeIterator(this, node));
+  } else {
+    LogFATAL("Unexpected operator type %s",
+             OpTypeStr(op_node->OpType()).c_str());
+  }
+
+  if (node->left()) {
+    CreateIteratorsRecursive(node->left());
+  }
+  if (node->right()) {
+    CreateIteratorsRecursive(node->right());
+  }
 }
 
 PhysicalPlan* SqlQuery::GenerateQueryPhysicalPlan(ExprTreeNode* node) {
@@ -681,6 +725,7 @@ PhysicalPlan* SqlQuery::GenerateQueryPhysicalPlan(ExprTreeNode* node) {
         right_plan->plan == PhysicalPlan::CONST_FALSE_SKIP) {
       this_plan->plan = PhysicalPlan::CONST_FALSE_SKIP;
       this_plan->query_ratio = 0.0;
+      node->set_physical_query_root(true);
     } else if (left_plan->plan == PhysicalPlan::CONST_TRUE_SCAN &&
                right_plan->plan == PhysicalPlan::CONST_TRUE_SCAN) {
       this_plan->plan = PhysicalPlan::CONST_TRUE_SCAN;
@@ -699,8 +744,8 @@ PhysicalPlan* SqlQuery::GenerateQueryPhysicalPlan(ExprTreeNode* node) {
                 PhysicalPlan::LEFT : PhysicalPlan::RIGHT;
       } else {
         this_plan->plan = PhysicalPlan::SCAN;
-        node->set_physical_query_root(true);
         this_plan->query_ratio = 1.0;
+        node->set_physical_query_root(true);
       }
     }
   } else if (op_node->OpType() == OR) {
@@ -723,11 +768,12 @@ PhysicalPlan* SqlQuery::GenerateQueryPhysicalPlan(ExprTreeNode* node) {
         right_plan->plan == PhysicalPlan::CONST_FALSE_SKIP) {
       this_plan->plan = PhysicalPlan::CONST_FALSE_SKIP;
       this_plan->query_ratio = 0.0;
+      node->set_physical_query_root(true);
     } else if (left_plan->plan == PhysicalPlan::CONST_TRUE_SCAN ||
                right_plan->plan == PhysicalPlan::CONST_TRUE_SCAN) {
       this_plan->plan = PhysicalPlan::CONST_TRUE_SCAN;
-      node->set_physical_query_root(true);
       this_plan->query_ratio = 1.0;
+      node->set_physical_query_root(true);
     } else {
       this_plan->query_ratio = left_plan->query_ratio + right_plan->query_ratio;
       // printf("left = %f\n", left_plan->query_ratio);
@@ -739,8 +785,8 @@ PhysicalPlan* SqlQuery::GenerateQueryPhysicalPlan(ExprTreeNode* node) {
       } else if (left_plan->plan == PhysicalPlan::SCAN ||
                  right_plan->plan == PhysicalPlan::SCAN) {
         this_plan->plan = PhysicalPlan::SCAN;
-        node->set_physical_query_root(true);
         this_plan->query_ratio = 1.0;
+        node->set_physical_query_root(true);
       } else {
         this_plan->plan = PhysicalPlan::POP;
         this_plan->pop_node = PhysicalPlan::BOTH;
@@ -755,15 +801,16 @@ PhysicalPlan* SqlQuery::GenerateQueryPhysicalPlan(ExprTreeNode* node) {
 
     if (left_plan->plan == PhysicalPlan::CONST_FALSE_SKIP) {
       this_plan->plan = PhysicalPlan::CONST_TRUE_SCAN;
-      node->set_physical_query_root(true);
       this_plan->query_ratio = 1.0;
+      node->set_physical_query_root(true);
     } else if (left_plan->plan == PhysicalPlan::CONST_TRUE_SCAN) {
       this_plan->plan = PhysicalPlan::CONST_FALSE_SKIP;
       this_plan->query_ratio = 0;
+      node->set_physical_query_root(true);
     } else {
       this_plan->plan = PhysicalPlan::SCAN;
-      node->set_physical_query_root(true);
       this_plan->query_ratio = 1.0;
+      node->set_physical_query_root(true);
     }
   } else {
     LogFATAL("Expect logical operator type, but got %s",
@@ -1211,8 +1258,8 @@ void SqlQuery::AggregateResults() {
       }
 
       // Update field index meta if the table record in result is INDEX_RECORD.
-      auto it = expr_node_->mutable_results()->tuple_meta.find(table_name);
-      CHECK(it != expr_node_->mutable_results()->tuple_meta.end(),
+      auto it = results_.tuple_meta->find(table_name);
+      CHECK(it != results_.tuple_meta->end(),
             "Couldn't find table record meta for table %s", table_name.c_str());
       if (!it->second.field_indexes.empty()) {  // index record
         it->second.field_indexes.push_back(extra_index.at(table_name));
@@ -1227,8 +1274,8 @@ void SqlQuery::AggregateResults() {
   }
 
   FetchedResult result;
-  result.tuple_meta = expr_node_->results().tuple_meta;
-  expr_node_->mutable_results()->SortByColumns(non_aggregation_columns);
+  result.tuple_meta = &tuple_meta_;
+  results_.SortByColumns(non_aggregation_columns);
 
   // Help function to calculate AVG() columns for a tuple.
   auto cal_avg = [&] (FetchedResult::Tuple* agg_tuple, uint32 group_size) {
@@ -1253,7 +1300,7 @@ void SqlQuery::AggregateResults() {
 
   FetchedResult::Tuple* agg_tuple = nullptr;
   uint32 group_size = 0;
-  for (auto& tuple : expr_node_->mutable_results()->tuples) {
+  for (auto& tuple : results_.tuples) {
     if (!agg_tuple ||
         (agg_tuple && FetchedResult::CompareBasedOnColumns(
                           tuple, *agg_tuple, non_aggregation_columns) != 0)) {
@@ -1323,17 +1370,17 @@ void SqlQuery::AggregateResults() {
   // Calculate AVG() columns for the last group.
   cal_avg(agg_tuple, group_size);
 
-  *expr_node_->mutable_results() = std::move(result);
+  results_ = std::move(result);
 }
  
 void SqlQuery::PrintResults() {
-  if (expr_node_->results().tuples.empty()) {
+  if (results_.tuples.empty()) {
     printf("Empty set\n");
     return;
   }
 
   // Get the print size for each column.
-  for (auto& tuple : expr_node_->mutable_results()->tuples) {
+  for (auto& tuple : results_.tuples) {
     for (auto& column_request : columns_) {
       const auto& it = tuple.find(column_request.column.table_name);
       CHECK(it != tuple.end(), "Tuple doesn't have the record of table %s",
@@ -1387,7 +1434,7 @@ void SqlQuery::PrintResults() {
   printf("+\n");
 
   // Do print.
-  for (auto& tuple : expr_node_->mutable_results()->tuples) {
+  for (auto& tuple : results_.tuples) {
     for (const auto& column_request : columns_) {
       const auto& it = tuple.find(column_request.column.table_name);
       CHECK(it != tuple.end(), "Tuple doesn't have the record of table %s",
@@ -1413,7 +1460,11 @@ void SqlQuery::PrintResults() {
     }
   }
   printf("+\n");
-  printf("%d rows in set\n", (int)expr_node_->mutable_results()->tuples.size());
+  printf("%d rows in set\n", (int)results_.tuples.size());
+}
+
+FetchedResult::TupleMeta* SqlQuery::mutable_tuple_meta() {
+  return &tuple_meta_;
 }
 
 std::string SqlQuery::error_msg() const {
