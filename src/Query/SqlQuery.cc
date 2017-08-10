@@ -522,7 +522,7 @@ int SqlQuery::Do_ExecutePhysicalQuery(ExprTreeNode* node) {
         }
       }
     } else {
-      DB::RangeSearchOp range_search_op;
+      DB::SearchOp range_search_op;
       range_search_op.reset();
       range_search_op.field_indexes.push_back(first_condition.column.index);
       for (const auto& condition : physical_plan.conditions) {
@@ -555,7 +555,7 @@ int SqlQuery::Do_ExecutePhysicalQuery(ExprTreeNode* node) {
       node->mutable_results()->tuple_meta.emplace(table_name,TableRecordMeta());
 
       std::vector<std::shared_ptr<Storage::RecordBase>> records;
-      table->RangeSearchRecords(range_search_op, &records);
+      table->SearchRecords(range_search_op, &records);
       for (const auto& record : records) {
         auto tuple = FetchedResult::Tuple();
         tuple.emplace(table_name, ResultRecord(record));
@@ -1325,7 +1325,7 @@ void SqlQuery::AggregateResults() {
 
   *expr_node_->mutable_results() = std::move(result);
 }
-
+ 
 void SqlQuery::PrintResults() {
   if (expr_node_->results().tuples.empty()) {
     printf("Empty set\n");

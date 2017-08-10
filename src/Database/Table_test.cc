@@ -174,41 +174,39 @@ class TableTest: public UnitTest {
 
   uint32 NumExpectedMatches(const SearchOp& op) {
     int expected_matches = 0;
-    for (const auto& record : puppy_records_) {
-      if (RecordBase::CompareRecordWithKey(*record, *op.key,
-                                           op.field_indexes) == 0) {
-        expected_matches++;
+    if (op.key) {
+      for (const auto& record : puppy_records_) {
+        if (RecordBase::CompareRecordWithKey(*record, *op.key,
+                                             op.field_indexes) == 0) {
+          expected_matches++;
+        }
       }
-    }
-    return expected_matches;
-  }
-
-  uint32 NumExpectedMatches(const RangeSearchOp& op) {
-    int expected_matches = 0;
-    for (const auto& record : puppy_records_) {
-      bool left_match = false, right_match = false;
-      if (op.left_key) {
-        int re = RecordBase::CompareRecordWithKey(*record, *op.left_key,
-                                                  op.field_indexes);
-        if ((re > 0 && op.left_open) || (re >= 0 && !op.left_open)) {
+    } else {
+      for (const auto& record : puppy_records_) {
+        bool left_match = false, right_match = false;
+        if (op.left_key) {
+          int re = RecordBase::CompareRecordWithKey(*record, *op.left_key,
+                                                    op.field_indexes);
+          if ((re > 0 && op.left_open) || (re >= 0 && !op.left_open)) {
+            left_match = true;
+          }
+        } else {
           left_match = true;
         }
-      } else {
-        left_match = true;
-      }
 
-      if (op.right_key) {
-        int re = RecordBase::CompareRecordWithKey(*record, *op.right_key,
-                                                  op.field_indexes);
-        if ((re < 0 && op.right_open) || (re <= 0 && !op.right_open)) {
+        if (op.right_key) {
+          int re = RecordBase::CompareRecordWithKey(*record, *op.right_key,
+                                                    op.field_indexes);
+          if ((re < 0 && op.right_open) || (re <= 0 && !op.right_open)) {
+            right_match = true;
+          }
+        } else {
           right_match = true;
         }
-      } else {
-        right_match = true;
-      }
 
-      if (left_match && right_match) {
-        expected_matches++;
+        if (left_match && right_match) {
+          expected_matches++;
+        }
       }
     }
     return expected_matches;
@@ -217,6 +215,19 @@ class TableTest: public UnitTest {
   void Test_ScanRecords() {
     std::vector<std::shared_ptr<Storage::RecordBase>> result;
     AssertEqual(kNumRecordsSource, table_->ScanRecords(&result));
+
+    result.clear();
+    SearchOp op;
+    auto table_iter = table_->RecordIterator(&op);
+    while (true) {
+      auto record = table_iter->GetNextRecord();
+      if (record) {
+        result.push_back(record);
+      } else {
+        break;
+      }
+    }
+    AssertEqual(kNumRecordsSource, result.size());
 
     result.clear();
     AssertEqual(kNumRecordsSource, table_->ScanRecords(&result, {3}));
@@ -246,6 +257,18 @@ class TableTest: public UnitTest {
     table_->SearchRecords(op, &result);
     AssertEqual(NumExpectedMatches(op), result.size());
 
+    result.clear();
+    auto table_iter = table_->RecordIterator(&op);
+    while (true) {
+      auto record = table_iter->GetNextRecord();
+      if (record) {
+        result.push_back(record);
+      } else {
+        break;
+      }
+    }
+    AssertEqual(NumExpectedMatches(op), result.size());
+
     // Search by adult
     result.clear();
     op.reset();
@@ -254,11 +277,23 @@ class TableTest: public UnitTest {
 
     table_->SearchRecords(op, &result);
     AssertEqual(NumExpectedMatches(op), result.size());
+
+    result.clear();
+    table_iter = table_->RecordIterator(&op);
+    while (true) {
+      auto record = table_iter->GetNextRecord();
+      if (record) {
+        result.push_back(record);
+      } else {
+        break;
+      }
+    }
+    AssertEqual(NumExpectedMatches(op), result.size());
   }
 
   void Test_RangeSearchRecords() {
     std::vector<std::shared_ptr<Storage::RecordBase>> result;
-    RangeSearchOp op;
+    SearchOp op;
 
     // Search by: id in [10, 20)
     op.reset();
@@ -266,12 +301,25 @@ class TableTest: public UnitTest {
     op.field_indexes.push_back(2);
     op.AddLeftKey()->AddField(new Schema::LongIntField(kNumRecordsSource/3));
     op.left_open = false;
-    op.AddRightKey()->AddField(new Schema::LongIntField(kNumRecordsSource/3 * 2));
+    op.AddRightKey()->AddField(
+        new Schema::LongIntField(kNumRecordsSource/3 * 2));
     op.right_open = false;
 
-    table_->RangeSearchRecords(op, &result);
+    table_->SearchRecords(op, &result);
     AssertEqual(NumExpectedMatches(op), result.size());
     printf("Matched records = %d\n", (int)result.size());
+
+    result.clear();
+    auto table_iter = table_->RecordIterator(&op);
+    while (true) {
+      auto record = table_iter->GetNextRecord();
+      if (record) {
+        result.push_back(record);
+      } else {
+        break;
+      }
+    }
+    AssertEqual(NumExpectedMatches(op), result.size());
 
     // Search by: name >= "m"
     op.reset();
@@ -280,9 +328,21 @@ class TableTest: public UnitTest {
     op.AddLeftKey()->AddField(new Schema::StringField("m"));
     op.left_open = false;
     op.right_key.reset();
-    table_->RangeSearchRecords(op, &result);
+    table_->SearchRecords(op, &result);
     AssertEqual(NumExpectedMatches(op), result.size());
     printf("Matched records = %d\n", (int)result.size());
+
+    result.clear();
+    table_iter = table_->RecordIterator(&op);
+    while (true) {
+      auto record = table_iter->GetNextRecord();
+      if (record) {
+        result.push_back(record);
+      } else {
+        break;
+      }
+    }
+    AssertEqual(NumExpectedMatches(op), result.size());
 
     // Search by: weight < 1.6
     op.reset();
@@ -290,9 +350,21 @@ class TableTest: public UnitTest {
     op.field_indexes.push_back(3);
     op.AddRightKey()->AddField(new Schema::DoubleField(1.6));
     op.right_open = true;
-    table_->RangeSearchRecords(op, &result);
+    table_->SearchRecords(op, &result);
     AssertEqual(NumExpectedMatches(op), result.size());
     printf("Matched records = %d\n", (int)result.size());
+
+    result.clear();
+    table_iter = table_->RecordIterator(&op);
+    while (true) {
+      auto record = table_iter->GetNextRecord();
+      if (record) {
+        result.push_back(record);
+      } else {
+        break;
+      }
+    }
+    AssertEqual(NumExpectedMatches(op), result.size());
 
     // Search by: 1 < age <= 1
     op.reset();
@@ -302,10 +374,22 @@ class TableTest: public UnitTest {
     op.left_open = true;
     op.AddRightKey()->AddField(new Schema::IntField(1));
     op.right_open = false;
-    table_->RangeSearchRecords(op, &result);
+    table_->SearchRecords(op, &result);
     AssertEqual(NumExpectedMatches(op), result.size());
     AssertEqual(0, result.size());
     printf("Matched records = %d\n", (int)result.size());
+
+    result.clear();
+    table_iter = table_->RecordIterator(&op);
+    while (true) {
+      auto record = table_iter->GetNextRecord();
+      if (record) {
+        result.push_back(record);
+      } else {
+        break;
+      }
+    }
+    AssertEqual(NumExpectedMatches(op), result.size());
   }
 };
 
@@ -315,9 +399,9 @@ int main() {
   DB::TableTest test;
   test.setup();
 
-  //test.Test_SearchRecords();
-  //test.Test_ScanRecords();
+  test.Test_SearchRecords();
   test.Test_RangeSearchRecords();
+  test.Test_ScanRecords();
 
   test.teardown();
 

@@ -1,15 +1,12 @@
 #ifndef STORAG_PAGE_RECORDS_MANAGER_
 #define STORAG_PAGE_RECORDS_MANAGER_
 
-#include "Storage/BplusTree.h"
 #include "Storage/PageRecord_Common.h"
 #include "Storage/Record.h"
 
-namespace DataBaseFiles {
-  class BplusTree;
-}
-
 namespace Storage {
+
+class BplusTree;
 
 // Page Records Manager provide service to load a page and parse records stored
 // in this page. The data structure is critical to processe a page.

@@ -12,27 +12,19 @@ namespace DB {
 
 struct SearchOp {
   std::vector<uint32> field_indexes;
+
   std::shared_ptr<Storage::RecordBase> key;
-
-  Storage::RecordBase* AddKey() {
-    key.reset(new Storage::RecordBase());
-    return key.get();
-  }
-
-  void reset() {
-    field_indexes.clear();
-    key.reset();
-  }
-};
-
-struct RangeSearchOp {
-  std::vector<uint32> field_indexes;
 
   std::shared_ptr<Storage::RecordBase> left_key;
   bool left_open = true;
 
   std::shared_ptr<Storage::RecordBase> right_key;
   bool right_open = true;
+
+  Storage::RecordBase* AddKey() {
+    key.reset(new Storage::RecordBase());
+    return key.get();
+  }
 
   Storage::RecordBase* AddLeftKey() {
     left_key.reset(new Storage::RecordBase());
@@ -46,6 +38,7 @@ struct RangeSearchOp {
 
   void reset() {
     field_indexes.clear();
+    key.reset();
     left_key.reset();
     left_open = true;
     right_key.reset();

@@ -4,6 +4,7 @@
 #include "Base/Log.h"
 #include "Base/Utils.h"
 
+#include "Database/Table.h"
 #include "Storage/PageRecordsManager.h"
 #include "Storage/BplusTree.h"
 
@@ -1193,149 +1194,211 @@ RecordPage* BplusTree::SearchByKey(const RecordBase& key) {
 //   return total_matches;
 // }
 
-int BplusTree::SearchRecords(const RecordBase& key,
-                             std::vector<std::shared_ptr<RecordBase>>* result) {
-  SANITY_CHECK(CheckKeyFieldsType(key),
-               "Key fields type mismatch table schema of this B+ tree");
-
-  auto leave = SearchByKey(key);
-  if (!leave) {
-    LogERROR("Can't search to leave by this key");
-    return -1;
-  }
-
-  result->clear();
-  FetchResultsFromLeave(key, leave, result);
-  return result->size();
+std::shared_ptr<TreeRecordIterator>
+BplusTree::RecordIterator(const DB::SearchOp* op) {
+  return std::make_shared<TreeRecordIterator>(this, op);
 }
 
-int BplusTree::FetchResultsFromLeave(
-       const RecordBase& key, RecordPage* leave,
-       std::vector<std::shared_ptr<RecordBase>>* result) {
-  if (!leave || !result) {
-    LogERROR("Nullptr input to FetchResultsFromLeave");
-    return -1;
-  }
+void TreeRecordIterator::Init() {
+  if (search_op->key) {
+    // Single key search.
+    CHECK(tree->CheckKeyFieldsType(*search_op->key),
+          "Key fields type mismatch table schema of this B+ tree");
 
-  while (leave) {
-    PageRecordsManager prmanager(leave, schema(), key_indexes_,
-                                 file_type_, leave->meta().page_type());
-    // Fetch all matching records in this leave.
-    bool last_is_match = false;
-    for (uint32 index = 0; index < prmanager.NumRecords(); index++) {
-      auto re = prmanager.CompareRecordWithKey(prmanager.record(index), key);
-      if (re < 0) {
-        continue;
-      } else if (re == 0) {
-        result->push_back(prmanager.plrecords().at(index).shared_record());
-        last_is_match = true;
-      } else {
-        if (leave->meta().is_overflow_page()) {
-          // Overflow page must have all same records that match the key we're
-          // searching for.
-          LogFATAL("Overflow page stores inconsistent records!");
-        }
-        last_is_match = false;
-        break;
-      }
-    }
-    // If index reaches the end of all records, check overflow page.
-    if (last_is_match && leave->meta().overflow_page() >= 0) {
-      leave = Page(leave->meta().overflow_page());
-    }
-    else {
-      break;
-    }
-  }
-
-  return result->size();
-}
-
-int BplusTree::RangeSearchRecords(
-      const DB::RangeSearchOp& op,
-      std::vector<std::shared_ptr<RecordBase>>* result) {
-  if (op.left_key) {
-    SANITY_CHECK(CheckKeyFieldsType(*op.left_key),
-                 "Left key fields type mismatch table schema of this B+ tree");
-  }
-
-  if (op.right_key) {
-    SANITY_CHECK(CheckKeyFieldsType(*op.right_key),
-                 "Right key fields type mismatch table schema of this B+ tree");
-  }
-
-  RecordPage* leave = nullptr;
-  if (op.left_key) {
-    leave = SearchByKey(*op.left_key);
+    leave = tree->SearchByKey(*search_op->key);
     if (!leave) {
       LogERROR("Can't search to leave by this key");
-      return 0;
+      end = true;
+      return;
+    }
+  } else if (search_op->left_key || search_op->right_key) {
+    // Range search.
+    if (search_op->left_key) {
+      CHECK(tree->CheckKeyFieldsType(*search_op->left_key),
+            "Left key fields type mismatch table schema of this B+ tree");
+    }
+    if (search_op->right_key) {
+      CHECK(tree->CheckKeyFieldsType(*search_op->right_key),
+            "Right key fields type mismatch table schema of this B+ tree");
+    }
+    if (!search_op->left_key && !search_op->right_key) {
+      LogERROR("No key range to search");
+      end = true;
+      return;
+    }
+
+    if (search_op->left_key) {
+      leave = tree->SearchByKey(*search_op->left_key);
+      if (!leave) {
+        LogERROR("Can't search to leave by this key");
+        end = true;
+        return;
+      }
+    } else {
+      leave = tree->FirstLeave();
     }
   } else {
-    leave = FirstLeave();
+    leave = tree->FirstLeave();
   }
 
-  result->clear();
+  prmanager.reset(
+      new PageRecordsManager(leave, tree->schema(), tree->key_indexes(),
+                             tree->file_type(), leave->meta().page_type()));
+  ready = true;
+}
 
-  bool end = false;
-  while (leave) {
-    PageRecordsManager prmanager(leave, schema(), key_indexes_,
-                                 file_type_, leave->meta().page_type());
+std::shared_ptr<RecordBase> TreeRecordIterator::GetNextRecord() {
+  if (!ready) {
+    Init();
+  }
 
-    // Fetch all matching records in this leave.
-    for (uint32 index = 0; index < prmanager.NumRecords(); index++) {
-      // Compare with left bound.
-      bool left_match = false, right_match = false;
+  if (end) {
+    return nullptr;
+  }
 
-      if (op.left_key) {
-        int re = prmanager.CompareRecordWithKey(prmanager.record(index),
-                                                *op.left_key);
-        left_match = (re > 0 && op.left_open) || (re >= 0 && !op.left_open);
-      } else {
-        left_match = true;
-      }
-
-      // Compare with right bound.
-      if (op.right_key) {
-        int re = prmanager.CompareRecordWithKey(prmanager.record(index),
-                                                *op.right_key);
-        right_match = (re < 0 && op.right_open) || (re <= 0 && !op.right_open);
-
-        if (!right_match) {
+  if (search_op->key) {
+    // Single key search.
+    while (true) {
+      if (page_record_index >= prmanager->NumRecords()) {
+        if (last_is_match && leave->meta().overflow_page() >= 0) {
+          leave = tree->Page(leave->meta().overflow_page());
+          prmanager.reset(new PageRecordsManager(leave, tree->schema(),
+                                                 tree->key_indexes(),
+                                                 tree->file_type(),
+                                                 leave->meta().page_type()));
+          page_record_index = 0;
+        } else {
           end = true;
-          break;
+          return nullptr;
         }
-      } else {
-        right_match = true;
       }
 
-      if (left_match && right_match) {
-        result->push_back(prmanager.shared_record(index));
-        //result->back()->Print();
+      while (page_record_index < prmanager->NumRecords()) {
+        int re = prmanager->CompareRecordWithKey(
+                    prmanager->record(page_record_index), *search_op->key);
+        if (re < 0) {
+          page_record_index++;
+          continue;
+        } else if (re == 0) {
+          auto record = prmanager->shared_record(page_record_index);
+          page_record_index++;
+          last_is_match = true;
+          return record;
+        } else {
+          if (leave->meta().is_overflow_page()) {
+            // Overflow page must have all same records that match the key we're
+            // searching for.
+            LogFATAL("Overflow page stores inconsistent records!");
+          }
+          last_is_match = false;
+          end = true;
+          return nullptr;
+        }
       }
     }
-    if (end) {
+  } else if (search_op->left_key || search_op->right_key) {
+    // Key range search.
+    while (true) {
+      if (page_record_index >= prmanager->NumRecords()) {
+        if (leave->meta().next_page() >= 0) {
+          leave = tree->Page(leave->meta().next_page());
+          prmanager.reset(new PageRecordsManager(leave, tree->schema(),
+                                                 tree->key_indexes(),
+                                                 tree->file_type(),
+                                                 leave->meta().page_type()));
+          page_record_index = 0;
+        } else {
+          end = true;
+          return nullptr;
+        }
+      }
+
+      while (page_record_index < prmanager->NumRecords()) {
+        // Compare with left bound.
+        bool left_match = false, right_match = false;
+
+        if (search_op->left_key) {
+          int re = prmanager->CompareRecordWithKey(
+                                  prmanager->record(page_record_index),
+                                  *search_op->left_key);
+          left_match = (re > 0 && search_op->left_open) ||
+                       (re >= 0 && !search_op->left_open);
+        } else {
+          left_match = true;
+        }
+
+        if (!left_match) {
+          page_record_index++;
+          continue;
+        }
+
+        // Compare with right bound.
+        if (search_op->right_key) {
+          int re = prmanager->CompareRecordWithKey(
+                                  prmanager->record(page_record_index),
+                                  *search_op->right_key);
+          right_match = (re < 0 && search_op->right_open) ||
+                        (re <= 0 && !search_op->right_open);
+
+          if (!right_match) {
+            end = true;
+            return nullptr;
+          }
+        } else {
+          right_match = true;
+        }
+
+        if (left_match && right_match) {
+          auto record = prmanager->shared_record(page_record_index);
+          page_record_index++;
+          return record;
+        }
+      }
+    }
+  } else {
+    // Scan records.
+    while (true) {
+      if (page_record_index >= prmanager->NumRecords()) {
+        if (leave->meta().next_page() >= 0) {
+          leave = tree->Page(leave->meta().next_page());
+          prmanager.reset(new PageRecordsManager(leave, tree->schema(),
+                                                 tree->key_indexes(),
+                                                 tree->file_type(),
+                                                 leave->meta().page_type()));
+          page_record_index = 0;
+        } else {
+          end = true;
+          return nullptr;
+        }
+      }
+      auto record = prmanager->shared_record(page_record_index);
+      page_record_index++;
+      return record;
+    }
+  }
+
+  return nullptr;
+}
+
+int BplusTree::SearchRecords(
+      const DB::SearchOp& op,
+      std::vector<std::shared_ptr<RecordBase>>* result) {
+  auto iter = RecordIterator(&op);
+  std::shared_ptr<RecordBase> record;
+  while (true) {
+    record = iter->GetNextRecord();
+    if (!record) {
       break;
     }
-    leave = Page(leave->Meta()->next_page());
+    result->push_back(record);
   }
 
   return result->size();
 }
 
 int BplusTree::ScanRecords(std::vector<std::shared_ptr<RecordBase>>* result) {
-  RecordPage* leave = FirstLeave();
-  while (leave) {
-    PageRecordsManager prmanager(leave, schema(), key_indexes_,
-                                 file_type_, leave->meta().page_type());
-
-    // Fetch all matching records in this leave.
-    for (uint32 index = 0; index < prmanager.NumRecords(); index++) {
-      result->push_back(prmanager.shared_record(index));
-    }
-    leave = Page(leave->Meta()->next_page());
-  }
-  return result->size();
+  DB::SearchOp op;
+  return SearchRecords(op, result);
 }
 
 BplusTree::SearchTreeNodeResult

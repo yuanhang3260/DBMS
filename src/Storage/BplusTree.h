@@ -6,16 +6,11 @@
 #include <queue>
 
 #include "Database/Catalog_pb.h"
-#include "Database/Table.h"
 #include "Database/Operation.h"
 #include "Storage/Record.h"
 #include "Storage/PageRecord_Common.h"
 #include "Storage/PageBase.h"
 #include "Storage/RecordPage.h"
-
-namespace Schema {
-  class PageRecordsManager;
-}
 
 namespace DB {
   class Table;
@@ -24,6 +19,8 @@ namespace DB {
 namespace Storage {
 
 class BplusTreeTest;
+class PageRecordsManager;
+class TreeRecordIterator;
 
 class BplusTreeHeaderPage: public HeaderPage {
  public:
@@ -118,16 +115,15 @@ class BplusTree {
   // int SearchRecords(const std::vector<std::shared_ptr<RecordBase>>& keys,
   //                   std::vector<std::shared_ptr<RecordBase>>* result);
 
-  int SearchRecords(const RecordBase& key,
-                    std::vector<std::shared_ptr<RecordBase>>* result);
-
-  int RangeSearchRecords(const DB::RangeSearchOp& op,
-                         std::vector<std::shared_ptr<RecordBase>>* result);
-
   int ScanRecords(std::vector<std::shared_ptr<RecordBase>>* result);
 
   // Search a key and return the leave.
   RecordPage* SearchByKey(const RecordBase& key);
+
+  int SearchRecords(const DB::SearchOp& op,
+                    std::vector<std::shared_ptr<RecordBase>>* result);
+
+  std::shared_ptr<TreeRecordIterator> RecordIterator(const DB::SearchOp* op);
 
   // Insert a data record to the B+ tree.
   RecordID Do_InsertRecord(
@@ -283,10 +279,10 @@ class BplusTree {
   SearchTreeNodeResult LookUpTreeNodeInfoForPage(const RecordPage& page);
 
   // Fetch all matching records from BB+ tree.
-  int FetchResultsFromLeave(
-          const RecordBase& key,
-          RecordPage* leave,
-          std::vector<std::shared_ptr<RecordBase>>* result);
+  // int FetchResultsFromLeave(
+  //         const RecordBase& key,
+  //         RecordPage* leave,
+  //         std::vector<std::shared_ptr<RecordBase>>* result);
 
   int DeleteMatchedRecordsFromLeave(
          const RecordBase& key,
@@ -401,8 +397,32 @@ class BplusTree {
   // Only for test - to allocated pages randomly.
   std::vector<int> new_page_id_list;
   int next_index = 0;
+
+  friend class TreeRecordIterator;
 };
 
-}
+struct TreeRecordIterator {
+  TreeRecordIterator() = default;
+  TreeRecordIterator(BplusTree* tree_, const DB::SearchOp* search_op_) :
+    tree(tree_),
+    search_op(search_op_) {}
+
+  BplusTree* tree = nullptr;
+  const DB::SearchOp* search_op = nullptr;
+
+  RecordPage* leave = nullptr;
+  std::shared_ptr<PageRecordsManager> prmanager;
+
+  bool ready = false;
+  bool end = false;
+
+  uint32 page_record_index = 0;
+  bool last_is_match = false;
+
+  void Init();
+  std::shared_ptr<RecordBase> GetNextRecord();
+};
+
+}  // namespace Storage
 
 #endif  /* STORAGE_BPLUS_TREE_ */

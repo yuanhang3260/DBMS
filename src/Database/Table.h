@@ -10,11 +10,9 @@
 #include "Storage/Record.h"
 #include "Storage/BplusTree.h"
 
-namespace Storage {
-  class BplusTree;
-}
-
 namespace DB {
+
+class TableRecordIterator;
 
 class Table {
  public:
@@ -48,14 +46,12 @@ class Table {
   int SearchRecords(const DB::SearchOp& op,
                     std::vector<std::shared_ptr<Storage::RecordBase>>* result);
 
-  int RangeSearchRecords(
-      const DB::RangeSearchOp& op,
-      std::vector<std::shared_ptr<Storage::RecordBase>>* result);
-
   int ScanRecords(std::vector<std::shared_ptr<Storage::RecordBase>>* result);
 
   int ScanRecords(std::vector<std::shared_ptr<Storage::RecordBase>>* result,
                   const std::vector<uint32>& key_indexes);
+
+  std::shared_ptr<TableRecordIterator> RecordIterator(const DB::SearchOp* op);
 
   bool InsertRecord(const Storage::RecordBase& record);
 
@@ -97,7 +93,34 @@ class Table {
           std::map<std::string, std::shared_ptr<Storage::BplusTree>>;
   TreeMap tree_map_;
 
+  friend class TableRecordIterator;
+
   FORBID_COPY_AND_ASSIGN(Table);
+};
+
+struct TableRecordIterator {
+  TableRecordIterator() = default;
+  TableRecordIterator(Table* table_, const SearchOp* search_op_) :
+    table(table_),
+    search_op(search_op_) {}
+
+  Table* table;
+  const SearchOp* search_op;
+
+  std::shared_ptr<Storage::TreeRecordIterator> tree_iter;
+
+  std::vector<Storage::RecordID> rids;
+  // This is for implementing "fake" iterating - prefetch all data records
+  // and wait for iteration.
+  std::vector<std::shared_ptr<Storage::RecordBase>> data_records;
+
+  uint32 record_index = 0;
+
+  bool ready = false;
+  bool end = false;
+
+  void Init();
+  std::shared_ptr<Storage::RecordBase> GetNextRecord();
 };
 
 }  // namespace DATABASE

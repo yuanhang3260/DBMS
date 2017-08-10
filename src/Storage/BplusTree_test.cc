@@ -247,8 +247,10 @@ class BplusTreeTest: public UnitTest {
       //key.Print();
 
       result.clear();
+      DB::SearchOp op;
+      *op.AddKey() = key;
       AssertEqual(start_list[i + 1] - start_list[i],
-                  tree->SearchRecords(key, &result), "Search result differs");
+                  tree->SearchRecords(op, &result), "Search result differs");
     }
   }
 

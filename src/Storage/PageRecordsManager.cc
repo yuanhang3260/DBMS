@@ -8,6 +8,7 @@
 #include "Base/Log.h"
 #include "Base/Utils.h"
 
+#include "Storage/BplusTree.h"
 #include "Storage/PageRecordsManager.h"
 
 namespace Storage {

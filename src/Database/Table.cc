@@ -14,10 +14,13 @@ namespace DB {
 
 namespace {
 
+using Storage::BplusTree;
 using Storage::RecordBase;
 using Storage::DataRecord;
 using Storage::IndexRecord;
 using Storage::RecordID;
+
+const bool kEnableInFlyIter = false;
 
 }
 
@@ -237,21 +240,9 @@ void Table::FetchDataRecordsByRids(
 }
 
 int Table::SearchRecords(const DB::SearchOp& op,
-                         std::vector<std::shared_ptr<RecordBase>>* result) {
-  auto data_tree = DataTree();
-  if (IsDataFileKey(op.field_indexes)) {
-    return data_tree->SearchRecords(*op.key, result);
-  } else {
-    std::vector<std::shared_ptr<RecordBase>> irecords;
-    Tree(Storage::INDEX, op.field_indexes)->SearchRecords(*op.key, &irecords);
-    FetchDataRecordsByRids(irecords, result);
-  }
-  return result->size();
-}
-
-int Table::RangeSearchRecords(const DB::RangeSearchOp& op,
-                              std::vector<std::shared_ptr<RecordBase>>* result){
-  // Compare left and right key. If they form an empty set, return 0.
+                         std::vector<std::shared_ptr<RecordBase>>* result){
+  // Just for range search - compare left and right key. If they form an empty
+  // set, return 0.
   if (op.left_key && op.right_key) {
     int re = RecordBase::CompareRecords(*op.left_key, *op.right_key);
     if (re > 0 || (re == 0 && (op.left_open || op.right_open))) {
@@ -262,10 +253,10 @@ int Table::RangeSearchRecords(const DB::RangeSearchOp& op,
 
   auto data_tree = DataTree();
   if (IsDataFileKey(op.field_indexes)) {
-    return data_tree->RangeSearchRecords(op, result);
+    return data_tree->SearchRecords(op, result);
   } else {
     std::vector<std::shared_ptr<RecordBase>> irecords;
-    Tree(Storage::INDEX, op.field_indexes)->RangeSearchRecords(op, &irecords);
+    Tree(Storage::INDEX, op.field_indexes)->SearchRecords(op, &irecords);
     FetchDataRecordsByRids(irecords, result);
   }
   return result->size();
@@ -284,6 +275,97 @@ int Table::ScanRecords(std::vector<std::shared_ptr<RecordBase>>* result,
     tree = Tree(Storage::INDEX, key_index);
   }
   return tree->ScanRecords(result);
+}
+
+void TableRecordIterator::Init() {
+  Storage::BplusTree* tree;
+  if (search_op->field_indexes.empty()) {
+    // Scan data tree.
+    tree = table->DataTree();
+  } else if (!table->IsDataFileKey(search_op->field_indexes)) {
+    // Search index tree.
+    std::vector<std::shared_ptr<RecordBase>> irecords;
+    tree = table->Tree(Storage::INDEX, search_op->field_indexes);
+    tree->SearchRecords(*search_op, &irecords);
+    for (const auto& irecord : irecords) {
+      rids.push_back((dynamic_cast<const IndexRecord&>(*irecord)).rid());
+    }
+    std::sort(rids.begin(), rids.end());
+  } else {
+    // search data tree.
+    tree = table->DataTree();
+  }
+
+  // Pre-fetch all data records.
+  if (!kEnableInFlyIter) {
+    if (search_op->field_indexes.empty() ||  // Scan data tree
+        table->IsDataFileKey(search_op->field_indexes)) {
+      tree->SearchRecords(*search_op, &data_records);
+    } else {
+      for (const auto& rid : rids) {
+        DataRecord* drecord = table->CreateDataRecord();
+        CHECK(drecord->LoadFromMem(table->DataTree()->Record(rid)) >= 0,
+              "Load data record failed");
+        data_records.push_back(std::shared_ptr<RecordBase>(drecord));
+      }
+    }
+  } else {
+    if (search_op->field_indexes.empty() ||  // Scan data tree
+        table->IsDataFileKey(search_op->field_indexes)) {
+      tree_iter = tree->RecordIterator(search_op);
+    }
+  }
+
+  ready = true;
+}
+
+std::shared_ptr<RecordBase> TableRecordIterator::GetNextRecord() {
+  if (!ready) {
+    Init();
+  }
+
+  if (end) {
+    return nullptr;
+  }
+
+  if (search_op->left_key && search_op->right_key) {
+    int re = RecordBase::CompareRecords(*search_op->left_key,
+                                        *search_op->right_key);
+    if (re > 0 ||
+        (re == 0 && (search_op->left_open || search_op->right_open))) {
+      LogINFO("Left and right keys produce empty range");
+      end = true;
+      return nullptr;
+    }
+  }
+
+  if (!kEnableInFlyIter) {
+    if (record_index >= data_records.size()) {
+      end = true;
+      return nullptr;
+    }
+    return data_records.at(record_index++);
+  } else {
+    if (search_op->field_indexes.empty() ||  // Scan data tree
+        table->IsDataFileKey(search_op->field_indexes)) {
+      return tree_iter->GetNextRecord();
+    } else {
+      if (record_index >= rids.size()) {
+        end = true;
+        return nullptr;
+      }
+      DataRecord* drecord = table->CreateDataRecord();
+      const auto& rid = rids.at(record_index++);
+      CHECK(drecord->LoadFromMem(table->DataTree()->Record(rid)) >= 0,
+            "Load data record failed");
+      return std::shared_ptr<RecordBase>(drecord);
+    }
+  }
+}
+
+std::shared_ptr<TableRecordIterator>
+Table::RecordIterator(const DB::SearchOp* op) {
+  return std::make_shared<TableRecordIterator>(this, op);
 }
 
 bool Table::ValidateAllIndexRecords(int num_records) {
