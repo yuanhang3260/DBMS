@@ -1,5 +1,8 @@
 #include "Database/Table.h"
+#include "Query/Common.h"
 #include "Query/Iterator.h"
+#include "Query/ExecutePlan.h"
+#include "Query/NodeValue.h"
 #include "Query/SqlQuery.h"
 
 namespace Query {

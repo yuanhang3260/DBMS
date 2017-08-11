@@ -9,7 +9,9 @@
 
 #include "Database/CatalogManager.h"
 #include "Query/Common.h"
+#include "Query/ExecutePlan.h"
 #include "Query/Iterator.h"
+#include "Query/NodeValue.h"
 #include "Schema/SchemaType.h"
 #include "Storage/Record.h"
 

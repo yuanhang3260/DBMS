@@ -11,6 +11,9 @@
 #include "Database/Database.h"
 #include "Query/Common.h"
 #include "Query/Expression.h"
+#include "Query/ExecutePlan.h"
+#include "Query/NodeValue.h"
+#include "Query/Result.h"
 
 namespace Database {
 class Database;

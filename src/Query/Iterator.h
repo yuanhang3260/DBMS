@@ -5,7 +5,7 @@
 #include <vector>
 
 #include "Database/Operation.h"
-#include "Query/Common.h"
+#include "Query/Result.h"
 
 namespace DB {
 class TableRecordIterator;

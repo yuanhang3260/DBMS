@@ -2,7 +2,8 @@
 #include "Base/MacroUtils.h"
 #include "UnitTest/UnitTest.h"
 
-#include "Query/Common.h"
+#include "Query/NodeValue.h"
+#include "Query/Result.h"
 
 namespace Query {
 

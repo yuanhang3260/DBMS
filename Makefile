@@ -25,8 +25,11 @@ OBJ = $(OBJ_DIR)/Database/Catalog_pb.o  \
       $(OBJ_DIR)/Database/Operation.o  \
       $(OBJ_DIR)/Query/Common.o  \
       $(OBJ_DIR)/Query/Expression.o  \
+      $(OBJ_DIR)/Query/ExecutePlan.o  \
       $(OBJ_DIR)/Query/Interpreter.o  \
       $(OBJ_DIR)/Query/Iterator.o  \
+      $(OBJ_DIR)/Query/NodeValue.o  \
+      $(OBJ_DIR)/Query/Result.o  \
       $(OBJ_DIR)/Query/SqlQuery.o  \
       $(OBJ_DIR)/Schema/SchemaType.o  \
       $(OBJ_DIR)/Schema/DataTypes.o  \
@@ -51,7 +54,7 @@ TESTOBJ = $(OBJ_DIR)/Schema/DataTypes_test.o  \
 					$(OBJ_DIR)/Database/Table_test.o  \
 					$(OBJ_DIR)/Database/Operation_test.o  \
 					$(OBJ_DIR)/Query/Query_test.o  \
-					$(OBJ_DIR)/Query/Query_Common_test.o  \
+					$(OBJ_DIR)/Query/Result_test.o  \
 
 
 TESTEXE = test/BplusTree_test.out  \
@@ -64,7 +67,7 @@ TESTEXE = test/BplusTree_test.out  \
 					test/RecordPage_test.out  \
           test/Record_test.out  \
           test/Table_test.out  \
-          test/Query_Common_test.out  \
+          test/Result_test.out  \
 
  LIB_DIRS = $(OBJ_DIR)/Storage  \
             $(OBJ_DIR)/Database  \
