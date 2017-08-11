@@ -6,61 +6,6 @@
 
 namespace Query {
 
-// ***************************** NodeValue ********************************** //
-NodeValue NodeValue::IntValue(int64 v) {
-  NodeValue value(INT64);
-  value.v_int64 = v;
-  value.has_value_flags_ = 1;
-  return value;
-}
-
-NodeValue NodeValue::DoubleValue(double v) {
-  NodeValue value(DOUBLE);
-  value.v_double = v;
-  value.has_value_flags_ = 1;
-  return value;
-}
-
-NodeValue NodeValue::StringValue(const std::string& v) {
-  NodeValue value(STRING);
-  value.v_str = v;
-  value.has_value_flags_ = 1;
-  return value;
-}
-
-NodeValue NodeValue::CharValue(char v) {
-  NodeValue value(CHAR);
-  value.v_char = v;
-  value.has_value_flags_ = 1;
-  return value;
-}
-
-NodeValue NodeValue::BoolValue(bool v) {
-  NodeValue value(BOOL);
-  value.v_bool = v;
-  value.has_value_flags_ = 1;
-  return value;
-}
-
-std::string NodeValue::AsString() const {
-  switch (type) {
-    case INT64:
-      return Strings::StrCat("Int64 ", std::to_string(v_int64));
-    case DOUBLE:
-      return Strings::StrCat("Double ", std::to_string(v_double));
-    case STRING:
-      return Strings::StrCat("String ", v_str);
-    case CHAR:
-      return Strings::StrCat("Char ", std::to_string(v_char));
-    case BOOL:
-      return Strings::StrCat("Bool ", v_bool ? "true" : "false");
-    case UNKNOWN_VALUE_TYPE:
-      return "Unknown type";
-  }
-  return "Unknown type";
-}
-
-
 // **************************** ExprTreeNode ******************************** //
 std::string ExprTreeNode::NodeTypeStr(ExprTreeNode::Type node_type) {
   switch (node_type) {
@@ -80,13 +25,33 @@ void ExprTreeNode::set_negative(bool neg) {
   if (value_.type == STRING || value_.type == UNKNOWN_VALUE_TYPE) {
     return;
   }
-  value_.negative = neg;
-}
 
+  if (type() == ExprTreeNode::CONST_VALUE) {
+    switch (value_.type) {
+      case INT64:
+        value_.v_int64 = -value_.v_int64;
+        break;
+      case DOUBLE:
+        value_.v_double = -value_.v_double;
+        break;
+      case CHAR:
+        value_.v_char = -value_.v_char;
+        break;
+      default:
+        break;
+    }
+  } else {
+    value_.negative = neg;
+  }
+}
 
 // ************************** ConstValueNode ******************************** //
 void ConstValueNode::Print() const {
   printf("const value node %s\n", value_.AsString().c_str());
+}
+
+NodeValue ConstValueNode::Evaluate(const FetchedResult::Tuple& arg) const {
+  return value_;
 }
 
 
@@ -409,145 +374,55 @@ ValueType OperatorNode::DeriveResultValueType(ValueType t1, ValueType t2) {
   return UNKNOWN_VALUE_TYPE;
 }
 
-// This is silly, but I can't find a better way to eliminate duplicated code.
-#define PRODUCE_RESULT_VALUE_1(t1, t2, t_result, t1_name, t2_name, t_result_name, op)    \
-    if (types_match(t1, t2)) {                                                           \
-      value.type = t_result;                                                             \
-      value.has_value_flags_ = 1;                                                        \
-      value.v_##t_result_name =                                                          \
-        ((left_value.negative? -left_value.v_##t1_name : left_value.v_##t1_name) op      \
-         (right_value.negative? -right_value.v_##t2_name : right_value.v_##t2_name));    \
-    }                                                                                    \
-
-#define PRODUCE_RESULT_VALUE_2(t1, t2, t_result, t1_name, t2_name, t_result_name, op)    \
-    PRODUCE_RESULT_VALUE_1(t1, t2, t_result, t1_name, t2_name, t_result_name, op)        \
-    if (types_match(t2, t1)) {                                                           \
-      value.type = t_result;                                                             \
-      value.has_value_flags_ = 1;                                                        \
-      value.v_##t_result_name =                                                          \
-        ((left_value.negative? -left_value.v_##t2_name : left_value.v_##t2_name) op      \
-         (right_value.negative? -right_value.v_##t1_name : right_value.v_##t1_name));    \
-    }                                                                                    \
-
-#define PRODUCE_STRING_OP_RESULT(op)                            \
-    if (types_match(STRING, STRING)) {                          \
-      value.type = BOOL;                                        \
-      value.has_value_flags_ = 1;                               \
-      value.v_bool = left_value.v_str op right_value.v_str;     \
-    }                                                           \
-
 NodeValue OperatorNode::Evaluate(const FetchedResult::Tuple& tuple) const {
   CHECK(valid_, "Invalid OperatorNode");
 
   NodeValue left_value = left_? left_->Evaluate(tuple) : NodeValue();
   NodeValue right_value = right_? right_->Evaluate(tuple) : NodeValue();
-  NodeValue value = value_;
 
-  auto types_match = [&] (ValueType type_1, ValueType type_2) {
-    if (left_value.type == type_1 && right_value.type == type_2) {
-      return true;
-    }
-    return false;
-  };
-
-  // Enjoy.
+  NodeValue value;
   switch (op_) {
     case ADD:
-      // Example of this macro expansion:
-      //
-      // if (types_match(INT64, INT64)) {
-      //   value.type = INT64;
-      //   value.has_value_flags_ = 1;
-      //   value.v_int64 = left_value.v_int64 + right_value.v_int64;
-      // }
-      PRODUCE_RESULT_VALUE_1(INT64, INT64, INT64, int64, int64, int64, +)
-      PRODUCE_RESULT_VALUE_2(INT64, DOUBLE, DOUBLE, int64, double, double, +)
-      PRODUCE_RESULT_VALUE_2(INT64, CHAR, CHAR, int64, char, char, +)
-      PRODUCE_RESULT_VALUE_1(DOUBLE, DOUBLE, DOUBLE, double, double, double, +)
-      PRODUCE_RESULT_VALUE_1(CHAR, CHAR, CHAR, char, char, char, +)
+      value = left_value + right_value;
       break;
     case SUB:
-      PRODUCE_RESULT_VALUE_1(INT64, INT64, INT64, int64, int64, int64, -)
-      PRODUCE_RESULT_VALUE_2(INT64, DOUBLE, DOUBLE, int64, double, double, -)
-      PRODUCE_RESULT_VALUE_2(INT64, CHAR, CHAR, int64, char, char, -)
-      PRODUCE_RESULT_VALUE_1(DOUBLE, DOUBLE, DOUBLE, double, double, double, -)
-      PRODUCE_RESULT_VALUE_1(CHAR, CHAR, CHAR, char, char, char, -)
+      value = left_value - right_value;
       break;
     case MUL:
-      PRODUCE_RESULT_VALUE_1(INT64, INT64, INT64, int64, int64, int64, *)
-      PRODUCE_RESULT_VALUE_2(INT64, DOUBLE, DOUBLE, int64, double, double, *)
-      PRODUCE_RESULT_VALUE_1(DOUBLE, DOUBLE, DOUBLE, double, double, double, *)
+      value = left_value * right_value;
       break;
     case DIV:
-      PRODUCE_RESULT_VALUE_1(INT64, INT64, INT64, int64, int64, int64, /)
-      PRODUCE_RESULT_VALUE_2(INT64, DOUBLE, DOUBLE, int64, double, double, /)
-      PRODUCE_RESULT_VALUE_1(DOUBLE, DOUBLE, DOUBLE, double, double, double, /)
+      value = left_value / right_value;
       break;
     case MOD:
-      PRODUCE_RESULT_VALUE_1(INT64, INT64, INT64, int64, int64, int64, %)
+      value = left_value % right_value;
       break;
     case EQUAL:
-      PRODUCE_RESULT_VALUE_1(INT64, INT64, BOOL, int64, int64, bool, ==)
-      PRODUCE_RESULT_VALUE_2(INT64, DOUBLE, BOOL, int64, double, bool, ==)
-      PRODUCE_RESULT_VALUE_2(INT64, CHAR, BOOL, int64, char, bool, ==)
-      PRODUCE_RESULT_VALUE_1(DOUBLE, DOUBLE, BOOL, double, double, bool, ==)
-      PRODUCE_RESULT_VALUE_2(BOOL, BOOL, BOOL, bool, bool, bool, ==)
-      PRODUCE_STRING_OP_RESULT(==)
-      PRODUCE_RESULT_VALUE_1(CHAR, CHAR, BOOL, char, char, bool, ==)
+      value = NodeValue::BoolValue(left_value == right_value);
       break;
     case NONEQUAL:
-      PRODUCE_RESULT_VALUE_1(INT64, INT64, BOOL, int64, int64, bool, !=)
-      PRODUCE_RESULT_VALUE_2(INT64, DOUBLE, BOOL, int64, double, bool, !=)
-      PRODUCE_RESULT_VALUE_2(INT64, CHAR, BOOL, int64, char, bool, !=)
-      PRODUCE_RESULT_VALUE_1(DOUBLE, DOUBLE, BOOL, double, double, bool, !=)
-      PRODUCE_RESULT_VALUE_2(BOOL, BOOL, BOOL, bool, bool, bool, !=)
-      PRODUCE_STRING_OP_RESULT(!=)
-      PRODUCE_RESULT_VALUE_1(CHAR, CHAR, BOOL, char, char, bool, !=)
+      value = NodeValue::BoolValue(left_value != right_value);
       break;
     case LT:
-      PRODUCE_RESULT_VALUE_1(INT64, INT64, BOOL, int64, int64, bool, <)
-      PRODUCE_RESULT_VALUE_2(INT64, DOUBLE, BOOL, int64, double, bool, <)
-      PRODUCE_RESULT_VALUE_2(INT64, CHAR, BOOL, int64, char, bool, <)
-      PRODUCE_RESULT_VALUE_1(DOUBLE, DOUBLE, BOOL, double, double, bool, <)
-      PRODUCE_STRING_OP_RESULT(<)
-      PRODUCE_RESULT_VALUE_1(CHAR, CHAR, BOOL, char, char, bool, <)
+      value = NodeValue::BoolValue(left_value < right_value);
       break;
     case GT:
-      PRODUCE_RESULT_VALUE_1(INT64, INT64, BOOL, int64, int64, bool, >)
-      PRODUCE_RESULT_VALUE_2(INT64, DOUBLE, BOOL, int64, double, bool, >)
-      PRODUCE_RESULT_VALUE_2(INT64, CHAR, BOOL, int64, char, bool, >)
-      PRODUCE_RESULT_VALUE_1(DOUBLE, DOUBLE, BOOL, double, double, bool, >)
-      PRODUCE_STRING_OP_RESULT(>)
-      PRODUCE_RESULT_VALUE_1(CHAR, CHAR, BOOL, char, char, bool, >)
+      value = NodeValue::BoolValue(left_value > right_value);
       break;
     case LE:
-      PRODUCE_RESULT_VALUE_1(INT64, INT64, BOOL, int64, int64, bool, <=)
-      PRODUCE_RESULT_VALUE_2(INT64, DOUBLE, BOOL, int64, double, bool, <=)
-      PRODUCE_RESULT_VALUE_2(INT64, CHAR, BOOL, int64, char, bool, <=)
-      PRODUCE_RESULT_VALUE_1(DOUBLE, DOUBLE, BOOL, double, double, bool, <=)
-      PRODUCE_STRING_OP_RESULT(<=)
-      PRODUCE_RESULT_VALUE_1(CHAR, CHAR, BOOL, char, char, bool, <=)
+      value = NodeValue::BoolValue(left_value <= right_value);
       break;
     case GE:
-      PRODUCE_RESULT_VALUE_1(INT64, INT64, BOOL, int64, int64, bool, >=)
-      PRODUCE_RESULT_VALUE_2(INT64, DOUBLE, BOOL, int64, double, bool, >=)
-      PRODUCE_RESULT_VALUE_2(INT64, CHAR, BOOL, int64, char, bool, >=)
-      PRODUCE_RESULT_VALUE_1(DOUBLE, DOUBLE, BOOL, double, double, bool, >=)
-      PRODUCE_STRING_OP_RESULT(>=)
-      PRODUCE_RESULT_VALUE_1(CHAR, CHAR, BOOL, char, char, bool, >=)
+      value = NodeValue::BoolValue(left_value >= right_value);
       break;
     case AND:
-      PRODUCE_RESULT_VALUE_1(BOOL, BOOL, BOOL, bool, bool, bool, &&)
+      value = NodeValue::BoolValue(left_value && right_value);
       break;
     case OR:
-      PRODUCE_RESULT_VALUE_1(BOOL, BOOL, BOOL, bool, bool, bool, ||)
+      value = NodeValue::BoolValue(left_value || right_value);
       break;
     case NOT:
-      if (left_value.type == BOOL) {
-        value.type = BOOL;
-        value.has_value_flags_ = 1;
-        value.v_bool = !left_value.v_bool;
-      }
+      value = NodeValue::BoolValue(!left_value);
       break;
     default:
       LogFATAL("Invalid operator");

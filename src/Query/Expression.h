@@ -112,9 +112,7 @@ class ConstValueNode : public ExprTreeNode {
 
   void Print() const override;
 
-  NodeValue Evaluate(const FetchedResult::Tuple& arg) const override {
-    return value_;
-  }
+  NodeValue Evaluate(const FetchedResult::Tuple& arg) const;
 };
 
 

@@ -141,6 +141,15 @@ struct NodeValue {
   bool operator>=(const NodeValue& other) const;
 };
 
+NodeValue operator+(const NodeValue& lhs, const NodeValue& rhs);
+NodeValue operator-(const NodeValue& lhs, const NodeValue& rhs);
+NodeValue operator*(const NodeValue& lhs, const NodeValue& rhs);
+NodeValue operator/(const NodeValue& lhs, const NodeValue& rhs);
+NodeValue operator%(const NodeValue& lhs, const NodeValue& rhs);
+bool operator&&(const NodeValue& lhs, const NodeValue& rhs);
+bool operator||(const NodeValue& lhs, const NodeValue& rhs);
+bool operator!(const NodeValue& lhs);
+
 struct QueryCondition {
   Column column;
   OperatorType op;

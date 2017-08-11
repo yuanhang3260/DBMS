@@ -1176,24 +1176,6 @@ RecordPage* BplusTree::SearchByKey(const RecordBase& key) {
   return crt_page;
 }
 
-// int BplusTree::SearchRecords(
-//         const std::vector<std::shared_ptr<RecordBase>>& keys,
-//         std::vector<std::shared_ptr<RecordBase>>* result) {
-//   for (const auto& key : keys) {
-//     SANITY_CHECK(CheckKeyFieldsType(*key),
-//                  "Key fields type mismatch table schema of this B+ tree");
-//   }
-
-//   int total_matches = 0;
-//   for (const auto& key : keys) {
-//     int num_matches_this_key = SearchRecords(*key, result);
-//     if (num_matches_this_key > 0) {
-//       total_matches += num_matches_this_key;
-//     }
-//   }
-//   return total_matches;
-// }
-
 std::shared_ptr<TreeRecordIterator>
 BplusTree::RecordIterator(const DB::SearchOp* op) {
   return std::make_shared<TreeRecordIterator>(this, op);

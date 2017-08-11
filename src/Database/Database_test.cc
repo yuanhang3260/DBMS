@@ -270,8 +270,20 @@ class DatabaseTest: public UnitTest {
     auto query = interpreter_->shared_query();
     AssertTrue(query->FinalizeParsing());
     int num_results = query->ExecuteSelectQuery();
+    printf("num_results = %d\n", num_results);
     AssertEqual(ExpectedResultNum(query->expr_root()), num_results);
     AssertTrue(VerifyResult(query->expr_root(), query->results()));
+    interpreter_->reset();
+    printf("\n");
+
+    expr = "SELECT * FROM Puppy WHERE id > -1 AND id < 10";
+    std::cout << expr << std::endl;
+    AssertTrue(interpreter_->Parse(expr));
+    query = interpreter_->shared_query();
+    AssertTrue(query->FinalizeParsing());
+    num_results = query->ExecuteSelectQuery();
+    printf("num_results = %d\n", num_results);
+    query->PrintResults();
     interpreter_->reset();
     printf("\n");
 
@@ -281,6 +293,7 @@ class DatabaseTest: public UnitTest {
     query = interpreter_->shared_query();
     AssertTrue(query->FinalizeParsing());
     num_results = query->ExecuteSelectQuery();
+    printf("num_results = %d\n", num_results);
     AssertEqual(ExpectedResultNum(query->expr_root()), num_results);
     AssertTrue(VerifyResult(query->expr_root(), query->results()));
     interpreter_->reset();
@@ -304,6 +317,7 @@ class DatabaseTest: public UnitTest {
     query = interpreter_->shared_query();
     AssertTrue(query->FinalizeParsing());
     num_results = query->ExecuteSelectQuery();
+    printf("num_results = %d\n", num_results);
     AssertEqual(ExpectedResultNum(query->expr_root()), num_results);
     AssertTrue(VerifyResult(query->expr_root(), query->results()));
     interpreter_->reset();
@@ -315,6 +329,7 @@ class DatabaseTest: public UnitTest {
     query = interpreter_->shared_query();
     AssertTrue(query->FinalizeParsing());
     num_results = query->ExecuteSelectQuery();
+    printf("num_results = %d\n", num_results);
     AssertEqual(ExpectedResultNum(query->expr_root()), num_results);
     AssertTrue(VerifyResult(query->expr_root(), query->results()));
     interpreter_->reset();
@@ -326,6 +341,19 @@ class DatabaseTest: public UnitTest {
     query = interpreter_->shared_query();
     AssertTrue(query->FinalizeParsing());
     num_results = query->ExecuteSelectQuery();
+    printf("num_results = %d\n", num_results);
+    AssertEqual(ExpectedResultNum(query->expr_root()), num_results);
+    AssertTrue(VerifyResult(query->expr_root(), query->results()));
+    interpreter_->reset();
+    printf("\n");
+
+    expr = "SELECT * FROM Puppy WHERE NOT adult AND age > 7";
+    std::cout << expr << std::endl;
+    AssertTrue(interpreter_->Parse(expr));
+    query = interpreter_->shared_query();
+    AssertTrue(query->FinalizeParsing());
+    num_results = query->ExecuteSelectQuery();
+    printf("num_results = %d\n", num_results);
     AssertEqual(ExpectedResultNum(query->expr_root()), num_results);
     AssertTrue(VerifyResult(query->expr_root(), query->results()));
     interpreter_->reset();
@@ -337,6 +365,7 @@ class DatabaseTest: public UnitTest {
     query = interpreter_->shared_query();
     AssertTrue(query->FinalizeParsing());
     num_results = query->ExecuteSelectQuery();
+    printf("num_results = %d\n", num_results);
     query->PrintResults();
     AssertEqual(ExpectedResultNum(query->expr_root()), num_results);
     AssertTrue(VerifyResult(query->expr_root(), query->results()));
@@ -397,6 +426,7 @@ class DatabaseTest: public UnitTest {
     query = interpreter_->shared_query();
     AssertTrue(query->FinalizeParsing());
     num_results = query->ExecuteSelectQuery();
+    printf("num_results = %d\n", num_results);
     query->PrintResults();
     interpreter_->reset();
     printf("\n");
