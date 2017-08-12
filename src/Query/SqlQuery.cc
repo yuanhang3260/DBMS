@@ -66,7 +66,7 @@ bool SqlQuery::AddColumn(const std::string& name,
   if (aggregation_type != NO_AGGREGATION) {
     aggregated_columns_num_++;
   }
-  column_request.request_pos = ++columns_num_;
+  column_request.request_pos = columns_num_++;
 
   if (column_request.column.table_name.empty()) {
     columns_unknown_table_.insert(column_request);
@@ -1210,17 +1210,22 @@ void SqlQuery::EvaluateQueryConditions(PhysicalPlan* physical_plan) {
     }
 
     auto group_plan = analyze_condition_group(group, field_m);
-    // Index search needs to be factored.
-    if (!table_m->IsPrimaryIndex({field_m->index()})) {
-      group_plan.query_ratio *= kIndexSearchFactor;
-      group_plan.query_ratio = std::min(1.0, group_plan.query_ratio);
-    }
-
     // Any group is direct false, the whole physical query is then skipped.
     if (group_plan.plan == PhysicalPlan::CONST_FALSE_SKIP) {
       *physical_plan = group_plan;
       break;
     }
+
+    // Index search ratio needs to be factored.
+    if (!table_m->IsPrimaryIndex({field_m->index()})) {
+      group_plan.query_ratio *= kIndexSearchFactor;
+      group_plan.query_ratio = std::min(1.0, group_plan.query_ratio);
+      if (group_plan.query_ratio >= 1.0 &&
+          group_plan.plan == PhysicalPlan::SEARCH) {
+        group_plan.plan = PhysicalPlan::SCAN;
+      }
+    }
+
     if (physical_plan->plan == PhysicalPlan::CONST_TRUE_SCAN) {
       // Const true should only be used if all conditions are const true.
       *physical_plan = group_plan;
