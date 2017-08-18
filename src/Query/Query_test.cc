@@ -312,7 +312,8 @@ class QueryTest: public UnitTest {
     // Test evaluation with index record.
     FetchedResult::Tuple tuple2;
     TableRecordMeta meta;
-    meta.field_indexes = key_fields_;
+    meta.CreateIndexRecordMeta(
+        catalog_m_->FindTableByName("Puppy")->table_info(), key_fields_);
     tuple2.emplace("Puppy", ResultRecord(index_record_));
     tuple2.at("Puppy").meta = &meta;
 

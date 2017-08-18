@@ -8,12 +8,37 @@ namespace {
 using Storage::RecordBase;
 }
 
+// *************************** TableRecordMeta *******************************//
+void TableRecordMeta::CreateDataRecordMeta(const DB::TableInfo& schema) {
+  if (!fetched_fields.empty()) {
+    return;
+  }
+
+  for (const auto& field : schema.fields()) {
+    fetched_fields.push_back(field);
+  }
+  record_type = Storage::DATA_RECORD;
+}
+
+void TableRecordMeta::CreateIndexRecordMeta(
+    const DB::TableInfo& schema, const std::vector<uint32>& field_indexes) {
+  if (!fetched_fields.empty()) {
+    return;
+  }
+
+  for (uint32 index : field_indexes) {
+    fetched_fields.push_back(schema.fields(index));
+  }
+  record_type = Storage::INDEX_RECORD;
+}
+
 // ****************************** ResultRecord *******************************//
 Storage::RecordType ResultRecord::record_type() const {
-  if (record) {
+  if (meta) {
+    return meta->record_type;
+  } else {
     return record->type();
   }
-  return Storage::UNKNOWN_RECORDTYPE;
 }
 
 const Schema::Field* ResultRecord::GetField(uint32 index) const {
@@ -22,8 +47,8 @@ const Schema::Field* ResultRecord::GetField(uint32 index) const {
     return record->fields().at(index).get();
   } else if (record_type() == Storage::INDEX_RECORD) {
     int pos = -1;
-    for (uint32 i = 0 ; i < meta->field_indexes.size(); i++) {
-      if (meta->field_indexes.at(i) == index) {
+    for (uint32 i = 0 ; i < meta->fetched_fields.size(); i++) {
+      if (meta->fetched_fields.at(i).index() == index) {
         pos = i;
         break;
       }
@@ -49,6 +74,14 @@ void ResultRecord::AddField(Schema::Field* field) {
 
 
 // **************************** FetchedResult ******************************* //
+uint32 FetchedResult::TupleSize(const FetchedResult::Tuple& tuple) {
+  uint32 size = 0;
+  for (const auto& iter : tuple) {
+    size += iter.second.record->size();
+  }
+  return size;
+}
+
 bool FetchedResult::AddTuple(const Tuple& tuple) {
   tuples.push_back(tuple);
   for (auto& table_record_iter : tuples.back()) {
@@ -105,11 +138,8 @@ int FetchedResult::CompareBasedOnColumns(
                           column.table_name,
                           " from tuple 2"));
 
-    CHECK(record_1.record_type() == record_2.record_type(),
-          "Comparing records with different record types");
-
-    CHECK(record_1.meta->field_indexes == record_2.meta->field_indexes,
-            "Comparing index records with different index fields");
+    CHECK(record_1.meta == record_2.meta,
+          "Comparing table records with different meta");
 
     int re = RecordBase::CompareSchemaFields(record_1.GetField(column.index),
                                              record_2.GetField(column.index));

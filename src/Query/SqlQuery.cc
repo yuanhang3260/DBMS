@@ -523,6 +523,7 @@ int SqlQuery::Do_ExecutePhysicalQuery(ExprTreeNode* node) {
 
       // Add table record meta.
       tuple_meta_.emplace(table_name, TableRecordMeta());
+      tuple_meta_[table_name].CreateDataRecordMeta(table->schema());
       node->mutable_results()->tuple_meta = &tuple_meta_;
 
       std::vector<std::shared_ptr<Storage::RecordBase>> records;
@@ -566,6 +567,7 @@ int SqlQuery::Do_ExecutePhysicalQuery(ExprTreeNode* node) {
 
       // Add table record meta.
       tuple_meta_.emplace(table_name, TableRecordMeta());
+      tuple_meta_[table_name].CreateDataRecordMeta(table->schema());
       node->mutable_results()->tuple_meta = &tuple_meta_;
 
       std::vector<std::shared_ptr<Storage::RecordBase>> records;
@@ -586,6 +588,7 @@ int SqlQuery::Do_ExecutePhysicalQuery(ExprTreeNode* node) {
 
     // Add table record meta.
     tuple_meta_.emplace(table_name, TableRecordMeta());
+    tuple_meta_[table_name].CreateDataRecordMeta(table->schema());
     node->mutable_results()->tuple_meta = &tuple_meta_;
 
     std::vector<std::shared_ptr<Storage::RecordBase>> records;
@@ -607,6 +610,7 @@ int SqlQuery::Do_ExecutePhysicalQuery(ExprTreeNode* node) {
 
     // Add table record meta.
     tuple_meta_.emplace(table_name, TableRecordMeta());
+    tuple_meta_[table_name].CreateDataRecordMeta(table->schema());
     node->mutable_results()->tuple_meta = &tuple_meta_;
 
     std::vector<std::shared_ptr<Storage::RecordBase>> records;
@@ -1262,13 +1266,13 @@ void SqlQuery::AggregateResults() {
         column_request.column.type = Schema::FieldType::INT;
       }
 
-      // Update field index meta if the table record in result is INDEX_RECORD.
+      // Update table record meta.
       auto it = results_.tuple_meta->find(table_name);
       CHECK(it != results_.tuple_meta->end(),
             "Couldn't find table record meta for table %s", table_name.c_str());
-      if (!it->second.field_indexes.empty()) {  // index record
-        it->second.field_indexes.push_back(extra_index.at(table_name));
-      }
+      it->second.fetched_fields.push_back(DB::TableField());
+      it->second.fetched_fields.back().set_index(extra_index.at(table_name));
+      it->second.fetched_fields.back().set_type(column_request.column.type);
 
       extra_index[table_name]++;
 
