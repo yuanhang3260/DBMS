@@ -20,8 +20,7 @@ struct FlatTupleFileOptions{
   // Metadata of each table's record. Note this map also gives the order of
   // records when tuple is dumped to / loaded from memory, because the map is
   // sorted by table name.
-  using TableMetas =
-      std::map<std::string, const Query::FetchedResult::TableRecordMeta*>
+  using TableMetas = std::map<std::string, const Query::TableRecordMeta*>;
   TableMetas table_metas;
 
   std::string db_name;
@@ -40,7 +39,7 @@ class FlatTuplePage {
 
   bool Init();
 
-  uint32 num_tuples() const { return num_tuples; }
+  uint32 num_tuples() const { return num_tuples_; }
   uint32 crt_tindex() const { return crt_tindex_; }
   byte* mutable_data() { return data_; }
   const byte* data() const { return data_; }
@@ -58,7 +57,7 @@ class FlatTuplePage {
  private:
   const FlatTupleFileOptions* opts_;
 
-  uint32 num_tuples = 0;
+  uint32 num_tuples_ = 0;
   byte* data_ = nullptr;
 
   uint32 crt_tindex_ = 0;

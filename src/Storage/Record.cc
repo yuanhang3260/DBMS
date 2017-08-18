@@ -334,32 +334,36 @@ void RecordBase::clear() {
   fields_.clear();
 }
 
+void RecordBase::AddField(const DB::TableField& field_info) {
+  auto field_type = field_info.type();
+  if (field_type == Schema::FieldType::INT) {
+    AddField(new Schema::IntField());
+  }
+  if (field_type == Schema::FieldType::LONGINT) {
+    AddField(new Schema::LongIntField());
+  }
+  if (field_type == Schema::FieldType::DOUBLE) {
+    AddField(new Schema::DoubleField());
+  }
+  if (field_type == Schema::FieldType::BOOL) {
+    AddField(new Schema::BoolField());
+  }
+  if (field_type == Schema::FieldType::CHAR) {
+    AddField(new Schema::CharField());
+  }
+  if (field_type == Schema::FieldType::STRING) {
+    AddField(new Schema::StringField());
+  }
+  if (field_type == Schema::FieldType::CHARARRAY) {
+    AddField(new Schema::CharArrayField(field_info.size()));
+  }
+}
+
 bool RecordBase::InitRecordFields(const DB::TableInfo& schema,
                                   const std::vector<uint32>& indexes) {
   clear();
   for (int index: indexes) {
-    auto type = schema.fields(index).type();
-    if (type == Schema::FieldType::INT) {
-      AddField(new Schema::IntField());
-    }
-    if (type == Schema::FieldType::LONGINT) {
-      AddField(new Schema::LongIntField());
-    }
-    if (type == Schema::FieldType::DOUBLE) {
-      AddField(new Schema::DoubleField());
-    }
-    if (type == Schema::FieldType::BOOL) {
-      AddField(new Schema::BoolField());
-    }
-    if (type == Schema::FieldType::CHAR) {
-      AddField(new Schema::CharField());
-    }
-    if (type == Schema::FieldType::STRING) {
-      AddField(new Schema::StringField());
-    }
-    if (type == Schema::FieldType::CHARARRAY) {
-      AddField(new Schema::CharArrayField(schema.fields(index).size()));
-    }
+    AddField(schema.fields(index));
   }
   return true;
 }

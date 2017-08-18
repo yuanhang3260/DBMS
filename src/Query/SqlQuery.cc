@@ -505,7 +505,16 @@ int SqlQuery::Do_ExecutePhysicalQuery(ExprTreeNode* node) {
     return 0;
   }
 
+  // Get table and search.
   const auto& table_name = physical_plan.table_name;
+  auto* table = db_->GetTable(table_name);
+  CHECK(table != nullptr, "Can't get table %s", table_name.c_str());
+
+  // Add table record meta.
+  tuple_meta_.emplace(table_name, TableRecordMeta());
+  tuple_meta_[table_name].CreateDataRecordMeta(table->schema());
+  node->mutable_results()->tuple_meta = &tuple_meta_;
+
   if (physical_plan.plan == PhysicalPlan::SEARCH) {
     printf("search\n");
     CHECK(!physical_plan.conditions.empty(), "No condition to search");
@@ -515,15 +524,6 @@ int SqlQuery::Do_ExecutePhysicalQuery(ExprTreeNode* node) {
       search_op.field_indexes.push_back(first_condition.column.index);
       search_op.AddKey()->AddField(
           first_condition.value.ToSchemaField(first_condition.column.type));
-
-      // Get table and search.
-      auto* table = db_->GetTable(table_name);
-      CHECK(table != nullptr, "Can't get table %s", table_name.c_str());
-
-      // Add table record meta.
-      tuple_meta_.emplace(table_name, TableRecordMeta());
-      tuple_meta_[table_name].CreateDataRecordMeta(table->schema());
-      node->mutable_results()->tuple_meta = &tuple_meta_;
 
       std::vector<std::shared_ptr<Storage::RecordBase>> records;
       table->SearchRecords(search_op, &records);
@@ -560,15 +560,6 @@ int SqlQuery::Do_ExecutePhysicalQuery(ExprTreeNode* node) {
         }
       }
 
-      // Get table and search.
-      auto* table = db_->GetTable(table_name);
-      CHECK(table != nullptr, "Can't get table %s", table_name.c_str());
-
-      // Add table record meta.
-      tuple_meta_.emplace(table_name, TableRecordMeta());
-      tuple_meta_[table_name].CreateDataRecordMeta(table->schema());
-      node->mutable_results()->tuple_meta = &tuple_meta_;
-
       std::vector<std::shared_ptr<Storage::RecordBase>> records;
       table->SearchRecords(range_search_op, &records);
       for (const auto& record : records) {
@@ -581,14 +572,6 @@ int SqlQuery::Do_ExecutePhysicalQuery(ExprTreeNode* node) {
     }
   } else if (physical_plan.plan == PhysicalPlan::SCAN) {
     printf("scan\n");
-    // Scan the table and evaluate on the node.
-    auto* table = db_->GetTable(table_name);
-    CHECK(table != nullptr, "Can't get table %s", table_name.c_str());
-
-    // Add table record meta.
-    tuple_meta_.emplace(table_name, TableRecordMeta());
-    tuple_meta_[table_name].CreateDataRecordMeta(table->schema());
-    node->mutable_results()->tuple_meta = &tuple_meta_;
 
     std::vector<std::shared_ptr<Storage::RecordBase>> records;
     table->ScanRecords(&records);
@@ -603,14 +586,6 @@ int SqlQuery::Do_ExecutePhysicalQuery(ExprTreeNode* node) {
     }
   } else if (physical_plan.plan == PhysicalPlan::CONST_TRUE_SCAN) {
     printf("const true scan\n");
-    // Scan the table.
-    auto* table = db_->GetTable(table_name);
-    CHECK(table != nullptr, "Can't get table %s", table_name.c_str());
-
-    // Add table record meta.
-    tuple_meta_.emplace(table_name, TableRecordMeta());
-    tuple_meta_[table_name].CreateDataRecordMeta(table->schema());
-    node->mutable_results()->tuple_meta = &tuple_meta_;
 
     std::vector<std::shared_ptr<Storage::RecordBase>> records;
     table->ScanRecords(&records);

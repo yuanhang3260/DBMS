@@ -99,6 +99,7 @@ class RecordBase {
   // Add a new field. This method takes ownership of SchemaFieldType pointer.
   void AddField(Schema::Field* new_field);
   void AddField(std::shared_ptr<Schema::Field> new_field);
+  void AddField(const DB::TableField& field_info);
 
   // Reset all fields to minimum.
   virtual void reset();
@@ -108,6 +109,8 @@ class RecordBase {
   // Init records fields with schema and key_indexes.
   bool InitRecordFields(const DB::TableInfo& schema,
                         const std::vector<uint32>& indexes);
+
+
 
   // Check all fields type match a schema.
   bool CheckFieldsType(const DB::TableInfo& schema,

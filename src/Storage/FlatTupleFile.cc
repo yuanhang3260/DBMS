@@ -70,7 +70,7 @@ std::pair<uint32, byte*> FlatTuplePage::GetNextTuple() {
   return {tuple_length, tuple_data};
 }
 
-uint32 FlatTuplePage::DumpTuple(const Query::FetchedResult::tuple& tuple) {
+uint32 FlatTuplePage::DumpTuple(const Query::FetchedResult::Tuple& tuple) {
   CHECK(data_, "Buffer page is not created yet.");
   if (crt_offset_ + sizeof(uint32) + FetchedResult::TupleSize(tuple) > 
       Storage::kPageSize) {
@@ -95,9 +95,8 @@ uint32 FlatTuplePage::DumpTuple(const Query::FetchedResult::tuple& tuple) {
     auto it = tuple.find(table_name);
     CHECK(it != tuple.end(),
           "Can't find record of table %s from tuple", table_name.c_str());
-    it->second.record->DumpToMem(data_ + crt_offset_);
+    crt_offset_ += it->second.record->DumpToMem(data_ + crt_offset_);
   }
-  crt_offset_ += tuple_length;
   num_tuples_++;
 
   return tuple_length;
@@ -119,7 +118,7 @@ void FlatTuplePage::Reset() {
 
 // **************************** FlatTupleFile ******************************* //
 FlatTupleFile::FlatTupleFile(
-    const FlatTupleFile::Options& opts, const std::string& filename) :
+    const FlatTupleFileOptions& opts, const std::string& filename) :
   opts_(opts),
   filename_(filename) {}
 
@@ -219,22 +218,41 @@ std::shared_ptr<FetchedResult::Tuple> FlatTupleFile::NextTuple() {
   }
 
   // Load next tuple.
-  PageLoadedRecord plrecord;
-  plrecord.GenerateRecordPrototype(*opts_->schema, opts_->key_fields,
-                                   opts_->file_type, TREE_LEAVE);
+  auto tuple = std::make_shared<FetchedResult::Tuple>();
+  uint32 load_size = 0;
+  for (const auto& iter : opts_.table_metas) {
+    const auto& table_name = iter.first;
+    const auto* table_meta = iter.second;
+    auto& result_record = (*tuple)[table_name];
+    if (table_meta->record_type == Storage::DATA_RECORD) {
+      result_record.record.reset(new Storage::DataRecord());
+    } else if (table_meta->record_type == Storage::INDEX_RECORD) {
+      result_record.record.reset(new Storage::IndexRecord());
+    } else {
+      LogFATAL("Unexpected table record type %s",
+               Storage::RecordTypeStr(table_meta->record_type).c_str());
+    }
 
-  int load_size = plrecord.LoadFromMem(tuple_data);
-  SANITY_CHECK(load_size == (int)tuple_length,
-               "Error record from page %u - expect %d bytes, actual %d ",
-               crt_page_num_, tuple_length, load_size);
+    // Set table metadata for the loaded table record.
+    result_record.meta = table_meta;
+    // Load record fields.
+    for (const auto& field_info : table_meta->fetched_fields) {
+      result_record.record->AddField(field_info);
+    }
+    load_size += result_record.record->LoadFromMem(tuple_data + load_size);
+  }
+
+  CHECK(load_size == tuple_length,
+        "Error record from page %u - expect %d bytes, actual %d ",
+        crt_page_num_, tuple_length, load_size);
   
   total_records_++;
-  return plrecord.shared_record();
+  return tuple;
 }
 
 bool FlatTupleFile::WriteTuple(const FetchedResult::Tuple& tuple) {
   if (!buf_page_) {
-    buf_page_ = ptr::MakeUnique<FlatRecordPage>();
+    buf_page_ = ptr::MakeUnique<FlatTuplePage>(&opts_);
     crt_page_num_ = 0;
   }
 

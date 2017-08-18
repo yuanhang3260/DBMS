@@ -17,11 +17,12 @@ struct TableRecordMeta {
 };
 
 struct ResultRecord {
+  ResultRecord() = default;
   ResultRecord(std::shared_ptr<Storage::RecordBase> record_) :
       record(record_) {}
 
   std::shared_ptr<Storage::RecordBase> record;
-  TableRecordMeta* meta = nullptr;
+  const TableRecordMeta* meta = nullptr;
 
   Storage::RecordType record_type() const;
 
