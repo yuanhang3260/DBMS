@@ -30,7 +30,7 @@ FlatRecordPage::~FlatRecordPage() {
 }
 
 std::pair<uint32, byte*> FlatRecordPage::ConsumeNextRecord() {
-  SANITY_CHECK(data_, "Buffer page is not created yet.");
+  CHECK(data_, "Buffer page is not created yet.");
 
   // Check meta data is parsed or not.
   if (num_records_ == 0) {

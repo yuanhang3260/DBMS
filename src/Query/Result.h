@@ -1,13 +1,19 @@
 #ifndef QUERY_RESULT_H_
 #define QUERY_RESULT_H_
 
+#include "Database/Catalog_pb.h"
 #include "Query/Common.h"
 
 namespace Query {
 
 // Result.
 struct TableRecordMeta {
-  std::vector<uint32> field_indexes;
+  std::vector<DB::TableField> fetched_fields;
+  Storage::RecordType record_type = Storage::DATA_RECORD;
+
+  void CreateDataRecordMeta(const DB::TableInfo& schema);
+  void CreateIndexRecordMeta(const DB::TableInfo& schema,
+                             const std::vector<uint32>& field_indexes);
 };
 
 struct ResultRecord {
@@ -34,6 +40,8 @@ struct FetchedResult {
 
   bool AddTuple(const Tuple& tuple);
   bool AddTuple(Tuple&& tuple);
+
+  static uint32 TupleSize(const Tuple& tuple);
 
   static bool AddTupleMeta(Tuple* tuple, TupleMeta* meta);
 

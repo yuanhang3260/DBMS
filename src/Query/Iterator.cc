@@ -24,6 +24,9 @@ void PhysicalQueryIterator::Init() {
   const auto& physical_plan = node_->physical_plan();
   const auto& table_name = physical_plan.table_name;
 
+  // Get the table to search create table iterator.
+  auto* table = query_->GetDB()->GetTable(table_name);
+  CHECK(table != nullptr, "Can't get table %s", table_name.c_str());
   if (physical_plan.plan == PhysicalPlan::CONST_FALSE_SKIP) {
     end_ = true;
   }
@@ -60,17 +63,11 @@ void PhysicalQueryIterator::Init() {
       }
     }
 
-    // Get the table to search create table iterator.
-    auto* table = query_->GetDB()->GetTable(table_name);
-    CHECK(table != nullptr, "Can't get table %s", table_name.c_str());
     table_iter = table->RecordIterator(&search_op);
   }
   else if (physical_plan.plan == PhysicalPlan::SCAN ||
            physical_plan.plan == PhysicalPlan::CONST_TRUE_SCAN) {
     // Scan the table and evaluate on the node.
-    auto* table = query_->GetDB()->GetTable(table_name);
-    CHECK(table != nullptr, "Can't get table %s", table_name.c_str());
-
     table_iter = table->RecordIterator(&search_op);
   } else {
     LogFATAL("Failed to init PhysicalQueryIterator - "
@@ -81,6 +78,8 @@ void PhysicalQueryIterator::Init() {
 
   // Add table record meta.
   query_->mutable_tuple_meta()->emplace(table_name, TableRecordMeta());
+  (*query_->mutable_tuple_meta())[table_name].CreateDataRecordMeta(
+                                                  table->schema());
   ready_ = true;
 }
 
