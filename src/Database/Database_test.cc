@@ -420,7 +420,7 @@ class DatabaseTest: public UnitTest {
     interpreter_->reset();
     printf("\n");
 
-    expr = "SELECT age, AVG(weight) FROM Puppy WHERE true GROUP BY age";
+    expr = "SELECT age, AVG(weight) FROM Puppy GROUP BY age";
     std::cout << expr << std::endl;
     AssertTrue(interpreter_->Parse(expr));
     query = interpreter_->shared_query();

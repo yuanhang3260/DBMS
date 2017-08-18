@@ -215,7 +215,6 @@ const ColumnRequest* SqlQuery::FindColumnRequest(const Column& column) const {
 const ColumnRequest* SqlQuery::FindColumnRequest(
     const Column& column, AggregationType aggregation_type) const {
   for (const auto& column_request : columns_) {
-    std::cout << column_request.AsString(true) << std::endl;
     if (column_request.column == column &&
         column_request.aggregation_type == aggregation_type) {
       return &column_request;

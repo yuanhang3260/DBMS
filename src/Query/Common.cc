@@ -129,7 +129,7 @@ std::string Column::DebugString() const {
 std::string Column::AsString(bool use_table_prefix) const {
   std::string result = column_name;
   if (use_table_prefix) {
-    result = Strings::StrCat(table_name, ". ", column_name);
+    result = Strings::StrCat(table_name, ".", column_name);
   }
   return result;
 }
