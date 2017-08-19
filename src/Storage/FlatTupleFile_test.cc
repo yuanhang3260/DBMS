@@ -6,6 +6,7 @@
 #include "UnitTest/UnitTest.h"
 
 #include "Storage/FlatTupleFile.h"
+#include "Utility/Uuid.h"
 
 namespace Storage {
 
@@ -21,7 +22,6 @@ class FlatTupleFileTest: public UnitTest {
   std::vector<std::shared_ptr<RecordBase>> index_records_;
   std::vector<std::shared_ptr<RecordBase>> data_records_;
   DB::DatabaseCatalog catalog_;
-  std::vector<uint32> key_fields_ = std::vector<uint32>{0, 2, 3};
 
   Query::FetchedResult::TupleMeta tuple_meta_;
   std::unique_ptr<FlatTupleFile> ft_file_;
@@ -71,7 +71,7 @@ class FlatTupleFileTest: public UnitTest {
     field->set_index(1);  // primary key
     field->set_type(DB::TableField::LONGINT);
 
-    tuple_meta_[kHostTableName].CreateIndexRecordMeta(*table_info, {1});
+    tuple_meta_[kHostTableName].CreateIndexRecordMeta(*table_info, {0});
   }
 
   void InitIndexRecords() {
@@ -82,7 +82,15 @@ class FlatTupleFileTest: public UnitTest {
       index_records_.push_back(record);
 
       // id.
-      record->AddField(new Schema::LongIntField(i));
+      //record->AddField(new Schema::LongIntField(i));
+
+      // name.
+      int str_len = Utils::RandomNumber(10);
+      char buf[str_len];
+      for (int i = 0; i < str_len; i++) {
+        buf[i] = 'a' + Utils::RandomNumber(26);
+      }
+      record->AddField(new Schema::StringField(buf, str_len));
     }
   }
 
@@ -95,7 +103,7 @@ class FlatTupleFileTest: public UnitTest {
       // Init fields to records.
       // name
       {
-        int str_len = 9;//Utils::RandomNumber(10);
+        int str_len = Utils::RandomNumber(10);
         char buf[str_len];
         for (int i = 0; i < str_len; i++) {
           buf[i] = 'a' + Utils::RandomNumber(26);
@@ -106,7 +114,7 @@ class FlatTupleFileTest: public UnitTest {
       double rand_double = 0.5 + 1.5 * Utils::RandomFloat();
       record->AddField(new Schema::DoubleField(rand_double));
       // age
-      int rand_int = Utils::RandomNumber(20);
+      int rand_int = Utils::RandomNumber(9);
       record->AddField(new Schema::IntField(rand_int));
       // signature
       {
@@ -134,10 +142,10 @@ class FlatTupleFileTest: public UnitTest {
     InitIndexRecords();
 
     FlatTupleFileOptions opts(tuple_meta_, {kPuppyTableName});
-    std::string tmpfile_name =
-        Path::JoinPath(Storage::DBDataDir(kDBName),  "tmpfile");
+    opts.db_name = kDBName;
+    opts.txn_id = UUID::TimeStampID();
 
-    ft_file_.reset(new FlatTupleFile(opts, tmpfile_name));
+    ft_file_.reset(new FlatTupleFile(opts));
   }
 
   void Test_WriteRead() {
@@ -168,9 +176,9 @@ class FlatTupleFileTest: public UnitTest {
 
   void Test_WriteRead_MultiTableTuples() {
     FlatTupleFileOptions opts(tuple_meta_, {kPuppyTableName, kHostTableName});
-    std::string tmpfile_name =
-        Path::JoinPath(Storage::DBDataDir(kDBName),  "tmpfile");
-    ft_file_.reset(new FlatTupleFile(opts, tmpfile_name));
+    opts.db_name = kDBName;
+    opts.txn_id = UUID::TimeStampID();
+    ft_file_.reset(new FlatTupleFile(opts));
 
     AssertTrue(ft_file_->InitForWriting());
 
@@ -199,6 +207,45 @@ class FlatTupleFileTest: public UnitTest {
     }
     AssertEqual(data_records_.size(), total_tuples);
   }
+
+  void Test_Sort() {
+    FlatTupleFileOptions opts(tuple_meta_, {kPuppyTableName, kHostTableName});
+    opts.db_name = kDBName;
+    opts.txn_id = UUID::TimeStampID();
+    opts.num_buf_pages = 5;
+    ft_file_.reset(new FlatTupleFile(opts));
+
+    AssertTrue(ft_file_->InitForWriting());
+
+    // Write tuples to file.
+    for (uint32 i = 0; i < kNumRecordsSource; i++) {
+      Query::FetchedResult::Tuple tuple;
+      tuple.emplace(kPuppyTableName, Query::ResultRecord(data_records_.at(i)));
+      tuple.emplace(kHostTableName, Query::ResultRecord(index_records_.at(i)));
+      AssertTrue(ft_file_->WriteTuple(tuple));
+    }
+    AssertTrue(ft_file_->FinishWriting());
+
+    Query::Column column1(kHostTableName, "name");
+    column1.index = 0;
+    Query::Column column2(kPuppyTableName, "age");
+    column2.index = 2;
+    AssertTrue(ft_file_->Sort({column1, column2}));
+
+    AssertTrue(ft_file_->InitForReading());
+    uint32 total_tuples = 0;
+    while (true) {
+      auto tuple = ft_file_->NextTuple();
+      if (!tuple) {
+        break;
+      }
+      total_tuples++;
+      // tuple->at(kHostTableName).record->Print();
+      // tuple->at(kPuppyTableName).record->Print();
+      // printf("\n");
+    }
+    AssertEqual(data_records_.size(), total_tuples);
+  }
 };
 
 }  // namespace Storage
@@ -208,7 +255,8 @@ int main() {
   test.setup();
 
   //test.Test_WriteRead();
-  test.Test_WriteRead_MultiTableTuples();
+  //test.Test_WriteRead_MultiTableTuples();
+  test.Test_Sort();
 
   test.teardown();
 

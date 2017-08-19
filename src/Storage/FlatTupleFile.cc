@@ -8,6 +8,8 @@
 #include "Strings/Utils.h"
 #include "IO/FileSystemUtils.h"
 #include "Utility/CleanUp.h"
+#include "Utility/Uuid.h"
+
 #include "Storage/FlatTupleFile.h"
 
 namespace Storage {
@@ -117,17 +119,43 @@ void FlatTuplePage::Reset() {
 
 
 // **************************** FlatTupleFile ******************************* //
+FlatTupleFile::FlatTupleFile(const FlatTupleFileOptions& opts) :
+  opts_(opts) {}
+
 FlatTupleFile::FlatTupleFile(
     const FlatTupleFileOptions& opts, const std::string& filename) :
   opts_(opts),
   filename_(filename) {}
 
-bool FlatTupleFile::Init() {
-  if (!FileSystem::FileExists(filename_)) {
-    LogERROR("MergeSort tempfile %s doesn't exist!", filename_.c_str());
-    return false;
-  }
+FlatTupleFile::~FlatTupleFile() {
+  Close();
+}
 
+bool FlatTupleFile::Close() {
+  if (file_descriptor_) {
+    return file_descriptor_->Close() == 0;
+  }
+  return true;
+}
+
+std::string FlatTupleFile::TempfileDir() const {
+  return Path::JoinPath(Storage::DBDataDir(opts_.db_name),
+                        Strings::StrCat("txn_", std::to_string(opts_.txn_id)),
+                        "tmpfiles");
+}
+
+std::string FlatTupleFile::NewTempfileName() const {
+  return Path::JoinPath(TempfileDir(),
+                        Strings::StrCat("ftf_", UUID::GenerateUUID()));
+}
+
+std::string FlatTupleFile::MergeSortChunkFileName(int pass_num, int chunk_num) {
+  return Strings::StrCat(filename_,
+                         "_ms_pass_", std::to_string(pass_num),
+                         "_chunk_", std::to_string(chunk_num));
+}
+
+bool FlatTupleFile::Init() {
   // Check file size. It must be a multiple of PageSize.
   auto file_size = FileSystem::FileSize(filename_);
   if (file_size < 0) {
@@ -140,16 +168,29 @@ bool FlatTupleFile::Init() {
   num_pages_ = file_size / Storage::kPageSize;
 
   // Open the file in r/w mode.
-  file_descriptor_ = ptr::MakeUnique<IO::FileDescriptor>(
-                          filename_, IO::FileDescriptor::READ_WRITE);
-  if (file_descriptor_->closed()) {
-    return false;
+  if (!file_descriptor_) {
+    file_descriptor_ = ptr::MakeUnique<IO::FileDescriptor>(
+                            filename_, IO::FileDescriptor::READ_WRITE);
+    if (file_descriptor_->closed()) {
+      return false;
+    }
+  } else {
+    auto re = lseek(file_descriptor_->fd(), 0, SEEK_SET);
+    if (re < 0) {
+      LogERROR("Failed to seek position to 0 for reading");
+      return false;
+    }
   }
 
   return true;
 }
 
 bool FlatTupleFile::InitForReading() {
+  if (!FileSystem::FileExists(filename_)) {
+    LogERROR("FlatTupleFile \"%s\" doesn't exist!", filename_.c_str());
+    return false;
+  }
+
   if (!Init()) {
     return false;
   }
@@ -158,6 +199,12 @@ bool FlatTupleFile::InitForReading() {
 }
 
 bool FlatTupleFile::InitForWriting() {
+  FileSystem::CreateDirRecursive(TempfileDir());
+
+  if (filename_.empty()) {
+    filename_ = NewTempfileName();
+  }
+
   // Check the file. If it already exists, empty it. Otherwise create new file. 
   if (FileSystem::FileExists(filename_)) {
     if (!FileSystem::TruncateFile(filename_, 0)) {
@@ -240,12 +287,14 @@ std::shared_ptr<FetchedResult::Tuple> FlatTupleFile::NextTuple() {
       result_record.record->AddField(field_info);
     }
     load_size += result_record.record->LoadFromMem(tuple_data + load_size);
+    // result_record.record->Print();
+    // printf("load_size = %d\n", load_size);
   }
 
   CHECK(load_size == tuple_length,
         "Error record from page %u - expect %d bytes, actual %d ",
         crt_page_num_, tuple_length, load_size);
-  
+
   total_records_++;
   return tuple;
 }
@@ -275,13 +324,17 @@ bool FlatTupleFile::WriteTuple(const FetchedResult::Tuple& tuple) {
 }
 
 bool FlatTupleFile::FinishWriting() {
+  if (!buf_page_) {
+    return true;
+  }
+
   buf_page_->FinishPage();
   int nwrite = file_descriptor_->Write(buf_page_->data(), Storage::kPageSize);
   if (nwrite != Storage::kPageSize) {
     LogERROR("Error writing page %d to file", crt_page_num_);
     return false;
   }
-  return file_descriptor_->Close() == 0;
+  return true;
 }
 
 bool FlatTupleFile::DeleteFile() {
@@ -295,6 +348,188 @@ bool FlatTupleFile::DeleteFile() {
     LogERROR("Failed to delete file %s", filename_.c_str());
     return false;
   }
+
+  file_descriptor_.reset();
+
+  return true;
+}
+
+bool FlatTupleFile::Sort(const std::vector<Query::Column>& columns) {
+  std::vector<std::string> tmpfiles;
+  // Clean up merge-sort directory.
+  auto cleanup = Utility::CleanUp([&] {
+    for (const auto& tmp_file : tmpfiles) {
+      FileSystem::Remove(tmp_file);
+    }
+  });
+
+  // Compare two tuples based on columns.
+  auto comparator = [&] (std::shared_ptr<FetchedResult::Tuple> t1,
+                         std::shared_ptr<FetchedResult::Tuple> t2) {
+    return FetchedResult::CompareBasedOnColumns(*t1, *t2, columns) < 0;
+  };
+
+  std::vector<std::shared_ptr<FlatTupleFile>> out_tempfiles;
+
+  uint32 sort_size = 0;
+  std::vector<std::shared_ptr<FetchedResult::Tuple>> sort_group;
+  uint32 chunk_num = 0;
+  auto create_chunkfile = [&] {
+    // Sort current group and write to tempfile.
+    std::stable_sort(sort_group.begin(), sort_group.end(), comparator);
+    tmpfiles.push_back(MergeSortChunkFileName(0, chunk_num));
+    auto out_file = std::make_shared<FlatTupleFile>(opts_, tmpfiles.back());
+    if (!out_file->InitForWriting()) {
+      LogERROR("Failed to init writing for tempfile %s",
+               out_file->filename().c_str());
+      return false;
+    }
+    for (uint32 j = 0; j < sort_group.size(); j++) {
+      out_file->WriteTuple(*sort_group.at(j));
+    }
+    if (!out_file->FinishWriting()) {
+      LogERROR("Failed to finish writing file %s",
+               out_file->filename().c_str());
+      return false;
+    }
+    out_tempfiles.push_back(out_file);
+
+    chunk_num++;
+    sort_size = 0;
+    sort_group.clear();
+    return true;
+  };
+
+
+  // Read all tuples and crete chunk files of pass 0.
+  if (!InitForReading()) {
+    return false;
+  }
+
+  while (true) {
+    auto tuple = NextTuple();
+    if (!tuple) {
+      break;
+    }
+    if (sort_size + FetchedResult::TupleSize(*tuple) >
+            (Storage::kPageSize - sizeof(uint32)) * opts_.num_buf_pages) {
+      if (!create_chunkfile()) {
+        return false;
+      }
+    }
+    sort_group.push_back(tuple);
+    sort_size += FetchedResult::TupleSize(*tuple);
+  }
+  if (!sort_group.empty()) {
+    if (!create_chunkfile()) {
+      return false;
+    }
+  }
+
+  // Begin merge sort.
+  uint32 pass_num = 1;
+  std::vector<std::shared_ptr<FlatTupleFile>> in_tempfiles;
+  while (out_tempfiles.size() > 1) {
+    // Output of last pass is input of this pass.
+    for (const auto& file : out_tempfiles) {
+      in_tempfiles.push_back(file);
+      if (!in_tempfiles.back()->InitForReading()) {
+        LogERROR("Failed to init reading for tempfile %s",
+                 in_tempfiles.back()->filename().c_str());
+        return false;
+      }
+    }
+    out_tempfiles.clear();
+
+    // Group input files by num_buf_pages, and do merge sort on each group.
+    uint32 num_groups =
+        (in_tempfiles.size() + opts_.num_buf_pages - 1) / opts_.num_buf_pages;
+    for (uint32 group = 0; group < num_groups; group++) {
+      // Do merge sort on this group and write out result to a tempfile.
+      tmpfiles.push_back(MergeSortChunkFileName(pass_num, group));
+      auto out_file = std::make_shared<FlatTupleFile>(opts_, tmpfiles.back());
+      if (!out_file->InitForWriting()) {
+        LogERROR("Failed to init writing for tempfile %s",
+                 out_file->filename().c_str());
+        return false;
+      }
+
+      // Create a min-heap and do K-lists sort merge.
+      struct HeapNode {
+        std::shared_ptr<FetchedResult::Tuple> tuple;
+        uint32 file_index;
+      };
+      auto hp_comparator = [&] (const HeapNode& n1, const HeapNode& n2) {
+        return !comparator(n1.tuple, n2.tuple);
+      };
+      std::priority_queue<struct HeapNode, std::vector<struct HeapNode>,
+                          decltype(hp_comparator)> min_heap(hp_comparator);
+
+      // Begin merge sorting!
+      uint32 group_start = group * opts_.num_buf_pages;
+      uint32 group_end = Utils::Min((group + 1) * opts_.num_buf_pages,
+                                    in_tempfiles.size());
+      //printf("group_start = %d, group_end = %d\n", group_start, group_end);
+      for (uint32 i = group_start; i < group_end; i++) {
+        auto tuple = in_tempfiles.at(i)->NextTuple();
+        CHECK(tuple, "Get a null record from file %s",
+                      in_tempfiles.at(i)->filename().c_str());
+        HeapNode node = {tuple, i};
+        min_heap.push(node);
+      }
+
+      while (!min_heap.empty()) {
+        // Fetch top element from heap.
+        auto min_ele = min_heap.top();
+        min_heap.pop();
+        if (!out_file->WriteTuple(*min_ele.tuple)) {
+          LogERROR("Failed to write record to file %s",
+                   out_file->filename().c_str());
+          return false;
+        }
+
+        auto next_tuple = in_tempfiles.at(min_ele.file_index)->NextTuple();
+        if (next_tuple) {
+          HeapNode node = {next_tuple, min_ele.file_index};
+          min_heap.push(node);
+        }
+      }
+      // Finish writing an out tempfile.
+      if (!out_file->FinishWriting()) {
+        LogERROR("Failed to finish writing file %s",
+                 out_file->filename().c_str());
+        return false;
+      }
+      out_tempfiles.push_back(out_file);
+    }
+
+    // Input tempfile of this pass is no longer needed. Delete them.
+    for (auto& in_file : in_tempfiles) {
+      if (!in_file->DeleteFile()) {
+        return false;
+      }
+    }
+    in_tempfiles.clear();
+
+    pass_num++;
+  }
+
+  // Delete current file, and replace with the final result file.
+  if (!DeleteFile()) {
+    return false;
+  }
+  if (!out_tempfiles.at(0)->Close()) {
+    LogERROR("Failed to close the final result chunk file");
+    return false;
+  }
+  if (!FileSystem::RenameFile(out_tempfiles.at(0)->filename(),
+                              FileSystem::FileName(filename_))) {
+    LogERROR("Failed to rename final result file");
+    return false;
+  }
+  InitForReading();
+
+  cleanup.clear();
 
   return true;
 }

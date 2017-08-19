@@ -24,14 +24,15 @@ struct FlatTupleFileOptions{
   TableMetas table_metas;
 
   std::string db_name;
-  uint32 txn_id;
+  uint64 txn_id;
+  uint32 num_buf_pages = 5;
 };
 
 // FlatTuplePage is the basic storage unit of FlatRecordFile. It has a simple
 // meta data at head followed by all records densely dumped as raw bytes.
 //
 // Each tuple is dumped as | tuple_length | tuple data |
-//                              4 bytes    tuple_length
+//                             4 bytes     tuple_length
 class FlatTuplePage {
  public:
   FlatTuplePage(const FlatTupleFileOptions* options);
@@ -69,8 +70,10 @@ class FlatTuplePage {
 
 class FlatTupleFile {
  public:
-  explicit FlatTupleFile(const FlatTupleFileOptions& opts,
-                         const std::string& filename);
+  explicit FlatTupleFile(const FlatTupleFileOptions& opts);
+  FlatTupleFile(const FlatTupleFileOptions& opts, const std::string& filename);
+
+  ~FlatTupleFile();
 
   // It must be called before reading records from file.
   bool InitForReading();
@@ -85,13 +88,21 @@ class FlatTupleFile {
   // the last page to disk and close the file descriptor.
   bool FinishWriting();
 
+  bool Close();
+
   std::string filename() const { return filename_; }
 
   bool DeleteFile();
 
+  bool Sort(const std::vector<Query::Column>& columns);
+
  private:
   // Check file and open it.
   bool Init();
+
+  std::string TempfileDir() const;
+  std::string NewTempfileName() const;
+  std::string MergeSortChunkFileName(int pass_num, int chunk_num);
 
   FlatTupleFileOptions opts_;
   std::string filename_;

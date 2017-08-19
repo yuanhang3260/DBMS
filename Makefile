@@ -5,7 +5,7 @@
 #
 CC=g++ -std=c++11
 CFLAGS=-Wall -Werror -O2 -g
-LFLAGS=-pthread
+LFLAGS=-pthread -luuid
 IFLAGS=-Isrc/ -I../ProtoBuf/src/ -Isrc/Public/
 
 ProtoBufLib=../ProtoBuf/libfull.a
@@ -132,19 +132,19 @@ $(OBJ_DIR)/Sql/%.o: $(SRC_DIR)/Sql/%.cc
 
 # Tests
 test/%.out: $(OBJ_DIR)/Utility/%.o library
-	$(CC) $(CFLAGS) $< libDBMS.a $(ProtoBufLib) $(HYLIB) -o $@
+	$(CC) $(CFLAGS) $< libDBMS.a $(ProtoBufLib) $(HYLIB) $(LFLAGS) -o $@
 
 test/%.out: $(OBJ_DIR)/Storage/%.o library
-	$(CC) $(CFLAGS) $< libDBMS.a $(ProtoBufLib) $(HYLIB) -o $@
+	$(CC) $(CFLAGS) $< libDBMS.a $(ProtoBufLib) $(HYLIB) $(LFLAGS) -o $@
 
 test/%.out: $(OBJ_DIR)/Schema/%.o library
-	$(CC) $(CFLAGS) $< libDBMS.a $(ProtoBufLib) $(HYLIB) -o $@
+	$(CC) $(CFLAGS) $< libDBMS.a $(ProtoBufLib) $(HYLIB) $(LFLAGS) -o $@
 
 test/%.out: $(OBJ_DIR)/Database/%.o library
-	$(CC) $(CFLAGS) $< libDBMS.a $(ProtoBufLib) $(HYLIB) -o $@
+	$(CC) $(CFLAGS) $< libDBMS.a $(ProtoBufLib) $(HYLIB) $(LFLAGS) -o $@
 
 test/%.out: $(OBJ_DIR)/Query/%.o library
-	$(CC) $(CFLAGS) $< libDBMS.a $(ProtoBufLib) $(HYLIB) -o $@
+	$(CC) $(CFLAGS) $< libDBMS.a $(ProtoBufLib) $(HYLIB) $(LFLAGS) -o $@
 
 tinyclean:
 	rm -rf libDBMS.a

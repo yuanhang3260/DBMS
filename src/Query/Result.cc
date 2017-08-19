@@ -53,9 +53,9 @@ const Schema::Field* ResultRecord::GetField(uint32 index) const {
         break;
       }
     }
-    CHECK(pos > 0, Strings::StrCat("Can't find required field index ",
-                                   std::to_string(index),
-                                   " for this index record"));
+    CHECK(pos >= 0, Strings::StrCat("Can't find required field index ",
+                                    std::to_string(index),
+                                    " for this index record"));
     return record->fields().at(pos).get();
   } else {
     LogFATAL("Invalid record type to evalute: %s",
