@@ -1362,6 +1362,17 @@ std::shared_ptr<RecordBase> TreeRecordIterator::GetNextRecord() {
   return nullptr;
 }
 
+void TreeRecordIterator::reset() {
+  prmanager.reset();
+  leave = nullptr;
+
+  page_record_index = 0;
+  last_is_match = false;
+
+  ready = false;
+  end = false;
+}
+
 int BplusTree::SearchRecords(
       const DB::SearchOp& op,
       std::vector<std::shared_ptr<RecordBase>>* result) {

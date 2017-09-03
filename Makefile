@@ -39,7 +39,6 @@ OBJ = $(OBJ_DIR)/Database/Catalog_pb.o  \
       $(OBJ_DIR)/Storage/BplusTree.o  \
       $(OBJ_DIR)/Storage/Common.o  \
       $(OBJ_DIR)/Storage/FlatTupleFile.o  \
-      $(OBJ_DIR)/Storage/MergeSort.o  \
       $(OBJ_DIR)/Storage/Record.o  \
       $(OBJ_DIR)/Storage/PageRecord_Common.o  \
       $(OBJ_DIR)/Storage/PageRecordsManager.o  \
@@ -47,7 +46,6 @@ OBJ = $(OBJ_DIR)/Database/Catalog_pb.o  \
 
 TESTOBJ = $(OBJ_DIR)/Schema/DataTypes_test.o  \
 					$(OBJ_DIR)/Storage/BplusTree_test.o  \
-					$(OBJ_DIR)/Storage/MergeSort_test.o  \
 					$(OBJ_DIR)/Storage/PageRecord_Common_test.o  \
           $(OBJ_DIR)/Storage/RecordPage_test.o  \
           $(OBJ_DIR)/Storage/Record_test.o  \
@@ -62,7 +60,6 @@ TESTOBJ = $(OBJ_DIR)/Schema/DataTypes_test.o  \
 TESTEXE = test/BplusTree_test.out  \
 					test/Database_test.out  \
           test/DataTypes_test.out  \
-          test/MergeSort_test.out  \
           test/FlatTupleFile_test.out  \
           test/Operation_test.out  \
           test/PageRecord_Common_test.out  \

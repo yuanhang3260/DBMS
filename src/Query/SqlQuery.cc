@@ -10,6 +10,7 @@ namespace Query {
 
 namespace {
 const double kIndexSearchFactor = 2;
+const uint32 kBlockBufferPages = 4;
 }
 
 SqlQuery::SqlQuery(DB::Database* db) :
@@ -226,12 +227,10 @@ const ColumnRequest* SqlQuery::FindColumnRequest(
 bool SqlQuery::FinalizeParsing() {
   // Apply default table.
   std::string default_table = DefaultTable();
-  if (default_table.empty() &&
-      (!columns_unknown_table_.empty() || !order_by_columns_.empty())) {
+  if (default_table.empty() && !columns_unknown_table_.empty()) {
     error_msg_ = "Default table not found.";
     return false;
   }
-
   for (const auto& column_request : columns_unknown_table_) {
     ColumnRequest cr_copy = column_request;
     cr_copy.column.table_name = default_table;
@@ -301,7 +300,6 @@ bool SqlQuery::FinalizeParsing() {
   for (const auto& column_request : columns_set_) {
     columns_.push_back(column_request);
   }
-  columns_set_.clear();
   std::sort(columns_.begin(), columns_.end(), comparator);
 
   // Check all tables and columns are valid.
@@ -360,12 +358,22 @@ bool SqlQuery::FinalizeParsing() {
     return false;
   }
 
+  // Check order_by_columns. It must be in the columns_set, and have field
+  // index and type.
   for (auto& column_request : order_by_columns_) {
     auto field_m = FindTableColumn(column_request.column);
     if (field_m == nullptr) {
       return false;
     }
-    // Assign column field index and type.
+
+    if (columns_set_.find(column_request) == columns_set_.end()) {
+      error_msg_ = Strings::StrCat("ORDER BY column ",
+                                   column_request.AsString(true),
+                                   " not in query column list");
+      return false;
+    }
+
+    // Assign group column field index and type.
     column_request.column.index = field_m->index();
     column_request.column.type = field_m->type();
   }
@@ -407,6 +415,88 @@ int SqlQuery::ExecuteSelectQuery() {
       break;
     }
     results_.AddTuple(std::move(*tuple));
+  }
+
+  if (aggregated_columns_num_ > 0) {
+    AggregateResults();
+  }
+
+  if (!order_by_columns_.empty()) {
+    std::vector<Column> columns;
+    for (const auto& column_request : order_by_columns_) {
+      columns.push_back(column_request.column);
+    }
+    results_.SortByColumns(columns);
+  }
+
+  return results_.NumTuples();
+}
+
+int SqlQuery::ExecuteJoinQuery() {
+  // TODO: Support multiple tables JOIN.
+  CHECK(tables_.size() == 2, "Sorry, only two-tables JOIN is supported");
+
+  // TODO: Analyze expr tree and extract "ON expr" and "WHERE exprs". Optimize
+  // execution plan.
+
+  // Loop join of two tables.
+  // Create fake nodes for two tables, with physical plan as CONST_TRUE_SCAN.
+  auto create_node = [&] (const std::string& table_name) {
+    std::shared_ptr<ExprTreeNode> node(
+        new ConstValueNode(NodeValue::BoolValue(true)));
+    node->mutable_physical_plan()->plan = PhysicalPlan::CONST_TRUE_SCAN;
+    node->mutable_physical_plan()->table_name = table_name;
+    node->SetIterator(new PhysicalQueryIterator(this, node.get()));
+    return node;
+  };
+
+  auto node_1 = create_node(*tables_.begin());
+  auto node_2 = create_node(*(--tables_.end()));
+
+  results_.tuple_meta = &tuple_meta_;
+
+  // Do loop join.
+  auto* iter_1 = node_1->GetIterator();
+  std::vector<std::shared_ptr<FetchedResult::Tuple>> block_tuples;
+  uint32 block_tuples_size = 0;
+  while (true) {
+    auto tuple_1 = iter_1->GetNextTuple();
+    if (!tuple_1) {
+      if (block_tuples.empty()) {
+        break;
+      }
+    }
+    if (tuple_1) {
+      uint32 tuple_size = FetchedResult::TupleSize(*tuple_1);
+      if (block_tuples_size + tuple_size <=
+          Storage::kPageSize * kBlockBufferPages) {
+        block_tuples.push_back(tuple_1);
+        block_tuples_size += tuple_size;
+        //FetchedResult::PrintTuple(*tuple_1);
+        continue;
+      }
+    }
+
+    // Block buffer for table_1 is full, iterate over table_2.
+    auto* iter_2 = node_2->GetIterator();
+    while (true) {
+      auto tuple_2 = iter_2->GetNextTuple();
+      if (!tuple_2) {
+        break;
+      }
+      //FetchedResult::PrintTuple(*tuple_2);
+      for (const auto& tuple_1 : block_tuples) {
+        auto tuple = FetchedResult::MergeTuples(*tuple_1, *tuple_2);
+        if (expr_node_->Evaluate(*tuple).v_bool) {
+          results_.AddTuple(std::move(*tuple));
+        }
+      }
+    }
+
+    // Reset table_2 iterator and continue to next block of table_1.
+    node_2->GetIterator()->reset();
+    block_tuples.clear();
+    block_tuples_size = 0;
   }
 
   if (aggregated_columns_num_ > 0) {
@@ -1236,7 +1326,7 @@ void SqlQuery::AggregateResults() {
         extra_index[table_name] = table_m->NumFields();
       }
       column_request.column.index = extra_index.at(table_name);
-      if (column_request.aggregation_type != COUNT) {
+      if (column_request.aggregation_type == COUNT) {
         column_request.column.type = Schema::FieldType::INT;
       }
 
@@ -1249,6 +1339,16 @@ void SqlQuery::AggregateResults() {
       it->second.fetched_fields.back().set_type(column_request.column.type);
 
       extra_index[table_name]++;
+
+      // Update order_by_columns if it has aggregated columns.
+      for (auto& order_by_column_request : order_by_columns_) {
+        // ColumnRequest operator== only compares table name and column name,
+        // and aggregation type. We need to update the aggregated column index
+        // for order_by_column_request.
+        if (order_by_column_request == column_request) {
+          order_by_column_request.column.index = column_request.column.index;
+        }
+      }
 
       aggregation_columns.push_back(&column_request);
     } else {

@@ -43,8 +43,11 @@ struct FetchedResult {
   bool AddTuple(Tuple&& tuple);
 
   static uint32 TupleSize(const Tuple& tuple);
+  static void PrintTuple(const Tuple& tuple);
 
   static bool AddTupleMeta(Tuple* tuple, TupleMeta* meta);
+
+  static std::shared_ptr<Tuple> MergeTuples(const Tuple& t1, const Tuple& t2);
 
   int NumTuples() const { return tuples.size(); }
 

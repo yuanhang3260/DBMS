@@ -26,14 +26,16 @@ using Query::SqlQuery;
 
 const char* const kDBName = "test_db";
 const char* const kTableName = "Puppy";
-const int kNumRecordsSource = 1000;
+const char* const kHostTableName = "Host";
+const int kNumRecordsSource = 20;
+const int kNumHosts = 3;
 
 }
 
 class DatabaseTest: public UnitTest {
  private:
   std::vector<std::shared_ptr<RecordBase>> puppy_records_;
-  std::vector<std::shared_ptr<RecordBase>> index_records_;
+  std::vector<std::shared_ptr<RecordBase>> host_records_;
   std::vector<uint32> key_fields_ = std::vector<uint32>{0, 2, 3};
 
   DatabaseCatalog catalog_;
@@ -94,6 +96,13 @@ class DatabaseTest: public UnitTest {
     field->set_size(3);
     field->mutable_min_value()->set_limit_chararray("a");
     field->mutable_max_value()->set_limit_chararray("zzz");
+    // Add long int type
+    field = table_info->add_fields();
+    field->set_name("host_id");
+    field->set_index(6);  // primary key
+    field->set_type(DB::TableField::LONGINT);
+    field->mutable_min_value()->set_limit_int64(0);
+    field->mutable_max_value()->set_limit_int64(kNumHosts - 1);
 
     // Set primary and other keys.
     auto* index = table_info->mutable_primary_index();
@@ -109,24 +118,35 @@ class DatabaseTest: public UnitTest {
     index->add_index_fields(4);
     index = table_info->add_indexes();
     index->add_index_fields(5);
+    index = table_info->add_indexes();
+    index->add_index_fields(6);
 
     // Create a table Host.
     table_info = catalog_.add_tables();
-    table_info->set_name("Host");
+    table_info->set_name(kHostTableName);
+
+    // Add long int type
+    field = table_info->add_fields();
+    field->set_name("id");
+    field->set_index(0);  // primary key
+    field->set_type(DB::TableField::LONGINT);
 
     // Add string type
     field = table_info->add_fields();
     field->set_name("name");
-    field->set_index(0);
+    field->set_index(1);
     field->set_type(DB::TableField::STRING);
-    // Add long int type
-    field = table_info->add_fields();
-    field->set_name("id");
-    field->set_index(1);  // primary key
-    field->set_type(DB::TableField::LONGINT);
+
+    // Set primary and other keys.
+    index = table_info->mutable_primary_index();
+    index->add_index_fields(0);
+
+    index = table_info->add_indexes();
+    index->add_index_fields(1);
   }
 
   void InitRecordResource() {
+    // Puppies.
     puppy_records_.clear();
     for (int i = 0; i < kNumRecordsSource; i++) {
       puppy_records_.push_back(std::shared_ptr<RecordBase>(new DataRecord()));
@@ -162,6 +182,30 @@ class DatabaseTest: public UnitTest {
         }
         puppy_records_.at(i)->AddField(
             new Schema::CharArrayField(buf, str_len, len_limit));
+      }
+      // host_id: 0 ~ (kNumHosts -1)
+      rand_int = Utils::RandomNumber(kNumHosts);
+      puppy_records_.at(i)->AddField(new Schema::LongIntField(rand_int));
+    }
+
+    // Hosts.
+    host_records_.clear();
+    for (int i = 0; i < kNumHosts; i++) {
+      host_records_.push_back(std::shared_ptr<RecordBase>(new DataRecord()));
+
+      // id: 0 ~ (kNumHosts - 1)
+      host_records_.at(i)->AddField(new Schema::LongIntField(i));
+
+      // name
+      if (i == 1) {
+        host_records_.at(i)->AddField(new Schema::StringField("hy"));
+      } else {
+        int str_len = Utils::RandomNumber(4) + 1;
+        char buf[str_len];
+        for (int i = 0; i < str_len; i++) {
+          buf[i] = 'a' + Utils::RandomNumber(26);
+        }
+        host_records_.at(i)->AddField(new Schema::StringField(buf, str_len));
       }
     }
   }
@@ -201,28 +245,37 @@ class DatabaseTest: public UnitTest {
   }
 
   void LoadData() {
+    auto load_data_for_table = [&] (
+        DB::Table* table,
+        std::vector<std::shared_ptr<RecordBase>>& records) {
+      table->PreLoadData(records);
+      AssertTrue(table->ValidateAllIndexRecords(records.size()));
+
+      for (const auto& index: table->schema().indexes()) {
+        std::vector<uint32> key_index = TableInfoManager::MakeIndex(index);
+        printf("Checking tree %s\n", Table::IndexStr(key_index).c_str());
+        auto file_type = table->IsDataFileKey(key_index) ?
+                             Storage::INDEX_DATA : Storage::INDEX;
+        auto tree = table->Tree(file_type, key_index);
+        tree->SaveToDisk();
+
+        AssertTrue(tree->ValidityCheck(), "Check Index tree failed");
+      }
+      printf("Checking tree %s\n",
+             Table::IndexStr(table->DataTreeKey()).c_str());
+      AssertTrue(table->DataTree()->ValidityCheck(),
+                 "Check Data tree failed");
+
+      printf("\n");
+    };
+
     auto puppy_table_ = db_->GetTable(kTableName);
     CHECK(puppy_table_ != nullptr, "Couldn't get table %s", kTableName);
+    load_data_for_table(puppy_table_, puppy_records_);
 
-    puppy_table_->PreLoadData(puppy_records_);
-    AssertTrue(puppy_table_->ValidateAllIndexRecords(puppy_records_.size()));
-
-    for (const auto& index: puppy_table_->schema().indexes()) {
-      std::vector<uint32> key_index = TableInfoManager::MakeIndex(index);
-      printf("Checking tree %s\n", Table::IndexStr(key_index).c_str());
-      auto file_type = puppy_table_->IsDataFileKey(key_index) ?
-                           Storage::INDEX_DATA : Storage::INDEX;
-      auto tree = puppy_table_->Tree(file_type, key_index);
-      tree->SaveToDisk();
-
-      AssertTrue(tree->ValidityCheck(), "Check Index tree failed");
-    }
-    printf("Checking tree %s\n",
-           Table::IndexStr(puppy_table_->DataTreeKey()).c_str());
-    AssertTrue(puppy_table_->DataTree()->ValidityCheck(),
-               "Check Data tree failed");
-
-    printf("\n");
+    auto host_table_ = db_->GetTable(kHostTableName);
+    CHECK(host_table_ != nullptr, "Couldn't get table %s", kHostTableName);    
+    load_data_for_table(host_table_, host_records_);
   }
 
   void setup() override {
@@ -238,11 +291,26 @@ class DatabaseTest: public UnitTest {
 
   int ExpectedResultNum(const Query::ExprTreeNode& expr_root) {
     int expected_num = 0;
-    for (const auto& record : puppy_records_) {
+    for (const auto& puppy_record : puppy_records_) {
       auto tuple = FetchedResult::Tuple();
-      tuple.emplace(kTableName, ResultRecord(record));
+      tuple.emplace(kTableName, ResultRecord(puppy_record));
       if (expr_root.Evaluate(tuple).v_bool) {
         expected_num++;
+      }
+    }
+    return expected_num;
+  }
+
+  int ExpectedJoinResultNum(const Query::ExprTreeNode& expr_root) {
+    int expected_num = 0;
+    for (const auto& puppy_record : puppy_records_) {
+      for (const auto& host_record : host_records_) {
+        auto tuple = FetchedResult::Tuple();
+        tuple.emplace(kTableName, ResultRecord(puppy_record));
+        tuple.emplace(kHostTableName, ResultRecord(host_record));
+        if (expr_root.Evaluate(tuple).v_bool) {
+          expected_num++;
+        }
       }
     }
     return expected_num;
@@ -431,6 +499,24 @@ class DatabaseTest: public UnitTest {
     interpreter_->reset();
     printf("\n");
   }
+
+  void Test_Join() {
+    std::cout << __FUNCTION__ << std::endl;
+    std::string expr;
+
+    expr = "SELECT Puppy.*, Host.* FROM Puppy, Host WHERE Puppy.host_id = Host.id ORDER BY Host.id, Puppy.name";
+    std::cout << expr << std::endl;
+    AssertTrue(interpreter_->Parse(expr));
+    auto query = interpreter_->shared_query();
+    AssertTrue(query->FinalizeParsing());
+    int num_results = query->ExecuteJoinQuery();
+    printf("num_results = %d\n", num_results);
+    query->PrintResults();
+    AssertEqual(ExpectedJoinResultNum(query->expr_root()), num_results);
+    AssertTrue(VerifyResult(query->expr_root(), query->results()));
+    interpreter_->reset();
+    printf("\n");
+  }
 };
 
 }  // namespace DB
@@ -441,6 +527,7 @@ int main(int argc, char** argv) {
   test.setup();
 
   test.Test_SelectQuery();
+  test.Test_Join();
 
   test.teardown();
   std::cout << "\033[2;32mAll Passed ^_^\033[0m" << std::endl;

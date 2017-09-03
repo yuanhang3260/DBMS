@@ -92,11 +92,10 @@ class SqlQuery {
   const Query::ExprTreeNode& expr_root() const { return *expr_node_; }
   const Query::FetchedResult& results() const { return results_; }
 
-  // Generate physical plan for this query.
-  const PhysicalPlan& PrepareQueryPlan();
-
   // Execute a SELECT query, returns the number of matching records.
   int ExecuteSelectQuery();
+  // Execute a JOIN query, returns the number of matching records.
+  int ExecuteJoinQuery();
 
   // Aggregate rows if there is SUM(), AVG(), COUNT(), etc.
   void AggregateResults();
@@ -109,21 +108,27 @@ class SqlQuery {
   void set_error_msg(const std::string& error_msg);
 
  private:
-  bool GroupPhysicalQueries(ExprTreeNode* node);
+  // Generate physical plan for this query.
+  const PhysicalPlan& PrepareQueryPlan();
 
+  // Group physical query units.
+  bool GroupPhysicalQueries(ExprTreeNode* node);
+  // Generate physical plan for the entire query.
   PhysicalPlan* GenerateQueryPhysicalPlan(ExprTreeNode* node);
 
-  PhysicalPlan* PreGenerateUnitPhysicalPlan(ExprTreeNode* node);
+  // Generate physical plan for a physical query unit.
   PhysicalPlan* GenerateUnitPhysicalPlan(ExprTreeNode* node);
+  PhysicalPlan* PreGenerateUnitPhysicalPlan(ExprTreeNode* node);
   void EvaluateQueryConditions(PhysicalPlan* physical_plan);
 
+  // Iterators for pipelined execution.
   void CreateIteratorsRecursive(ExprTreeNode* node);
 
+  // (Deprecated) Static execution of select query.
   int ExecuteSelectQueryFromNode(ExprTreeNode* node);
+  int Do_ExecutePhysicalQuery(ExprTreeNode* node);
 
   bool IsConstExpression(ExprTreeNode* node);
-
-  int Do_ExecutePhysicalQuery(ExprTreeNode* node);
 
   DB::Database* db_ = nullptr;
   DB::CatalogManager* catalog_m_ = nullptr;

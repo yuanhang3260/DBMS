@@ -363,6 +363,13 @@ std::shared_ptr<RecordBase> TableRecordIterator::GetNextRecord() {
   }
 }
 
+void TableRecordIterator::reset() {
+  if (tree_iter) {
+    tree_iter->reset();
+  }
+  end = false;
+}
+
 std::shared_ptr<TableRecordIterator>
 Table::RecordIterator(const DB::SearchOp* op) {
   return std::make_shared<TableRecordIterator>(this, op);

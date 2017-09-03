@@ -421,6 +421,7 @@ struct TreeRecordIterator {
 
   void Init();
   std::shared_ptr<RecordBase> GetNextRecord();
+  void reset();
 };
 
 }  // namespace Storage

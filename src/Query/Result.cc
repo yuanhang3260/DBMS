@@ -114,6 +114,25 @@ bool FetchedResult::AddTupleMeta(Tuple* tuple, TupleMeta* meta) {
   return true;
 }
 
+std::shared_ptr<FetchedResult::Tuple> FetchedResult::MergeTuples(
+    const Tuple& t1, const Tuple& t2) {
+  std::shared_ptr<Tuple> tuple(new Tuple(t1));
+  for (const auto& iter : t2) {
+    tuple->emplace(iter.first, iter.second);
+  }
+  return tuple;
+}
+
+void FetchedResult::PrintTuple(const Tuple& tuple) {
+  for (const auto& iter : tuple) {
+    printf("%s ", iter.first.c_str());
+    if (iter.second.record) {
+      iter.second.record->Print();
+    }
+  }
+  printf("\n");
+}
+
 int FetchedResult::CompareBasedOnColumns(
     const Tuple& t1, const Tuple& t2,
     const std::vector<Column>& columns) {

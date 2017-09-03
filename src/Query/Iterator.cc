@@ -34,41 +34,41 @@ void PhysicalQueryIterator::Init() {
     CHECK(!physical_plan.conditions.empty(), "No condition to search");
     const auto& first_condition = physical_plan.conditions.front();
     if (first_condition.op == EQUAL) {
-      search_op.field_indexes.push_back(first_condition.column.index);
-      search_op.AddKey()->AddField(
+      search_op_.field_indexes.push_back(first_condition.column.index);
+      search_op_.AddKey()->AddField(
           first_condition.value.ToSchemaField(first_condition.column.type));
     } else {
-      search_op.reset();
-      search_op.field_indexes.push_back(first_condition.column.index);
+      search_op_.reset();
+      search_op_.field_indexes.push_back(first_condition.column.index);
       for (const auto& condition : physical_plan.conditions) {
         if (condition.op == GE) {
-          search_op.AddLeftKey()->AddField(
+          search_op_.AddLeftKey()->AddField(
               condition.value.ToSchemaField(condition.column.type));
-          search_op.left_open = false;
+          search_op_.left_open = false;
         } else if (condition.op == GT) {
-          search_op.AddLeftKey()->AddField(
+          search_op_.AddLeftKey()->AddField(
               condition.value.ToSchemaField(condition.column.type));
-          search_op.left_open = true;
+          search_op_.left_open = true;
         } else if (condition.op == LT) {
-          search_op.AddRightKey()->AddField(
+          search_op_.AddRightKey()->AddField(
               condition.value.ToSchemaField(condition.column.type));
-          search_op.right_open = true;
+          search_op_.right_open = true;
         } else if (condition.op == LE) {
-          search_op.AddRightKey()->AddField(
+          search_op_.AddRightKey()->AddField(
               condition.value.ToSchemaField(condition.column.type));
-          search_op.right_open = false;
+          search_op_.right_open = false;
         } else {
           LogFATAL("Unexpected op %s", OpTypeStr(condition.op).c_str());
         }
       }
     }
 
-    table_iter = table->RecordIterator(&search_op);
+    table_iter_ = table->RecordIterator(&search_op_);
   }
   else if (physical_plan.plan == PhysicalPlan::SCAN ||
            physical_plan.plan == PhysicalPlan::CONST_TRUE_SCAN) {
     // Scan the table and evaluate on the node.
-    table_iter = table->RecordIterator(&search_op);
+    table_iter_ = table->RecordIterator(&search_op_);
   } else {
     LogFATAL("Failed to init PhysicalQueryIterator - "
              "Invalid physical plan %s for this node",
@@ -100,7 +100,7 @@ std::shared_ptr<FetchedResult::Tuple> PhysicalQueryIterator::GetNextTuple() {
   } else if (physical_plan.plan == PhysicalPlan::SEARCH ||
              physical_plan.plan == PhysicalPlan::SCAN) {
     while (true) {
-      auto record = table_iter->GetNextRecord();
+      auto record = table_iter_->GetNextRecord();
       if (!record) {
         return nullptr;
       }
@@ -112,7 +112,7 @@ std::shared_ptr<FetchedResult::Tuple> PhysicalQueryIterator::GetNextTuple() {
       }
     }
   } else if (physical_plan.plan == PhysicalPlan::CONST_TRUE_SCAN) {
-    auto record = table_iter->GetNextRecord();
+    auto record = table_iter_->GetNextRecord();
     if (!record) {
       return nullptr;
     }
@@ -126,6 +126,13 @@ std::shared_ptr<FetchedResult::Tuple> PhysicalQueryIterator::GetNextTuple() {
   }
 
   return nullptr;
+}
+
+void PhysicalQueryIterator::reset() {
+  if (table_iter_) {
+    table_iter_->reset();
+  }
+  end_ = false;
 }
 
 
@@ -179,6 +186,13 @@ std::shared_ptr<FetchedResult::Tuple> AndNodeIterator::GetNextTuple() {
       }
     }
   }
+}
+
+void AndNodeIterator::reset() {
+  if (pop_node_) {
+    pop_node_->GetIterator()->reset();
+  }
+  end_ = false;
 }
 
 
@@ -243,8 +257,13 @@ std::shared_ptr<FetchedResult::Tuple> OrNodeIterator::GetNextTuple() {
   }
 
   auto tuple = std::make_shared<FetchedResult::Tuple>();
-  *tuple = std::move(result_.tuples.at(tuple_index_++));
+  *tuple = result_.tuples.at(tuple_index_++);
   return tuple;
+}
+
+void OrNodeIterator::reset() {
+  tuple_index_ = 0;
+  end_ = false;
 }
 
 }  // namespace Query

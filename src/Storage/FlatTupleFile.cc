@@ -400,7 +400,6 @@ bool FlatTupleFile::Sort(const std::vector<Query::Column>& columns) {
     return true;
   };
 
-
   // Read all tuples and crete chunk files of pass 0.
   if (!InitForReading()) {
     return false;

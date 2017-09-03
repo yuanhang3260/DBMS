@@ -22,6 +22,8 @@ class Iterator {
 
   virtual void Init() = 0;
   virtual std::shared_ptr<FetchedResult::Tuple> GetNextTuple() = 0;
+  // Iterator goes pack to begin,
+  virtual void reset() = 0;
 
  protected:
   SqlQuery* query_ = nullptr;
@@ -38,10 +40,11 @@ class PhysicalQueryIterator : public Iterator {
 
   void Init() override;
   std::shared_ptr<FetchedResult::Tuple> GetNextTuple() override;
+  void reset() override;
 
  private:
-  DB::SearchOp search_op;
-  std::shared_ptr<DB::TableRecordIterator> table_iter;
+  DB::SearchOp search_op_;
+  std::shared_ptr<DB::TableRecordIterator> table_iter_;
 };
 
 
@@ -51,6 +54,7 @@ class AndNodeIterator : public Iterator {
 
   void Init() override;
   std::shared_ptr<FetchedResult::Tuple> GetNextTuple() override;
+  void reset() override;
 
  private:
   ExprTreeNode* pop_node_ = nullptr;
@@ -63,6 +67,7 @@ class OrNodeIterator : public Iterator {
 
   void Init() override;
   std::shared_ptr<FetchedResult::Tuple> GetNextTuple() override;
+  void reset() override;
 
  private:
   FetchedResult result_;

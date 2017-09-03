@@ -121,6 +121,7 @@ struct TableRecordIterator {
 
   void Init();
   std::shared_ptr<Storage::RecordBase> GetNextRecord();
+  void reset();
 };
 
 }  // namespace DATABASE

@@ -234,12 +234,18 @@ class FlatTupleFileTest: public UnitTest {
 
     AssertTrue(ft_file_->InitForReading());
     uint32 total_tuples = 0;
+    std::shared_ptr<Query::FetchedResult::Tuple> prev_tuple;
     while (true) {
       auto tuple = ft_file_->NextTuple();
       if (!tuple) {
         break;
       }
       total_tuples++;
+      if (prev_tuple) {
+        AssertTrue(Query::FetchedResult::CompareBasedOnColumns(
+                      *prev_tuple, *tuple, {column1, column2}) <= 0);
+      }
+      prev_tuple = tuple;
       // tuple->at(kHostTableName).record->Print();
       // tuple->at(kPuppyTableName).record->Print();
       // printf("\n");
