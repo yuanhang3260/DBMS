@@ -113,7 +113,6 @@ struct TableRecordIterator {
   // This is for implementing "fake" iterating - prefetch all data records
   // and wait for iteration.
   std::vector<std::shared_ptr<Storage::RecordBase>> data_records;
-
   uint32 record_index = 0;
 
   bool ready = false;

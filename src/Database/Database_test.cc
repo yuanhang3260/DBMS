@@ -186,6 +186,8 @@ class DatabaseTest: public UnitTest {
       // host_id: 0 ~ (kNumHosts -1)
       rand_int = Utils::RandomNumber(kNumHosts);
       puppy_records_.at(i)->AddField(new Schema::LongIntField(rand_int));
+
+      //puppy_records_.at(i)->Print();
     }
 
     // Hosts.
@@ -488,7 +490,7 @@ class DatabaseTest: public UnitTest {
     interpreter_->reset();
     printf("\n");
 
-    expr = "SELECT age, AVG(weight) FROM Puppy GROUP BY age";
+    expr = "SELECT age, AVG(weight) FROM Puppy GROUP BY age ORDER BY AVG(weight)";
     std::cout << expr << std::endl;
     AssertTrue(interpreter_->Parse(expr));
     query = interpreter_->shared_query();
@@ -504,7 +506,7 @@ class DatabaseTest: public UnitTest {
     std::cout << __FUNCTION__ << std::endl;
     std::string expr;
 
-    expr = "SELECT Puppy.*, Host.* FROM Puppy, Host WHERE Puppy.host_id = Host.id ORDER BY Host.id, Puppy.name";
+    expr = "SELECT Puppy.*, Host.* FROM Puppy, Host WHERE Puppy.host_id = Host.id ORDER BY Host.id, Puppy.id";
     std::cout << expr << std::endl;
     AssertTrue(interpreter_->Parse(expr));
     auto query = interpreter_->shared_query();
@@ -526,7 +528,7 @@ int main(int argc, char** argv) {
   DB::DatabaseTest test;
   test.setup();
 
-  test.Test_SelectQuery();
+  //test.Test_SelectQuery();
   test.Test_Join();
 
   test.teardown();

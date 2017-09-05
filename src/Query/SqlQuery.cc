@@ -10,7 +10,7 @@ namespace Query {
 
 namespace {
 const double kIndexSearchFactor = 2;
-const uint32 kBlockBufferPages = 4;
+const uint32 kBlockBufferPages = 1;
 }
 
 SqlQuery::SqlQuery(DB::Database* db) :
@@ -476,6 +476,7 @@ int SqlQuery::ExecuteJoinQuery() {
         continue;
       }
     }
+    //printf("block group\n");
 
     // Block buffer for table_1 is full, iterate over table_2.
     auto* iter_2 = node_2->GetIterator();
@@ -496,6 +497,11 @@ int SqlQuery::ExecuteJoinQuery() {
     // Reset table_2 iterator and continue to next block of table_1.
     node_2->GetIterator()->reset();
     block_tuples.clear();
+    if (tuple_1) {
+      block_tuples.push_back(tuple_1);
+    } else {
+      break;
+    }
     block_tuples_size = 0;
   }
 

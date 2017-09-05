@@ -364,8 +364,12 @@ std::shared_ptr<RecordBase> TableRecordIterator::GetNextRecord() {
 }
 
 void TableRecordIterator::reset() {
-  if (tree_iter) {
-    tree_iter->reset();
+  if (!kEnableInFlyIter) {
+    record_index = 0;
+  } else {
+    if (tree_iter) {
+      tree_iter->reset();
+    }
   }
   end = false;
 }
