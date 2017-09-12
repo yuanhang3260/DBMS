@@ -44,6 +44,9 @@ class ExprTreeNode {
   ExprTreeNode* left() const { return left_.get(); }
   ExprTreeNode* right() const { return right_.get(); }
 
+  std::shared_ptr<ExprTreeNode> shared_left() const { return left_; }
+  std::shared_ptr<ExprTreeNode> shared_right() const { return right_; }
+
   void set_parent(std::shared_ptr<ExprTreeNode> parent) {
     parent_ = parent;
   }

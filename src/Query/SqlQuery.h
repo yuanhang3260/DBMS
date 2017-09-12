@@ -130,6 +130,29 @@ class SqlQuery {
 
   bool IsConstExpression(ExprTreeNode* node);
 
+  // Analyze join expression - split the original complete JOIN query expression
+  // to conditions for saprate tables and JOIN expr.
+  //
+  // Example:
+  //   SELECT * from t1, t2 WHERE t1.a > 3 AND t2.b = 6 AND t1.c = t2.c
+  //
+  // table 1 will get expr: t1.a > 3
+  // table 2 will get expr: t2.b = 6
+  // JOIN expr is: t1.c = t2.c
+  struct JoinQueryConditionGroups {
+    std::vector<std::shared_ptr<ExprTreeNode>> table_1_exprs;
+    std::vector<std::shared_ptr<ExprTreeNode>> table_2_exprs;
+    std::vector<std::shared_ptr<ExprTreeNode>> join_exprs;
+    bool discard = false;
+  };
+  std::shared_ptr<SqlQuery::JoinQueryConditionGroups>
+  GroupJoinQueryConditions(std::shared_ptr<ExprTreeNode> node);
+
+  std::shared_ptr<SqlQuery::JoinQueryConditionGroups>
+  AnalyzeUnitJoinCondition(std::shared_ptr<ExprTreeNode> node);
+
+  std::vector<std::string> GetExprTables(ExprTreeNode* node);
+
   DB::Database* db_ = nullptr;
   DB::CatalogManager* catalog_m_ = nullptr;
 

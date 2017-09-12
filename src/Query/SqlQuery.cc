@@ -432,6 +432,125 @@ int SqlQuery::ExecuteSelectQuery() {
   return results_.NumTuples();
 }
 
+std::shared_ptr<SqlQuery::JoinQueryConditionGroups>
+SqlQuery::GroupJoinQueryConditions(std::shared_ptr<ExprTreeNode> node) {
+  if (!node) {
+    return nullptr;
+  }
+
+  auto left_re = GroupJoinQueryConditions(node->shared_left());
+  auto right_re = GroupJoinQueryConditions(node->shared_right());
+
+  auto re = std::make_shared<JoinQueryConditionGroups>();
+  if (node->type() == ExprTreeNode::OPERATOR) {
+    OperatorNode* op_node = dynamic_cast<OperatorNode*>(node.get());
+    if (op_node->OpType() == OR || op_node->OpType() == NOT) {
+      // If current node is OR or NOT node, conditions will be discarded.
+      auto expr_tables = GetExprTables(node.get());
+      if (expr_tables.size() == 1) {
+        if (expr_tables.front() == *tables_.begin()) {
+          re->table_1_exprs.push_back(node);
+        } else {
+          re->table_2_exprs.push_back(node);
+        }
+      }
+      return re;
+    } else if (op_node->OpType() == AND) {
+      // Merge conditions.
+      if (left_re) {
+        re->table_1_exprs.insert(re->table_1_exprs.end(),
+                                 left_re->table_1_exprs.begin(),
+                                 left_re->table_2_exprs.end());
+        re->table_2_exprs.insert(re->table_2_exprs.end(),
+                                 left_re->table_2_exprs.begin(),
+                                 left_re->table_2_exprs.end());
+        re->join_exprs.insert(re->join_exprs.end(),
+                              left_re->join_exprs.begin(),
+                              left_re->join_exprs.end());
+      }
+      if (right_re) {
+        re->table_1_exprs.insert(re->table_1_exprs.end(),
+                                 right_re->table_1_exprs.begin(),
+                                 right_re->table_2_exprs.end());
+        re->table_2_exprs.insert(re->table_2_exprs.end(),
+                                 right_re->table_2_exprs.begin(),
+                                 right_re->table_2_exprs.end());
+        re->join_exprs.insert(re->join_exprs.end(),
+                              right_re->join_exprs.begin(),
+                              right_re->join_exprs.end());
+      }
+    } else {
+      return AnalyzeUnitJoinCondition(node);
+    }
+  } else {
+    LogFATAL("Unexpected node type %s",
+             ExprTreeNode::NodeTypeStr(node->type()).c_str());
+  }
+
+  return re;
+}
+
+std::shared_ptr<SqlQuery::JoinQueryConditionGroups>
+SqlQuery::AnalyzeUnitJoinCondition(std::shared_ptr<ExprTreeNode> node) {
+  CHECK(node, "nullptr to AnalyzeUnitJoinCondition");
+
+  auto re = std::make_shared<JoinQueryConditionGroups>();
+
+  auto table_conditions = GetExprTables(node.get());
+  if (table_conditions.size() == 2) {
+    re->join_exprs.push_back(node);
+  } else if (table_conditions.size() == 1) {
+    auto table_name = table_conditions.front();
+    if (table_name == *tables_.begin()) {
+      re->table_1_exprs.push_back(node);
+    } else {
+      re->table_2_exprs.push_back(node);
+    }
+  }
+
+  return re;
+}
+
+std::vector<std::string> SqlQuery::GetExprTables(ExprTreeNode* node) {
+  if (!node) {
+    return std::vector<std::string>();
+  }
+
+  if (node->type() == ExprTreeNode::TABLE_COLUMN) {
+    ColumnNode* column_node = dynamic_cast<ColumnNode*>(node);
+    return std::vector<std::string>{column_node->column().table_name};
+  }
+  if (node->type() == ExprTreeNode::CONST_VALUE) {
+    return std::vector<std::string>();
+  }
+
+  // OPERATOR node
+  std::vector<std::string> left_re = GetExprTables(node->left());
+  std::vector<std::string> right_re = GetExprTables(node->right());
+  if (left_re.empty() && right_re.empty()) {
+    return left_re;
+  }
+  if (left_re.size() == 2 || right_re.size() == 2) {
+    return left_re;
+  }
+  if (!left_re.empty() && !right_re.empty()) {
+    if (left_re.front() == right_re.front()) {
+      return left_re;
+    } else {
+      left_re.push_back(right_re.front());
+      return left_re;
+    }
+  } else {
+    if (!left_re.empty()) {
+      return left_re;
+    }
+    if (!right_re.empty()) {
+      return right_re;
+    }
+  }
+  return std::vector<std::string>();
+}
+
 int SqlQuery::ExecuteJoinQuery() {
   // TODO: Support multiple tables JOIN.
   CHECK(tables_.size() == 2, "Sorry, only two-tables JOIN is supported");
