@@ -438,9 +438,6 @@ SqlQuery::GroupJoinQueryConditions(std::shared_ptr<ExprTreeNode> node) {
     return nullptr;
   }
 
-  auto left_re = GroupJoinQueryConditions(node->shared_left());
-  auto right_re = GroupJoinQueryConditions(node->shared_right());
-
   auto re = std::make_shared<JoinQueryConditionGroups>();
   if (node->type() == ExprTreeNode::OPERATOR) {
     OperatorNode* op_node = dynamic_cast<OperatorNode*>(node.get());
@@ -456,11 +453,13 @@ SqlQuery::GroupJoinQueryConditions(std::shared_ptr<ExprTreeNode> node) {
       }
       return re;
     } else if (op_node->OpType() == AND) {
+      auto left_re = GroupJoinQueryConditions(node->shared_left());
+      auto right_re = GroupJoinQueryConditions(node->shared_right());
       // Merge conditions.
       if (left_re) {
         re->table_1_exprs.insert(re->table_1_exprs.end(),
                                  left_re->table_1_exprs.begin(),
-                                 left_re->table_2_exprs.end());
+                                 left_re->table_1_exprs.end());
         re->table_2_exprs.insert(re->table_2_exprs.end(),
                                  left_re->table_2_exprs.begin(),
                                  left_re->table_2_exprs.end());
@@ -471,7 +470,7 @@ SqlQuery::GroupJoinQueryConditions(std::shared_ptr<ExprTreeNode> node) {
       if (right_re) {
         re->table_1_exprs.insert(re->table_1_exprs.end(),
                                  right_re->table_1_exprs.begin(),
-                                 right_re->table_2_exprs.end());
+                                 right_re->table_1_exprs.end());
         re->table_2_exprs.insert(re->table_2_exprs.end(),
                                  right_re->table_2_exprs.begin(),
                                  right_re->table_2_exprs.end());

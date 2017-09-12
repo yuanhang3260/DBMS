@@ -14,10 +14,12 @@ namespace Query {
 
 namespace {
 const double kIndexSearchFactor = 2;  // needs to match with SqlQuery.cc
+const int64 kNumHosts = 3;
 }
 
 namespace {
 const char* const kTableName = "Puppy";
+const char* const kHostTableName = "Host";
 const char* const kDBName = "testDB";
 }  // namespace
 
@@ -85,6 +87,13 @@ class QueryTest: public UnitTest {
     field->set_size(20);
     field->mutable_min_value()->set_limit_chararray("a");
     field->mutable_max_value()->set_limit_chararray("z");
+    // Add long int type
+    field = table_info->add_fields();
+    field->set_name("host_id");
+    field->set_index(6);  // primary key
+    field->set_type(DB::TableField::LONGINT);
+    field->mutable_min_value()->set_limit_int64(0);
+    field->mutable_max_value()->set_limit_int64(kNumHosts - 1);
 
     auto* index = table_info->mutable_primary_index();
     index->add_index_fields(2);
@@ -99,21 +108,31 @@ class QueryTest: public UnitTest {
     index->add_index_fields(4);
     index = table_info->add_indexes();
     index->add_index_fields(5);
+    index = table_info->add_indexes();
+    index->add_index_fields(6);
 
     // Create a table Host.
     table_info = catalog_.add_tables();
-    table_info->set_name("Host");
+    table_info->set_name(kHostTableName);
+
+    // Add long int type
+    field = table_info->add_fields();
+    field->set_name("id");
+    field->set_index(0);  // primary key
+    field->set_type(DB::TableField::LONGINT);
 
     // Add string type
     field = table_info->add_fields();
     field->set_name("name");
-    field->set_index(0);
+    field->set_index(1);
     field->set_type(DB::TableField::STRING);
-    // Add long int type
-    field = table_info->add_fields();
-    field->set_name("id");
-    field->set_index(1);  // primary key
-    field->set_type(DB::TableField::LONGINT);
+
+    // Set primary and other keys.
+    index = table_info->mutable_primary_index();
+    index->add_index_fields(0);
+
+    index = table_info->add_indexes();
+    index->add_index_fields(1);
 
     catalog_m_ = std::make_shared<DB::CatalogManager>(&catalog_);
     AssertTrue(catalog_m_->Init());
@@ -888,6 +907,84 @@ class QueryTest: public UnitTest {
     interpreter_->reset();
     printf("\n");
   }
+
+  void Test_AnalyzeJoinExpression() {
+    std::string expr;
+
+    expr = "SELECT Puppy.*, Host.* FROM Puppy, Host "
+           "WHERE Puppy.host_id = Host.id AND "
+           "(Puppy.name <= \"n\" OR Puppy.weight < 0.7) AND "
+           "Host.name = \"hy\"";
+    std::cout << expr << std::endl;
+    AssertTrue(interpreter_->Parse(expr));
+    auto query = interpreter_->shared_query();
+    AssertTrue(query->FinalizeParsing());
+    auto join_conditions = query->GroupJoinQueryConditions(query->expr_node_);
+
+    AssertEqual(1, join_conditions->table_1_exprs.size());
+    const auto& table_1_expr = *join_conditions->table_1_exprs.front();
+    AssertEqual(ExprTreeNode::OPERATOR, table_1_expr.type());
+    AssertEqual(EQUAL,  // Host.name = "hy"
+                dynamic_cast<const OperatorNode&>(table_1_expr).OpType());
+
+    AssertEqual(1, join_conditions->table_2_exprs.size());
+    const auto& table_2_expr = *join_conditions->table_2_exprs.front();
+    AssertEqual(ExprTreeNode::OPERATOR, table_2_expr.type());
+    AssertEqual(OR,  // Puppy.name <= \"n\" OR Puppy.weight < 0.7 
+                dynamic_cast<const OperatorNode&>(table_2_expr).OpType());
+
+    AssertEqual(1, join_conditions->join_exprs.size());
+    const auto& join_expr = *join_conditions->join_exprs.front();
+    AssertEqual(ExprTreeNode::OPERATOR, join_expr.type());
+    AssertEqual(EQUAL,  // Puppy.host_id = Host.id 
+                dynamic_cast<const OperatorNode&>(join_expr).OpType());
+    printf("\n");
+
+    expr = "SELECT Puppy.*, Host.* FROM Puppy, Host "
+           "WHERE Puppy.host_id = Host.id OR "
+           "(Puppy.name <= \"n\" OR Puppy.weight < 0.7) AND "
+           "Host.name = \"hy\"";
+    std::cout << expr << std::endl;
+    AssertTrue(interpreter_->Parse(expr));
+    query = interpreter_->shared_query();
+    AssertTrue(query->FinalizeParsing());
+    join_conditions = query->GroupJoinQueryConditions(query->expr_node_);
+
+    AssertTrue(join_conditions->table_1_exprs.empty());
+    AssertTrue(join_conditions->table_2_exprs.empty());
+    AssertTrue(join_conditions->join_exprs.empty());
+    printf("\n");
+
+    expr = "SELECT Puppy.*, Host.* FROM Puppy, Host "
+           "WHERE Puppy.host_id = Host.id AND "
+           "(Puppy.name <= \"n\" OR Puppy.weight < 0.7 OR "
+           "Host.name = \"hy\")";
+    std::cout << expr << std::endl;
+    AssertTrue(interpreter_->Parse(expr));
+    query = interpreter_->shared_query();
+    AssertTrue(query->FinalizeParsing());
+    join_conditions = query->GroupJoinQueryConditions(query->expr_node_);
+
+    AssertTrue(join_conditions->table_1_exprs.empty());
+    AssertTrue(join_conditions->table_2_exprs.empty());
+    AssertEqual(1, join_conditions->join_exprs.size());
+    printf("\n");
+
+    expr = "SELECT Puppy.*, Host.* FROM Puppy, Host "
+           "WHERE (Puppy.host_id = Host.id AND "
+           "Puppy.name <= \"n\" OR Puppy.weight < 0.7) AND "
+           "Host.name = \"hy\"";
+    std::cout << expr << std::endl;
+    AssertTrue(interpreter_->Parse(expr));
+    query = interpreter_->shared_query();
+    AssertTrue(query->FinalizeParsing());
+    join_conditions = query->GroupJoinQueryConditions(query->expr_node_);
+
+    AssertEqual(1, join_conditions->table_1_exprs.size());
+    AssertTrue(join_conditions->table_2_exprs.empty());
+    AssertTrue(join_conditions->join_exprs.empty());
+    printf("\n");
+  }
 };
 
 }  // namespace Storage
@@ -896,13 +993,14 @@ int main() {
   Query::QueryTest test;
   test.setup();
 
-  test.Test_EvaluateConst();
-  test.Test_ColumnNodeExpr();
-  test.Test_EvaluateSingleExpr();
-  test.Test_ParseSelectQuery();
-  test.Test_EvaluateQueryConditions();
-  test.Test_GenerateUnitPhysicalPlan();
-  test.Test_GenerateQueryPhysicalPlan();
+  // test.Test_EvaluateConst();
+  // test.Test_ColumnNodeExpr();
+  // test.Test_EvaluateSingleExpr();
+  // test.Test_ParseSelectQuery();
+  // test.Test_EvaluateQueryConditions();
+  // test.Test_GenerateUnitPhysicalPlan();
+  // test.Test_GenerateQueryPhysicalPlan();
+  test.Test_AnalyzeJoinExpression();
 
   test.teardown();
 
