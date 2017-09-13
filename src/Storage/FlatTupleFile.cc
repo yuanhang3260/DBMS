@@ -72,6 +72,13 @@ std::pair<uint32, byte*> FlatTuplePage::GetNextTuple() {
   return {tuple_length, tuple_data};
 }
 
+bool FlatTuplePage::Restore(uint32 tindex, uint32 offset) {
+  memcpy(&num_tuples_, data_, sizeof(num_tuples_));
+  tindex = crt_tindex_;
+  crt_offset_ = offset;
+  return true;
+}
+
 uint32 FlatTuplePage::DumpTuple(const Query::FetchedResult::Tuple& tuple) {
   CHECK(data_, "Buffer page is not created yet.");
   if (crt_offset_ + sizeof(uint32) + FetchedResult::TupleSize(tuple) > 
@@ -295,8 +302,52 @@ std::shared_ptr<FetchedResult::Tuple> FlatTupleFile::NextTuple() {
         "Error record from page %u - expect %d bytes, actual %d ",
         crt_page_num_, tuple_length, load_size);
 
-  total_records_++;
   return tuple;
+}
+
+FlatTupleFile::ReadSnapshot FlatTupleFile::TakeReadSnapshot() const {
+  ReadSnapshot snapshot;
+  snapshot.page_num = crt_page_num_;
+  if (buf_page_) {
+    // If reach the end of current page, next tuple will be in next page.
+    // There snapshot should be taken at the beginning tuple of next page.
+    if (buf_page_->crt_tindex() == buf_page_->num_tuples()) {
+      snapshot.page_offset = sizeof(uint32);
+      snapshot.page_tuple_index = 0;
+      snapshot.page_num = crt_page_num_ + 1;
+    } else {
+      snapshot.page_offset = buf_page_->crt_offset();
+      snapshot.page_tuple_index = buf_page_->crt_tindex();
+      snapshot.page_tuples = buf_page_->num_tuples();
+    }
+  }
+  return snapshot;
+}
+
+bool FlatTupleFile::RestoreReadSnapshot(const ReadSnapshot& snapshot) {
+  if (crt_page_num_ != snapshot.page_num) {
+    auto new_buf_page_ = ptr::MakeUnique<FlatTuplePage>(&opts_);
+    if (file_descriptor_->Seek(kPageSize * snapshot.page_num) < 0) {
+      LogERROR("Failed to seek to page %d", snapshot.page_num);
+      return false;
+    }
+    int read_size = file_descriptor_->Read(new_buf_page_->mutable_data(),
+                                           Storage::kPageSize);
+    if (read_size != Storage::kPageSize) {
+      LogERROR("Failed to fetch first page from file %s", filename_.c_str());
+      // Re-seek back.
+      file_descriptor_->Seek(kPageSize * crt_page_num_);
+      return false;
+    }
+    crt_page_num_ = snapshot.page_num;
+    buf_page_ = std::move(new_buf_page_);
+  }
+
+  return buf_page_->Restore(snapshot.page_tuple_index, snapshot.page_offset);
+}
+
+bool FlatTupleFile::ResetRead() {
+  return InitForReading();
 }
 
 bool FlatTupleFile::WriteTuple(const FetchedResult::Tuple& tuple) {

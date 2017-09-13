@@ -2,6 +2,7 @@
 #include "Base/MacroUtils.h"
 #include "Base/Path.h"
 #include "Base/Ptr.h"
+#include "Base/Utils.h"
 #include "IO/FileSystemUtils.h"
 #include "UnitTest/UnitTest.h"
 
@@ -252,6 +253,75 @@ class FlatTupleFileTest: public UnitTest {
     }
     AssertEqual(data_records_.size(), total_tuples);
   }
+
+  void Test_SnapshotRestore() {
+    // Write tuples to file.
+    FlatTupleFileOptions opts(tuple_meta_, {kPuppyTableName, kHostTableName});
+    opts.db_name = kDBName;
+    opts.txn_id = UUID::TimeStampID();
+    ft_file_.reset(new FlatTupleFile(opts));
+
+    AssertTrue(ft_file_->InitForWriting());
+
+    // Write tuples to file.
+    for (uint32 i = 0; i < kNumRecordsSource; i++) {
+      Query::FetchedResult::Tuple tuple;
+      tuple.emplace(kPuppyTableName, Query::ResultRecord(data_records_.at(i)));
+      tuple.emplace(kHostTableName, Query::ResultRecord(index_records_.at(i)));
+      AssertTrue(ft_file_->WriteTuple(tuple));
+    }
+    ft_file_->FinishWriting();
+
+    AssertTrue(ft_file_->InitForReading());
+
+    // Begin random reading.
+    for (uint32 times = 0; times < 30; times++) {
+      // Pick up a random tuple.
+      int32 begin_tuple_index = Utils::RandomNumber(kNumRecordsSource);
+      std::shared_ptr<Query::FetchedResult::Tuple> tuple_1;
+      FlatTupleFile::ReadSnapshot snapshot_1;
+      for (int32 i = 0; i < begin_tuple_index; i++) {
+        snapshot_1 = ft_file_->TakeReadSnapshot();
+        tuple_1 = ft_file_->NextTuple();
+        AssertTrue(tuple_1.get());
+      }
+
+      // Go to another random tuple.
+      int32 end_tuple_index = begin_tuple_index +
+          Utils::RandomNumber(kNumRecordsSource - begin_tuple_index);
+      std::shared_ptr<Query::FetchedResult::Tuple> tuple_2;
+      FlatTupleFile::ReadSnapshot snapshot_2;
+      for (int32 i = begin_tuple_index; i < end_tuple_index; i++) {
+        snapshot_2 = ft_file_->TakeReadSnapshot();
+        tuple_2 = ft_file_->NextTuple();
+        AssertTrue(tuple_2.get());
+      }
+
+      // Restore snapshots, repeating 10 times.
+      for (int j = 0; j < 10; j++) {
+        // Restore to first tuple position and re-read.
+        AssertTrue(ft_file_->RestoreReadSnapshot(snapshot_1));
+        auto new_tuple_1 = ft_file_->NextTuple();
+        AssertTrue(new_tuple_1.get());
+        AssertTrue(*(tuple_1->at(kPuppyTableName).record) ==
+                   *(new_tuple_1->at(kPuppyTableName).record));
+        AssertTrue(*(tuple_1->at(kHostTableName).record) ==
+                   *(new_tuple_1->at(kHostTableName).record));
+
+        // Restore to second tuple position and re-read.
+        AssertTrue(ft_file_->RestoreReadSnapshot(snapshot_2));
+        auto new_tuple_2 = ft_file_->NextTuple();
+        AssertTrue(new_tuple_2.get());
+        AssertTrue(*(tuple_2->at(kPuppyTableName).record) ==
+                   *(new_tuple_2->at(kPuppyTableName).record));
+        AssertTrue(*(tuple_2->at(kHostTableName).record) ==
+                   *(new_tuple_2->at(kHostTableName).record));
+      }
+
+      // Restore everything.
+      AssertTrue(ft_file_->ResetRead());
+    }
+  }
 };
 
 }  // namespace Storage
@@ -262,7 +332,8 @@ int main() {
 
   //test.Test_WriteRead();
   //test.Test_WriteRead_MultiTableTuples();
-  test.Test_Sort();
+  //test.Test_Sort();
+  test.Test_SnapshotRestore();
 
   test.teardown();
 

@@ -42,6 +42,7 @@ class FlatTuplePage {
 
   uint32 num_tuples() const { return num_tuples_; }
   uint32 crt_tindex() const { return crt_tindex_; }
+  uint32 crt_offset() const { return crt_offset_; }
   byte* mutable_data() { return data_; }
   const byte* data() const { return data_; }
 
@@ -52,6 +53,9 @@ class FlatTuplePage {
   // the record.
   uint32 DumpTuple(const Query::FetchedResult::Tuple& tuple);
   void FinishPage();
+
+  // Restore read status to a prev snapshot.
+  bool Restore(uint32 tindex, uint32 offset);
 
   void Reset();
 
@@ -90,6 +94,16 @@ class FlatTupleFile {
 
   bool Close();
 
+  struct ReadSnapshot {
+    uint32 page_num = 0;
+    uint32 page_offset = 0;
+    uint32 page_tuple_index = 0;
+    uint32 page_tuples = 0;
+  };
+  ReadSnapshot TakeReadSnapshot() const;
+  bool RestoreReadSnapshot(const ReadSnapshot& snapshot);
+  bool ResetRead();  // Restore to initial reading status.
+
   std::string filename() const { return filename_; }
 
   bool DeleteFile();
@@ -115,7 +129,6 @@ class FlatTupleFile {
   // in order.
   std::unique_ptr<FlatTuplePage> buf_page_;
   uint32 crt_page_num_ = 0;
-  uint32 total_records_ = 0;
 
   FORBID_COPY_AND_ASSIGN(FlatTupleFile);
 };
