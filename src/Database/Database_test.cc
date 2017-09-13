@@ -130,12 +130,16 @@ class DatabaseTest: public UnitTest {
     field->set_name("id");
     field->set_index(0);  // primary key
     field->set_type(DB::TableField::LONGINT);
+    field->mutable_min_value()->set_limit_int64(0);
+    field->mutable_max_value()->set_limit_int64(kNumHosts - 1);
 
     // Add string type
     field = table_info->add_fields();
     field->set_name("name");
     field->set_index(1);
     field->set_type(DB::TableField::STRING);
+    field->mutable_min_value()->set_limit_str("aaa");
+    field->mutable_max_value()->set_limit_str("zzz");
 
     // Set primary and other keys.
     index = table_info->mutable_primary_index();
@@ -506,12 +510,30 @@ class DatabaseTest: public UnitTest {
     std::cout << __FUNCTION__ << std::endl;
     std::string expr;
 
-    expr = "SELECT Puppy.*, Host.* FROM Puppy, Host WHERE Puppy.host_id = Host.id ORDER BY Host.id, Puppy.id";
+    expr = "SELECT Puppy.*, Host.* FROM Puppy, Host "
+           "WHERE Puppy.host_id = Host.id "
+           "ORDER BY Host.id, Puppy.id";
     std::cout << expr << std::endl;
     AssertTrue(interpreter_->Parse(expr));
     auto query = interpreter_->shared_query();
     AssertTrue(query->FinalizeParsing());
     int num_results = query->ExecuteJoinQuery();
+    printf("num_results = %d\n", num_results);
+    query->PrintResults();
+    AssertEqual(ExpectedJoinResultNum(query->expr_root()), num_results);
+    AssertTrue(VerifyResult(query->expr_root(), query->results()));
+    interpreter_->reset();
+    printf("\n");
+
+    expr = "SELECT Puppy.*, Host.* FROM Puppy, Host "
+           "WHERE Puppy.host_id = Host.id AND "
+           "(Puppy.name <= \"h\" OR Puppy.weight < 1.1) AND "
+           "Host.name = \"hy\"";
+    std::cout << expr << std::endl;
+    AssertTrue(interpreter_->Parse(expr));
+    query = interpreter_->shared_query();
+    AssertTrue(query->FinalizeParsing());
+    num_results = query->ExecuteJoinQuery();
     printf("num_results = %d\n", num_results);
     query->PrintResults();
     AssertEqual(ExpectedJoinResultNum(query->expr_root()), num_results);

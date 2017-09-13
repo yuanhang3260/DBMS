@@ -110,6 +110,7 @@ class SqlQuery {
  private:
   // Generate physical plan for this query.
   const PhysicalPlan& PrepareQueryPlan();
+  const PhysicalPlan& PrepareQueryPlan(ExprTreeNode* node);
 
   // Group physical query units.
   bool GroupPhysicalQueries(ExprTreeNode* node);
@@ -151,6 +152,16 @@ class SqlQuery {
   std::shared_ptr<SqlQuery::JoinQueryConditionGroups>
   AnalyzeUnitJoinCondition(std::shared_ptr<ExprTreeNode> node);
 
+  // Do nested block loop join.
+  void NestedLoopJoin(const JoinQueryConditionGroups& exprs);
+
+  // Build expression tree for a single table based on list of sub-conditions.
+  // All sub-conditions are logically connected by AND.
+  std::shared_ptr<ExprTreeNode> BuildExpressTree(
+      const std::string& table_name,
+      const std::vector<std::shared_ptr<ExprTreeNode>>& exprs);
+
+  // Get tables that are referenced in an expression.
   std::vector<std::string> GetExprTables(ExprTreeNode* node);
 
   DB::Database* db_ = nullptr;

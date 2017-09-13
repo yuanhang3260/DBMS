@@ -909,23 +909,29 @@ class QueryTest: public UnitTest {
   }
 
   void Test_AnalyzeJoinExpression() {
+    std::cout << __FUNCTION__ << std::endl;
     std::string expr;
 
     expr = "SELECT Puppy.*, Host.* FROM Puppy, Host "
            "WHERE Puppy.host_id = Host.id AND "
            "(Puppy.name <= \"n\" OR Puppy.weight < 0.7) AND "
-           "Host.name = \"hy\"";
+           "Host.name = \"hy\" AND "
+           "Host.id < 10";
     std::cout << expr << std::endl;
     AssertTrue(interpreter_->Parse(expr));
     auto query = interpreter_->shared_query();
     AssertTrue(query->FinalizeParsing());
     auto join_conditions = query->GroupJoinQueryConditions(query->expr_node_);
 
-    AssertEqual(1, join_conditions->table_1_exprs.size());
-    const auto& table_1_expr = *join_conditions->table_1_exprs.front();
-    AssertEqual(ExprTreeNode::OPERATOR, table_1_expr.type());
+    AssertEqual(2, join_conditions->table_1_exprs.size());
+    const auto& table_1_expr_1 = *join_conditions->table_1_exprs.front();
+    AssertEqual(ExprTreeNode::OPERATOR, table_1_expr_1.type());
     AssertEqual(EQUAL,  // Host.name = "hy"
-                dynamic_cast<const OperatorNode&>(table_1_expr).OpType());
+                dynamic_cast<const OperatorNode&>(table_1_expr_1).OpType());
+    const auto& table_1_expr_2 = *join_conditions->table_1_exprs.back();
+    AssertEqual(ExprTreeNode::OPERATOR, table_1_expr_2.type());
+    AssertEqual(LT,  // Host.id < 10
+                dynamic_cast<const OperatorNode&>(table_1_expr_2).OpType());
 
     AssertEqual(1, join_conditions->table_2_exprs.size());
     const auto& table_2_expr = *join_conditions->table_2_exprs.front();
@@ -983,6 +989,19 @@ class QueryTest: public UnitTest {
     AssertEqual(1, join_conditions->table_1_exprs.size());
     AssertTrue(join_conditions->table_2_exprs.empty());
     AssertTrue(join_conditions->join_exprs.empty());
+    printf("\n");
+
+    expr = "SELECT Puppy.*, Host.* FROM Puppy, Host "
+           "WHERE Puppy.host_id = Host.id";
+    std::cout << expr << std::endl;
+    AssertTrue(interpreter_->Parse(expr));
+    query = interpreter_->shared_query();
+    AssertTrue(query->FinalizeParsing());
+    join_conditions = query->GroupJoinQueryConditions(query->expr_node_);
+
+    AssertTrue(join_conditions->table_1_exprs.empty());
+    AssertTrue(join_conditions->table_2_exprs.empty());
+    AssertEqual(1, join_conditions->join_exprs.size());
     printf("\n");
   }
 };

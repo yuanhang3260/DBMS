@@ -393,14 +393,18 @@ bool SqlQuery::FinalizeParsing() {
 }
 
 const PhysicalPlan& SqlQuery::PrepareQueryPlan() {
-  GroupPhysicalQueries(expr_node_.get());
-  GenerateQueryPhysicalPlan(expr_node_.get());
-  CreateIteratorsRecursive(expr_node_.get());
-  return expr_node_->physical_plan();
+  return PrepareQueryPlan(expr_node_.get());
+}
+
+const PhysicalPlan& SqlQuery::PrepareQueryPlan(ExprTreeNode* node) {
+  GroupPhysicalQueries(node);
+  GenerateQueryPhysicalPlan(node);
+  CreateIteratorsRecursive(node);
+  return node->physical_plan();
 }
 
 int SqlQuery::ExecuteSelectQuery() {
-  PrepareQueryPlan();
+  PrepareQueryPlan(expr_node_.get());
 
   // Static query.
   // ExecuteSelectQueryFromNode(expr_node_.get());
@@ -453,6 +457,16 @@ SqlQuery::GroupJoinQueryConditions(std::shared_ptr<ExprTreeNode> node) {
       }
       return re;
     } else if (op_node->OpType() == AND) {
+      auto expr_tables = GetExprTables(node.get());
+      if (expr_tables.size() == 1) {
+        if (expr_tables.front() == *tables_.begin()) {
+          re->table_1_exprs.push_back(node);
+        } else {
+          re->table_2_exprs.push_back(node);
+        }
+        return re;
+      }
+
       auto left_re = GroupJoinQueryConditions(node->shared_left());
       auto right_re = GroupJoinQueryConditions(node->shared_right());
       // Merge conditions.
@@ -550,26 +564,14 @@ std::vector<std::string> SqlQuery::GetExprTables(ExprTreeNode* node) {
   return std::vector<std::string>();
 }
 
-int SqlQuery::ExecuteJoinQuery() {
-  // TODO: Support multiple tables JOIN.
-  CHECK(tables_.size() == 2, "Sorry, only two-tables JOIN is supported");
+void SqlQuery::NestedLoopJoin(const JoinQueryConditionGroups& exprs) {
+  auto node_1 = BuildExpressTree(*tables_.begin(), exprs.table_1_exprs);
+  PrepareQueryPlan(node_1.get());
+  std::cout << node_1->physical_plan().plan << std::endl;
 
-  // TODO: Analyze expr tree and extract "ON expr" and "WHERE exprs". Optimize
-  // execution plan.
-
-  // Loop join of two tables.
-  // Create fake nodes for two tables, with physical plan as CONST_TRUE_SCAN.
-  auto create_node = [&] (const std::string& table_name) {
-    std::shared_ptr<ExprTreeNode> node(
-        new ConstValueNode(NodeValue::BoolValue(true)));
-    node->mutable_physical_plan()->plan = PhysicalPlan::CONST_TRUE_SCAN;
-    node->mutable_physical_plan()->table_name = table_name;
-    node->SetIterator(new PhysicalQueryIterator(this, node.get()));
-    return node;
-  };
-
-  auto node_1 = create_node(*tables_.begin());
-  auto node_2 = create_node(*(--tables_.end()));
+  auto node_2 = BuildExpressTree(*(++tables_.begin()), exprs.table_2_exprs);
+  PrepareQueryPlan(node_2.get());
+  std::cout << node_2->physical_plan().plan << std::endl;
 
   results_.tuple_meta = &tuple_meta_;
 
@@ -622,7 +624,20 @@ int SqlQuery::ExecuteJoinQuery() {
     }
     block_tuples_size = 0;
   }
+}
 
+int SqlQuery::ExecuteJoinQuery() {
+  // TODO: Support multiple tables JOIN.
+  CHECK(tables_.size() == 2, "Sorry, only two-tables JOIN is supported");
+
+  // Analyze expr tree and extract expression tree for both table and JOIN
+  // itself, and choose execution plan.
+  auto condition_exprs = GroupJoinQueryConditions(expr_node_);
+
+  // Join.
+  NestedLoopJoin(*condition_exprs);
+
+  // Aggregation and sort.
   if (aggregated_columns_num_ > 0) {
     AggregateResults();
   }
@@ -638,15 +653,31 @@ int SqlQuery::ExecuteJoinQuery() {
   return results_.NumTuples();
 }
 
-int SqlQuery::ExecuteSelectQueryFromNode(ExprTreeNode* node) {
-  const auto& this_plan = node->physical_plan();
-  const std::string& table_name = this_plan.table_name;
-  if (this_plan.plan == PhysicalPlan::CONST_FALSE_SKIP) {
-    return 0;
+std::shared_ptr<ExprTreeNode> SqlQuery::BuildExpressTree(
+    const std::string& table_name,
+    const std::vector<std::shared_ptr<ExprTreeNode>>& exprs) {
+  if (exprs.empty()) {
+    // No expression, create a CONST_TRUE_SCAN_NODE
+    std::shared_ptr<ExprTreeNode> root(
+        new ConstValueNode(NodeValue::BoolValue(true)));
+    root->mutable_physical_plan()->table_name = table_name;
+    return root;
   }
 
+  std::shared_ptr<ExprTreeNode> root = exprs.front();
+  auto iter = ++exprs.begin();
+  while (iter != exprs.end()) {
+    std::shared_ptr<ExprTreeNode> new_root(new OperatorNode(AND, root, *iter));
+    root = new_root;
+    iter++;
+  }
+  return root;
+}
+
+void SqlQuery::CreateIteratorsRecursive(ExprTreeNode* node) {
   if (node->physical_query_root()) {
-    return Do_ExecutePhysicalQuery(node);
+    node->SetIterator(new PhysicalQueryIterator(this, node));
+    return;
   }
 
   CHECK(node->type() == ExprTreeNode::OPERATOR,
@@ -655,161 +686,20 @@ int SqlQuery::ExecuteSelectQueryFromNode(ExprTreeNode* node) {
 
   OperatorNode* op_node = dynamic_cast<OperatorNode*>(node);
   if (op_node->OpType() == AND) {
-    CHECK(this_plan.plan == PhysicalPlan::POP,
-          Strings::StrCat("Expect AND node plan to be POP, but got ",
-                          PhysicalPlan::PlanStr(this_plan.plan)));
-    ExprTreeNode *pop_node = nullptr, *other_node = nullptr;
-    if (this_plan.pop_node == PhysicalPlan::LEFT) {
-      pop_node = node->left();
-      other_node = node->right();
-    } else if (this_plan.pop_node == PhysicalPlan::RIGHT) {
-      pop_node = node->right();
-      other_node = node->left();
-    } else {
-      LogFATAL("No pop node to fetch result for AND node");
-    }
-    ExecuteSelectQueryFromNode(pop_node);
-    if (other_node->physical_plan().plan == PhysicalPlan::CONST_TRUE_SCAN) {
-      // The other node returns const true. No need to verify. Pop all fetched
-      // tuples up.
-      *node->mutable_results() = std::move(*pop_node->mutable_results());
-    } else {
-      // Evaluate fetched tuples on the other node.
-      node->mutable_results()->tuple_meta = &tuple_meta_;
-      for (auto& tuple : pop_node->mutable_results()->tuples) {
-        NodeValue result = other_node->Evaluate(tuple);
-        if (result.v_bool) {
-          node->mutable_results()->AddTuple(std::move(tuple));
-        }
-      }
-    }
+    node->SetIterator(new AndNodeIterator(this, node));
   } else if (op_node->OpType() == OR) {
-    CHECK(this_plan.plan == PhysicalPlan::POP,
-          Strings::StrCat("Expect OR node plan to be POP, but got ",
-                          PhysicalPlan::PlanStr(this_plan.plan)));
-
-    int left_re = ExecuteSelectQueryFromNode(node->left());
-    int right_re = ExecuteSelectQueryFromNode(node->right());
-    if (left_re <= 0 && right_re <= 0) {
-      // Is it possible?
-      return 0;
-    }
-
-    // TODO: This only applies to single table query. Sort and remove
-    // duplication based on the primary key.
-    node->mutable_results()->tuple_meta = &tuple_meta_;
-    auto table_m = FindTable(table_name);
-    CHECK(table_m != nullptr,
-          Strings::StrCat("Couldn't find table ", table_name));
-
-    node->mutable_results()->MergeSortResultsRemoveDup(
-        *node->left()->mutable_results(), *node->right()->mutable_results(),
-        table_name, table_m->PrimaryIndex());
+    node->SetIterator(new OrNodeIterator(this, node));
   } else {
-    LogFATAL("Unexpected OP type for OPERATOR node %s",
+    LogFATAL("Unexpected operator type %s",
              OpTypeStr(op_node->OpType()).c_str());
   }
 
-  return node->results().NumTuples();
-}
-
-int SqlQuery::Do_ExecutePhysicalQuery(ExprTreeNode* node) {
-  const auto& physical_plan = node->physical_plan();
-  if (physical_plan.plan == PhysicalPlan::CONST_FALSE_SKIP) {
-    return 0;
+  if (node->left()) {
+    CreateIteratorsRecursive(node->left());
   }
-
-  // Get table and search.
-  const auto& table_name = physical_plan.table_name;
-  auto* table = db_->GetTable(table_name);
-  CHECK(table != nullptr, "Can't get table %s", table_name.c_str());
-
-  // Add table record meta.
-  tuple_meta_.emplace(table_name, TableRecordMeta());
-  tuple_meta_[table_name].CreateDataRecordMeta(table->schema());
-  node->mutable_results()->tuple_meta = &tuple_meta_;
-
-  if (physical_plan.plan == PhysicalPlan::SEARCH) {
-    printf("search\n");
-    CHECK(!physical_plan.conditions.empty(), "No condition to search");
-    const auto& first_condition = physical_plan.conditions.front();
-    if (first_condition.op == EQUAL) {
-      DB::SearchOp search_op;
-      search_op.field_indexes.push_back(first_condition.column.index);
-      search_op.AddKey()->AddField(
-          first_condition.value.ToSchemaField(first_condition.column.type));
-
-      std::vector<std::shared_ptr<Storage::RecordBase>> records;
-      table->SearchRecords(search_op, &records);
-      for (const auto& record : records) {
-        auto tuple = FetchedResult::Tuple();
-        tuple.emplace(table_name, ResultRecord(record));
-        if (node->Evaluate(tuple).v_bool) {
-          node->mutable_results()->AddTuple(std::move(tuple));
-        }
-      }
-    } else {
-      DB::SearchOp range_search_op;
-      range_search_op.reset();
-      range_search_op.field_indexes.push_back(first_condition.column.index);
-      for (const auto& condition : physical_plan.conditions) {
-        if (condition.op == GE) {
-          range_search_op.AddLeftKey()->AddField(
-              condition.value.ToSchemaField(condition.column.type));
-          range_search_op.left_open = false;
-        } else if (condition.op == GT) {
-          range_search_op.AddLeftKey()->AddField(
-              condition.value.ToSchemaField(condition.column.type));
-          range_search_op.left_open = true;
-        } else if (condition.op == LT) {
-          range_search_op.AddRightKey()->AddField(
-              condition.value.ToSchemaField(condition.column.type));
-          range_search_op.right_open = true;
-        } else if (condition.op == LE) {
-          range_search_op.AddRightKey()->AddField(
-              condition.value.ToSchemaField(condition.column.type));
-          range_search_op.right_open = false;
-        } else {
-          LogFATAL("Unexpected op %s", OpTypeStr(condition.op).c_str());
-        }
-      }
-
-      std::vector<std::shared_ptr<Storage::RecordBase>> records;
-      table->SearchRecords(range_search_op, &records);
-      for (const auto& record : records) {
-        auto tuple = FetchedResult::Tuple();
-        tuple.emplace(table_name, ResultRecord(record));
-        if (node->Evaluate(tuple).v_bool) {
-          node->mutable_results()->AddTuple(std::move(tuple));
-        }
-      }
-    }
-  } else if (physical_plan.plan == PhysicalPlan::SCAN) {
-    printf("scan\n");
-
-    std::vector<std::shared_ptr<Storage::RecordBase>> records;
-    table->ScanRecords(&records);
-    for (const auto& record : records) {
-      auto tuple = FetchedResult::Tuple();
-      tuple.emplace(table_name, ResultRecord(record));
-      auto match = node->Evaluate(tuple);
-      if (!match.v_bool) {
-        continue;
-      }
-      node->mutable_results()->AddTuple(std::move(tuple));
-    }
-  } else if (physical_plan.plan == PhysicalPlan::CONST_TRUE_SCAN) {
-    printf("const true scan\n");
-
-    std::vector<std::shared_ptr<Storage::RecordBase>> records;
-    table->ScanRecords(&records);
-    for (const auto& record : records) {
-      auto tuple = FetchedResult::Tuple();
-      tuple.emplace(table_name, ResultRecord(record));
-      node->mutable_results()->AddTuple(std::move(tuple));
-    }
+  if (node->right()) {
+    CreateIteratorsRecursive(node->right());
   }
-  return node->mutable_results()->tuples.size();
 }
 
 bool SqlQuery::GroupPhysicalQueries(ExprTreeNode* node) {
@@ -843,34 +733,6 @@ bool SqlQuery::GroupPhysicalQueries(ExprTreeNode* node) {
   }
 
   return re;
-}
-
-void SqlQuery::CreateIteratorsRecursive(ExprTreeNode* node) {
-  if (node->physical_query_root()) {
-    node->SetIterator(new PhysicalQueryIterator(this, node));
-    return;
-  }
-
-  CHECK(node->type() == ExprTreeNode::OPERATOR,
-        Strings::StrCat("Expect OPERATOR node, but got ",
-                        ExprTreeNode::NodeTypeStr(node->type()).c_str()));
-
-  OperatorNode* op_node = dynamic_cast<OperatorNode*>(node);
-  if (op_node->OpType() == AND) {
-    node->SetIterator(new AndNodeIterator(this, node));
-  } else if (op_node->OpType() == OR) {
-    node->SetIterator(new OrNodeIterator(this, node));
-  } else {
-    LogFATAL("Unexpected operator type %s",
-             OpTypeStr(op_node->OpType()).c_str());
-  }
-
-  if (node->left()) {
-    CreateIteratorsRecursive(node->left());
-  }
-  if (node->right()) {
-    CreateIteratorsRecursive(node->right());
-  }
 }
 
 PhysicalPlan* SqlQuery::GenerateQueryPhysicalPlan(ExprTreeNode* node) {
@@ -1433,6 +1295,181 @@ void SqlQuery::EvaluateQueryConditions(PhysicalPlan* physical_plan) {
     physical_plan->query_ratio = 1.0;
   }
   physical_plan->table_name = table_name;
+}
+
+// Deprecated: Use pipelined execution.
+int SqlQuery::ExecuteSelectQueryFromNode(ExprTreeNode* node) {
+  const auto& this_plan = node->physical_plan();
+  const std::string& table_name = this_plan.table_name;
+  if (this_plan.plan == PhysicalPlan::CONST_FALSE_SKIP) {
+    return 0;
+  }
+
+  if (node->physical_query_root()) {
+    return Do_ExecutePhysicalQuery(node);
+  }
+
+  CHECK(node->type() == ExprTreeNode::OPERATOR,
+        Strings::StrCat("Expect OPERATOR node, but got ",
+                        ExprTreeNode::NodeTypeStr(node->type()).c_str()));
+
+  OperatorNode* op_node = dynamic_cast<OperatorNode*>(node);
+  if (op_node->OpType() == AND) {
+    CHECK(this_plan.plan == PhysicalPlan::POP,
+          Strings::StrCat("Expect AND node plan to be POP, but got ",
+                          PhysicalPlan::PlanStr(this_plan.plan)));
+    ExprTreeNode *pop_node = nullptr, *other_node = nullptr;
+    if (this_plan.pop_node == PhysicalPlan::LEFT) {
+      pop_node = node->left();
+      other_node = node->right();
+    } else if (this_plan.pop_node == PhysicalPlan::RIGHT) {
+      pop_node = node->right();
+      other_node = node->left();
+    } else {
+      LogFATAL("No pop node to fetch result for AND node");
+    }
+    ExecuteSelectQueryFromNode(pop_node);
+    if (other_node->physical_plan().plan == PhysicalPlan::CONST_TRUE_SCAN) {
+      // The other node returns const true. No need to verify. Pop all fetched
+      // tuples up.
+      *node->mutable_results() = std::move(*pop_node->mutable_results());
+    } else {
+      // Evaluate fetched tuples on the other node.
+      node->mutable_results()->tuple_meta = &tuple_meta_;
+      for (auto& tuple : pop_node->mutable_results()->tuples) {
+        NodeValue result = other_node->Evaluate(tuple);
+        if (result.v_bool) {
+          node->mutable_results()->AddTuple(std::move(tuple));
+        }
+      }
+    }
+  } else if (op_node->OpType() == OR) {
+    CHECK(this_plan.plan == PhysicalPlan::POP,
+          Strings::StrCat("Expect OR node plan to be POP, but got ",
+                          PhysicalPlan::PlanStr(this_plan.plan)));
+
+    int left_re = ExecuteSelectQueryFromNode(node->left());
+    int right_re = ExecuteSelectQueryFromNode(node->right());
+    if (left_re <= 0 && right_re <= 0) {
+      // Is it possible?
+      return 0;
+    }
+
+    // Sort and remove duplication based on the primary key.
+    node->mutable_results()->tuple_meta = &tuple_meta_;
+    auto table_m = FindTable(table_name);
+    CHECK(table_m != nullptr,
+          Strings::StrCat("Couldn't find table ", table_name));
+
+    node->mutable_results()->MergeSortResultsRemoveDup(
+        *node->left()->mutable_results(), *node->right()->mutable_results(),
+        table_name, table_m->PrimaryIndex());
+  } else {
+    LogFATAL("Unexpected OP type for OPERATOR node %s",
+             OpTypeStr(op_node->OpType()).c_str());
+  }
+
+  return node->results().NumTuples();
+}
+
+// Deprecated: Use pipelined execution.
+int SqlQuery::Do_ExecutePhysicalQuery(ExprTreeNode* node) {
+  const auto& physical_plan = node->physical_plan();
+  if (physical_plan.plan == PhysicalPlan::CONST_FALSE_SKIP) {
+    return 0;
+  }
+
+  // Get table and search.
+  const auto& table_name = physical_plan.table_name;
+  auto* table = db_->GetTable(table_name);
+  CHECK(table != nullptr, "Can't get table %s", table_name.c_str());
+
+  // Add table record meta.
+  tuple_meta_.emplace(table_name, TableRecordMeta());
+  tuple_meta_[table_name].CreateDataRecordMeta(table->schema());
+  node->mutable_results()->tuple_meta = &tuple_meta_;
+
+  if (physical_plan.plan == PhysicalPlan::SEARCH) {
+    printf("search\n");
+    CHECK(!physical_plan.conditions.empty(), "No condition to search");
+    const auto& first_condition = physical_plan.conditions.front();
+    if (first_condition.op == EQUAL) {
+      DB::SearchOp search_op;
+      search_op.field_indexes.push_back(first_condition.column.index);
+      search_op.AddKey()->AddField(
+          first_condition.value.ToSchemaField(first_condition.column.type));
+
+      std::vector<std::shared_ptr<Storage::RecordBase>> records;
+      table->SearchRecords(search_op, &records);
+      for (const auto& record : records) {
+        auto tuple = FetchedResult::Tuple();
+        tuple.emplace(table_name, ResultRecord(record));
+        if (node->Evaluate(tuple).v_bool) {
+          node->mutable_results()->AddTuple(std::move(tuple));
+        }
+      }
+    } else {
+      DB::SearchOp range_search_op;
+      range_search_op.reset();
+      range_search_op.field_indexes.push_back(first_condition.column.index);
+      for (const auto& condition : physical_plan.conditions) {
+        if (condition.op == GE) {
+          range_search_op.AddLeftKey()->AddField(
+              condition.value.ToSchemaField(condition.column.type));
+          range_search_op.left_open = false;
+        } else if (condition.op == GT) {
+          range_search_op.AddLeftKey()->AddField(
+              condition.value.ToSchemaField(condition.column.type));
+          range_search_op.left_open = true;
+        } else if (condition.op == LT) {
+          range_search_op.AddRightKey()->AddField(
+              condition.value.ToSchemaField(condition.column.type));
+          range_search_op.right_open = true;
+        } else if (condition.op == LE) {
+          range_search_op.AddRightKey()->AddField(
+              condition.value.ToSchemaField(condition.column.type));
+          range_search_op.right_open = false;
+        } else {
+          LogFATAL("Unexpected op %s", OpTypeStr(condition.op).c_str());
+        }
+      }
+
+      std::vector<std::shared_ptr<Storage::RecordBase>> records;
+      table->SearchRecords(range_search_op, &records);
+      for (const auto& record : records) {
+        auto tuple = FetchedResult::Tuple();
+        tuple.emplace(table_name, ResultRecord(record));
+        if (node->Evaluate(tuple).v_bool) {
+          node->mutable_results()->AddTuple(std::move(tuple));
+        }
+      }
+    }
+  } else if (physical_plan.plan == PhysicalPlan::SCAN) {
+    printf("scan\n");
+
+    std::vector<std::shared_ptr<Storage::RecordBase>> records;
+    table->ScanRecords(&records);
+    for (const auto& record : records) {
+      auto tuple = FetchedResult::Tuple();
+      tuple.emplace(table_name, ResultRecord(record));
+      auto match = node->Evaluate(tuple);
+      if (!match.v_bool) {
+        continue;
+      }
+      node->mutable_results()->AddTuple(std::move(tuple));
+    }
+  } else if (physical_plan.plan == PhysicalPlan::CONST_TRUE_SCAN) {
+    printf("const true scan\n");
+
+    std::vector<std::shared_ptr<Storage::RecordBase>> records;
+    table->ScanRecords(&records);
+    for (const auto& record : records) {
+      auto tuple = FetchedResult::Tuple();
+      tuple.emplace(table_name, ResultRecord(record));
+      node->mutable_results()->AddTuple(std::move(tuple));
+    }
+  }
+  return node->mutable_results()->tuples.size();
 }
 
 void SqlQuery::AggregateResults() {
