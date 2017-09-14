@@ -1,10 +1,16 @@
 #include "Strings/Split.h"
 #include "Strings/Utils.h"
+#include "Utility/CleanUp.h"
+#include "Utility/Uuid.h"
 
 #include "Database/Database.h"
 #include "Database/Operation.h"
 #include "Query/SqlQuery.h"
+#include "Storage/FlatTupleFile.h"
 #include "Storage/Record.h"
+
+using Storage::FlatTupleFile;
+using Storage::FlatTupleFileOptions;
 
 namespace Query {
 
@@ -626,6 +632,158 @@ void SqlQuery::NestedLoopJoin(const JoinQueryConditionGroups& exprs) {
   }
 }
 
+void SqlQuery::SortMergeJoin(const JoinQueryConditionGroups& exprs) {
+  auto node_1 = BuildExpressTree(*tables_.begin(), exprs.table_1_exprs);
+  PrepareQueryPlan(node_1.get());
+
+  auto node_2 = BuildExpressTree(*(++tables_.begin()), exprs.table_2_exprs);
+  PrepareQueryPlan(node_2.get());
+
+  results_.tuple_meta = &tuple_meta_;
+
+  // Fetch records from 2 tables and materialize to tmpfiles.
+  auto dump_and_sort_tuples_to_file = [&] (
+      std::shared_ptr<ExprTreeNode> node,
+      const std::string& table_name,
+      const std::vector<Query::Column>& sort_columns) {
+    auto* iter = node->GetIterator();
+    std::shared_ptr<FlatTupleFile> ft_file;
+    while (true) {
+      auto tuple = iter->GetNextTuple();
+      if (!tuple) {
+        break;
+      }
+      if (!ft_file) {
+        FlatTupleFileOptions opts(tuple_meta_, {table_name});
+        opts.db_name = db_->catalog().name();
+        opts.txn_id = 0;  // TODO: Add transaction id.
+        ft_file = std::make_shared<FlatTupleFile>(opts);
+        if (!ft_file->InitForWriting()) {
+          ft_file.reset();
+          return ft_file;
+        }
+      }
+      if (!ft_file->WriteTuple(*tuple)) {
+        LogERROR("Failed to write tuple to tmpfile");
+      }
+    }
+    if (!ft_file->FinishWriting()) {
+      ft_file->DeleteFile();
+      ft_file.reset();
+      return ft_file;
+    }
+
+    // Sort records.
+    if (!ft_file->Sort(sort_columns)) {
+      LogERROR("Failed to sort results from table %s", table_name.c_str());
+      ft_file.reset();
+      return ft_file;
+    }
+    return ft_file;
+  };
+
+  // Tmpfiles.
+  std::shared_ptr<FlatTupleFile> ft_file_1, ft_file_2;
+  auto cleanup = Utility::CleanUp([&] {
+    ft_file_1->DeleteFile();
+    ft_file_2->DeleteFile();
+  });
+
+  // Get join columns for both tables, respectively.
+  std::vector<Query::Column> join_column_1, join_column_2;
+  const ColumnNode& left_node =
+      dynamic_cast<const ColumnNode&>(*exprs.join_exprs.at(0)->left());
+  const ColumnNode& right_node =
+      dynamic_cast<const ColumnNode&>(*exprs.join_exprs.at(0)->right());
+  if (left_node.column().table_name == *tables_.begin()) {
+    join_column_1.push_back(left_node.column());
+    join_column_2.push_back(right_node.column());
+  } else {
+    CHECK(right_node.column().table_name == *tables_.begin(),
+          "table name %s doesn't match JOIN condition",
+          tables_.begin()->c_str());
+    join_column_1.push_back(right_node.column());
+    join_column_2.push_back(left_node.column());
+  }
+
+  // Do load and sort.
+  ft_file_1 = dump_and_sort_tuples_to_file(node_1, *tables_.begin(),
+                                           join_column_1);
+  if (!ft_file_1) {
+    LogERROR("Failed to dump results from table %s",
+             (*tables_.begin()).c_str());
+    return;
+  }
+
+  ft_file_2 = dump_and_sort_tuples_to_file(node_2, *(++tables_.begin()),
+                                           join_column_2);
+  if (!ft_file_2) {
+    LogERROR("Failed to dump results from table %s",
+             (*(++tables_.begin())).c_str());
+    return;
+  }
+
+  // Merge join.
+  if (!ft_file_1->InitForReading()) {
+    LogERROR("Failed to init reading for tmpfile 1");
+    return;
+  }
+  if (!ft_file_2->InitForReading()) {
+    LogERROR("Failed to init reading for tmpfile 2");
+    return;
+  }
+
+  FlatTupleFile::ReadSnapshot snapshot_1 = ft_file_1->TakeReadSnapshot();
+  std::shared_ptr<FetchedResult::Tuple> tuple_1 = ft_file_1->NextTuple();
+  std::shared_ptr<FetchedResult::Tuple> tuple_2 = ft_file_2->NextTuple();
+  while (tuple_1 && tuple_2) {
+    while (tuple_1 &&
+           FetchedResult::CompareBasedOnColumns(
+              *tuple_1, join_column_1, *tuple_2, join_column_2) < 0) {
+      snapshot_1 = ft_file_1->TakeReadSnapshot();
+      tuple_1 = ft_file_1->NextTuple();
+    }
+    if (!tuple_1) {
+      break;
+    }
+
+    while (tuple_2 &&
+           FetchedResult::CompareBasedOnColumns(
+              *tuple_1, join_column_1, *tuple_2, join_column_2) > 0) {
+      tuple_2 = ft_file_2->NextTuple();
+    }
+    if (!tuple_2) {
+      break;
+    }
+
+    std::shared_ptr<FetchedResult::Tuple> tuple_1_flag = tuple_1;
+    std::shared_ptr<FetchedResult::Tuple> tuple_2_flag = tuple_2;
+    while (tuple_2) {
+      if (FetchedResult::CompareBasedOnColumns(
+            *tuple_2_flag, *tuple_2, join_column_2) < 0) {
+        break;
+      }
+      // Traverse tuple_1 group and merge with this tuple_2.
+      ft_file_1->RestoreReadSnapshot(snapshot_1);
+      while (true) {
+        tuple_1 = ft_file_1->NextTuple();
+        if (!tuple_1) {
+          break;
+        }
+        if (FetchedResult::CompareBasedOnColumns(
+              *tuple_1_flag, *tuple_1, join_column_1) < 0) {
+          break;
+        }
+        auto tuple = FetchedResult::MergeTuples(*tuple_1, *tuple_2);
+        if (expr_node_->Evaluate(*tuple).v_bool) {
+          results_.AddTuple(std::move(*tuple));
+        }
+      }
+      tuple_2 = ft_file_2->NextTuple();
+    }
+  }
+}
+
 int SqlQuery::ExecuteJoinQuery() {
   // TODO: Support multiple tables JOIN.
   CHECK(tables_.size() == 2, "Sorry, only two-tables JOIN is supported");
@@ -634,8 +792,9 @@ int SqlQuery::ExecuteJoinQuery() {
   // itself, and choose execution plan.
   auto condition_exprs = GroupJoinQueryConditions(expr_node_);
 
-  // Join.
-  NestedLoopJoin(*condition_exprs);
+  // Join. TODO: choose optimal JOIN plan based on join conditions.
+  //NestedLoopJoin(*condition_exprs);
+  SortMergeJoin(*condition_exprs);
 
   // Aggregation and sort.
   if (aggregated_columns_num_ > 0) {

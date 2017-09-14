@@ -54,6 +54,9 @@ struct FetchedResult {
   void reset();
 
   static int CompareBasedOnColumns(
+      const Tuple& t1, const std::vector<Column>& columns_1,
+      const Tuple& t2, const std::vector<Column>& columns_2);
+  static int CompareBasedOnColumns(
       const Tuple& t1, const Tuple& t2, const std::vector<Column>& columns);
 
   void SortByColumns(const std::vector<Column>& columns);

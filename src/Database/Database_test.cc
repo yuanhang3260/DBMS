@@ -540,6 +540,21 @@ class DatabaseTest: public UnitTest {
     AssertTrue(VerifyResult(query->expr_root(), query->results()));
     interpreter_->reset();
     printf("\n");
+
+    expr = "SELECT Puppy.*, Host.* FROM Puppy, Host "
+           "WHERE Puppy.host_id = Host.id AND "
+           "Host.name = \"hy\"";
+    std::cout << expr << std::endl;
+    AssertTrue(interpreter_->Parse(expr));
+    query = interpreter_->shared_query();
+    AssertTrue(query->FinalizeParsing());
+    num_results = query->ExecuteJoinQuery();
+    printf("num_results = %d\n", num_results);
+    query->PrintResults();
+    AssertEqual(ExpectedJoinResultNum(query->expr_root()), num_results);
+    AssertTrue(VerifyResult(query->expr_root(), query->results()));
+    interpreter_->reset();
+    printf("\n");
   }
 };
 

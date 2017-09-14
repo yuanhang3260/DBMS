@@ -134,39 +134,51 @@ void FetchedResult::PrintTuple(const Tuple& tuple) {
 }
 
 int FetchedResult::CompareBasedOnColumns(
-    const Tuple& t1, const Tuple& t2,
-    const std::vector<Column>& columns) {
-  for (const Column& column : columns) {
-    auto it = t1.find(column.table_name);
+    const Tuple& t1, const std::vector<Column>& columns_1,
+    const Tuple& t2, const std::vector<Column>& columns_2) {
+  CHECK(columns_1.size() == columns_2.size(),
+        "Comparing tuples with different number of columns");
+  uint32 num_columns = columns_1.size();
+
+  for (uint32 i = 0; i < num_columns; i++) {
+    const Column& column_1 = columns_1.at(i);
+    auto it = t1.find(column_1.table_name);
     CHECK(it != t1.end(),
-          Strings::StrCat("Couldn't find record of table ", column.table_name,
+          Strings::StrCat("Couldn't find record of table ", column_1.table_name,
                           " from tuple 1"));
     const auto& record_1 = it->second;
     CHECK(record_1.meta != nullptr,
           Strings::StrCat("Couldn't find record meta of table ",
-                          column.table_name,
+                          column_1.table_name,
                           " from tuple 1"));
 
-    it = t2.find(column.table_name);
+    const Column& column_2 = columns_2.at(i);
+    it = t2.find(column_2.table_name);
     CHECK(it != t2.end(),
-          Strings::StrCat("Couldn't find record of table ", column.table_name,
+          Strings::StrCat("Couldn't find record of table ", column_2.table_name,
                           " from tuple 2"));
     const auto& record_2 = it->second;
     CHECK(record_2.meta != nullptr,
           Strings::StrCat("Couldn't find record meta of table ",
-                          column.table_name,
+                          column_2.table_name,
                           " from tuple 2"));
 
-    CHECK(record_1.meta == record_2.meta,
-          "Comparing table records with different meta");
+    // CHECK(record_1.meta == record_2.meta,
+    //       "Comparing table records with different meta");
 
-    int re = RecordBase::CompareSchemaFields(record_1.GetField(column.index),
-                                             record_2.GetField(column.index));
+    int re = RecordBase::CompareSchemaFields(record_1.GetField(column_1.index),
+                                             record_2.GetField(column_2.index));
     if (re != 0) {
       return re;
     }
   }
   return 0;
+}
+
+int FetchedResult::CompareBasedOnColumns(
+    const Tuple& t1, const Tuple& t2,
+    const std::vector<Column>& columns) {
+  return CompareBasedOnColumns(t1, columns, t2, columns);
 }
 
 void FetchedResult::SortByColumns(const std::vector<Column>& columns) {

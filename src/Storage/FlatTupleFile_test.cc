@@ -275,12 +275,12 @@ class FlatTupleFileTest: public UnitTest {
     AssertTrue(ft_file_->InitForReading());
 
     // Begin random reading.
-    for (uint32 times = 0; times < 30; times++) {
+    for (uint32 times = 0; times < 50; times++) {
       // Pick up a random tuple.
       int32 begin_tuple_index = Utils::RandomNumber(kNumRecordsSource);
       std::shared_ptr<Query::FetchedResult::Tuple> tuple_1;
       FlatTupleFile::ReadSnapshot snapshot_1;
-      for (int32 i = 0; i < begin_tuple_index; i++) {
+      for (int32 i = 0; i <= begin_tuple_index; i++) {
         snapshot_1 = ft_file_->TakeReadSnapshot();
         tuple_1 = ft_file_->NextTuple();
         AssertTrue(tuple_1.get());
@@ -298,7 +298,7 @@ class FlatTupleFileTest: public UnitTest {
       }
 
       // Restore snapshots, repeating 10 times.
-      for (int j = 0; j < 10; j++) {
+      for (int j = 0; j < 3; j++) {
         // Restore to first tuple position and re-read.
         AssertTrue(ft_file_->RestoreReadSnapshot(snapshot_1));
         auto new_tuple_1 = ft_file_->NextTuple();
@@ -311,6 +311,19 @@ class FlatTupleFileTest: public UnitTest {
         // Restore to second tuple position and re-read.
         AssertTrue(ft_file_->RestoreReadSnapshot(snapshot_2));
         auto new_tuple_2 = ft_file_->NextTuple();
+        AssertTrue(new_tuple_2.get());
+        AssertTrue(*(tuple_2->at(kPuppyTableName).record) ==
+                   *(new_tuple_2->at(kPuppyTableName).record));
+        AssertTrue(*(tuple_2->at(kHostTableName).record) ==
+                   *(new_tuple_2->at(kHostTableName).record));
+
+        // Go back to first tuple. This time iterate one by one until reaching
+        // the second tuple.
+        AssertTrue(ft_file_->RestoreReadSnapshot(snapshot_1));
+        new_tuple_1 = ft_file_->NextTuple();
+        for (int k = 0; k < (end_tuple_index - begin_tuple_index); k++) {
+          new_tuple_2 = ft_file_->NextTuple();
+        }
         AssertTrue(new_tuple_2.get());
         AssertTrue(*(tuple_2->at(kPuppyTableName).record) ==
                    *(new_tuple_2->at(kPuppyTableName).record));

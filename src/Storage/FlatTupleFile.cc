@@ -74,7 +74,7 @@ std::pair<uint32, byte*> FlatTuplePage::GetNextTuple() {
 
 bool FlatTuplePage::Restore(uint32 tindex, uint32 offset) {
   memcpy(&num_tuples_, data_, sizeof(num_tuples_));
-  tindex = crt_tindex_;
+  crt_tindex_ = tindex;
   crt_offset_ = offset;
   return true;
 }
@@ -202,6 +202,7 @@ bool FlatTupleFile::InitForReading() {
     return false;
   }
   buf_page_.reset();
+  crt_page_num_ = 0;
   return true;
 }
 
@@ -227,6 +228,7 @@ bool FlatTupleFile::InitForWriting() {
     return false;
   }
   buf_page_.reset();
+  crt_page_num_ = 0;
   return true;
 }
 
@@ -320,6 +322,11 @@ FlatTupleFile::ReadSnapshot FlatTupleFile::TakeReadSnapshot() const {
       snapshot.page_tuple_index = buf_page_->crt_tindex();
       snapshot.page_tuples = buf_page_->num_tuples();
     }
+  } else {
+    // Buffer page is not loadd. This is the initial state for reading.
+    snapshot.page_offset = sizeof(uint32);
+    snapshot.page_tuple_index = 0;
+    snapshot.page_num = 0;
   }
   return snapshot;
 }
@@ -342,7 +349,6 @@ bool FlatTupleFile::RestoreReadSnapshot(const ReadSnapshot& snapshot) {
     crt_page_num_ = snapshot.page_num;
     buf_page_ = std::move(new_buf_page_);
   }
-
   return buf_page_->Restore(snapshot.page_tuple_index, snapshot.page_offset);
 }
 
@@ -389,10 +395,12 @@ bool FlatTupleFile::FinishWriting() {
 }
 
 bool FlatTupleFile::DeleteFile() {
-  int re = file_descriptor_->Close();
-  if (re != 0) {
-    LogERROR("Failed to close file %s", filename_.c_str());
-    return false;
+  if (file_descriptor_) {
+    int re = file_descriptor_->Close();
+    if (re != 0) {
+      LogERROR("Failed to close file %s", filename_.c_str());
+      return false;
+    }
   }
 
   if (!FileSystem::Remove(filename_)) {

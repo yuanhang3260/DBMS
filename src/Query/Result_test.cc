@@ -126,7 +126,7 @@ int main() {
   Query::CommonTest test;
   test.setup();
 
-  //test.Test_SortByColumn();
+  test.Test_SortByColumn();
   test.Test_MergeSortResultsRemoveDup();
 
   test.teardown();

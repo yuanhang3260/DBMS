@@ -154,6 +154,8 @@ class SqlQuery {
 
   // Do nested block loop join.
   void NestedLoopJoin(const JoinQueryConditionGroups& exprs);
+  // Do sort merge join.
+  void SortMergeJoin(const JoinQueryConditionGroups& exprs);
 
   // Build expression tree for a single table based on list of sub-conditions.
   // All sub-conditions are logically connected by AND.
