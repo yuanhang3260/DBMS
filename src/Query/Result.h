@@ -32,55 +32,80 @@ struct ResultRecord {
   void AddField(Schema::Field* field);
 };
 
-struct FetchedResult {
-  using Tuple = std::map<std::string, ResultRecord>;
-  using TupleMeta = std::map<std::string, TableRecordMeta>;
+using TupleMeta = std::map<std::string, TableRecordMeta>;
 
-  std::vector<Tuple> tuples;
-  TupleMeta* tuple_meta;
+struct Tuple {
+  // Table name -> ResultRecord
+  std::map<std::string, ResultRecord> records;
 
-  bool AddTuple(const Tuple& tuple);
-  bool AddTuple(Tuple&& tuple);
+  uint32 size() const;
+  void Print() const;
 
-  static uint32 TupleSize(const Tuple& tuple);
-  static void PrintTuple(const Tuple& tuple);
-
-  static bool AddTupleMeta(Tuple* tuple, TupleMeta* meta);
+  const ResultRecord* GetTableRecord(const std::string& table_name) const;
+  ResultRecord* MutableTableRecord(const std::string& table_name);
+  bool AddTableRecord(const std::string& table_name,
+                      std::shared_ptr<Storage::RecordBase> record);
+  bool AddMeta(const TupleMeta& meta);
 
   static std::shared_ptr<Tuple> MergeTuples(const Tuple& t1, const Tuple& t2);
-
-  int NumTuples() const { return tuples.size(); }
-
-  void reset();
 
   static int CompareBasedOnColumns(
       const Tuple& t1, const std::vector<Column>& columns_1,
       const Tuple& t2, const std::vector<Column>& columns_2);
   static int CompareBasedOnColumns(
       const Tuple& t1, const Tuple& t2, const std::vector<Column>& columns);
+};
 
+class ResultContainer {
+ public:
+  // TODO: Random access should NOT be supported.
+  std::shared_ptr<Tuple> GetTuple(uint32 index);
+  std::shared_ptr<Tuple> GetNextTuple();
+
+  bool AddTuple(std::shared_ptr<Tuple> tuple);
+  bool AddTuple(const Tuple& tuple);
+  bool AddTuple(Tuple&& tuple);
+
+  uint32 NumTuples() const { return tuples_.size(); }
+
+  void SetTupleMeta(TupleMeta* tuple_meta) { tuple_meta_ = tuple_meta; }
+  TupleMeta* GetTupleMeta() { return tuple_meta_; }
+
+  void reset();
+
+  // Sort tuples by given columns.
   void SortByColumns(const std::vector<Column>& columns);
   void SortByColumns(const std::string& table_name,
                      const std::vector<uint32>& field_indexes);
 
   // Take two set of results, sort and merge them by columns.
-  void MergeSortResults(FetchedResult& result_1,
-                        FetchedResult& result_2,
+  void MergeSortResults(ResultContainer& result_1,
+                        ResultContainer& result_2,
                         const std::vector<Column>& columns);
 
-  void MergeSortResults(FetchedResult& result_1,
-                        FetchedResult& result_2,
+  void MergeSortResults(ResultContainer& result_1,
+                        ResultContainer& result_2,
                         const std::string& table_name,
                         const std::vector<uint32>& field_indexes);
 
-  void MergeSortResultsRemoveDup(FetchedResult& result_1,
-                                 FetchedResult& result_2,
+  void MergeSortResultsRemoveDup(ResultContainer& result_1,
+                                 ResultContainer& result_2,
                                  const std::vector<Column>& columns);
 
-  void MergeSortResultsRemoveDup(FetchedResult& result_1,
-                                 FetchedResult& result_2,
+  void MergeSortResultsRemoveDup(ResultContainer& result_1,
+                                 ResultContainer& result_2,
                                  const std::string& table_name,
                                  const std::vector<uint32>& field_indexes);
+
+ private:
+  TupleMeta* tuple_meta_;
+
+  std::vector<std::shared_ptr<Tuple>> tuples_;
+
+  uint32 num_tuples_ = 0;
+  uint32 crt_tindex_ = 0;
+
+  bool materialized_ = false;
 };
 
 // Result aggregation.

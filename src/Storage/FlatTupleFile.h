@@ -15,7 +15,7 @@
 namespace Storage {
 
 struct FlatTupleFileOptions{
-  FlatTupleFileOptions(const Query::FetchedResult::TupleMeta& tuple_meta,
+  FlatTupleFileOptions(const Query::TupleMeta& tuple_meta,
                        const std::vector<std::string>& tables);
   // Metadata of each table's record. Note this map also gives the order of
   // records when tuple is dumped to / loaded from memory, because the map is
@@ -51,7 +51,7 @@ class FlatTuplePage {
 
   // Dump a tuple to page, and increment buffer offset. Return the length of
   // the record.
-  uint32 DumpTuple(const Query::FetchedResult::Tuple& tuple);
+  uint32 DumpTuple(const Query::Tuple& tuple);
   void FinishPage();
 
   // Restore read status to a prev snapshot.
@@ -81,34 +81,44 @@ class FlatTupleFile {
 
   // It must be called before reading records from file.
   bool InitForReading();
-  // Get next record from the file.
-  std::shared_ptr<Query::FetchedResult::Tuple> NextTuple();
 
   // It must be called before writing records to file.
   bool InitForWriting();
   // Write out (append) a record to file.
-  bool WriteTuple(const Query::FetchedResult::Tuple& tuple);
+  bool WriteTuple(const Query::Tuple& tuple);
   // FinishFile must be called after writing all records to file. It flushes
   // the last page to disk and close the file descriptor.
   bool FinishWriting();
 
   bool Close();
 
-  struct ReadSnapshot {
-    uint32 page_num = 0;
-    uint32 page_offset = 0;
-    uint32 page_tuple_index = 0;
-    uint32 page_tuples = 0;
-  };
-  ReadSnapshot TakeReadSnapshot() const;
-  bool RestoreReadSnapshot(const ReadSnapshot& snapshot);
-  bool ResetRead();  // Restore to initial reading status.
-
   std::string filename() const { return filename_; }
 
   bool DeleteFile();
 
   bool Sort(const std::vector<Query::Column>& columns);
+
+  // Iterator for reading tuples. This is a forward-only iterator.
+  class Iterator {
+   public:
+    Iterator(FlatTupleFile* ft_file);
+    Iterator(const Iterator& other);
+    Iterator& operator=(const Iterator& other);
+
+    // Get next record from the file.
+    std::shared_ptr<Query::Tuple> NextTuple();
+   
+   private:
+    uint32 page_num_ = 0;
+    uint32 page_tuples_ = 0;
+    uint32 page_tuple_index_ = 0;
+    uint32 page_offset_ = 0;
+
+    FlatTupleFile* ft_file_;
+    std::unique_ptr<FlatTuplePage> buf_page_;
+  };
+
+  Iterator GetIterator() { return Iterator(this); }
 
  private:
   // Check file and open it.
@@ -129,6 +139,15 @@ class FlatTupleFile {
   // in order.
   std::unique_ptr<FlatTuplePage> buf_page_;
   uint32 crt_page_num_ = 0;
+
+  enum State {
+    INIT,
+    WRITING,
+    READING,
+  };
+  State state_ = INIT;
+
+  friend class FlatTupleFile::Iterator;
 
   FORBID_COPY_AND_ASSIGN(FlatTupleFile);
 };

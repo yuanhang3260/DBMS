@@ -73,10 +73,10 @@ class CommonTest: public UnitTest {
   }
 
   void Test_SortByColumn() {
-    FetchedResult result;
+    ResultContainer result;
     result.tuple_meta = &tuple_meta_;
     for (const auto& record : data_records_) {
-      auto tuple = FetchedResult::Tuple();
+      auto tuple = Tuple();
       tuple.emplace(kTableName, ResultRecord(record));
       result.AddTuple(std::move(tuple));
     }
@@ -91,25 +91,25 @@ class CommonTest: public UnitTest {
   void Test_MergeSortResultsRemoveDup() {
     std::vector<std::shared_ptr<RecordBase>> data_records_1;
     InitRecordResource(&data_records_1);
-    FetchedResult result1;
+    ResultContainer result1;
     result1.tuple_meta = &tuple_meta_;
     for (const auto& record : data_records_1) {
-      auto tuple = FetchedResult::Tuple();
+      auto tuple = Tuple();
       tuple.emplace(kTableName, ResultRecord(record));
       result1.AddTuple(std::move(tuple));
     }
 
     std::vector<std::shared_ptr<RecordBase>> data_records_2;
     InitRecordResource(&data_records_2);
-    FetchedResult result2;
+    ResultContainer result2;
     result2.tuple_meta = &tuple_meta_;
     for (const auto& record : data_records_2) {
-      auto tuple = FetchedResult::Tuple();
+      auto tuple = Tuple();
       tuple.emplace(kTableName, ResultRecord(record));
       result2.AddTuple(std::move(tuple));
     }
 
-    FetchedResult result;
+    ResultContainer result;
     result.MergeSortResultsRemoveDup(result1, result2, kTableName, {1});
     AssertGreaterEqual(7, result.tuples.size());
 

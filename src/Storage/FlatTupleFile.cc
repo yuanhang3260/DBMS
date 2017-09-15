@@ -15,13 +15,13 @@
 namespace Storage {
 
 namespace {
-using Query::FetchedResult;
 using Query::TableRecordMeta;
 using Query::ResultRecord;
+using Query::Tuple;
 }
 
 FlatTupleFileOptions::FlatTupleFileOptions(
-    const Query::FetchedResult::TupleMeta& tuple_meta,
+    const Query::TupleMeta& tuple_meta,
     const std::vector<std::string>& tables) {
   for (const auto& table_name : tables) {
     auto it = tuple_meta.find(table_name);
@@ -79,10 +79,9 @@ bool FlatTuplePage::Restore(uint32 tindex, uint32 offset) {
   return true;
 }
 
-uint32 FlatTuplePage::DumpTuple(const Query::FetchedResult::Tuple& tuple) {
+uint32 FlatTuplePage::DumpTuple(const Tuple& tuple) {
   CHECK(data_, "Buffer page is not created yet.");
-  if (crt_offset_ + sizeof(uint32) + FetchedResult::TupleSize(tuple) > 
-      Storage::kPageSize) {
+  if (crt_offset_ + sizeof(uint32) + tuple.size() > Storage::kPageSize) {
     FinishPage();
     return 0;
   }
@@ -93,7 +92,7 @@ uint32 FlatTuplePage::DumpTuple(const Query::FetchedResult::Tuple& tuple) {
   }
 
   // Dump tuple size first.
-  uint32 tuple_length = FetchedResult::TupleSize(tuple);
+  uint32 tuple_length = tuple.size();
   memcpy(data_ + crt_offset_, &tuple_length, sizeof(tuple_length));
   crt_offset_ += sizeof(tuple_length);
 
@@ -101,10 +100,10 @@ uint32 FlatTuplePage::DumpTuple(const Query::FetchedResult::Tuple& tuple) {
   // name, so the dump order is also by table name.
   for (const auto& iter : opts_->table_metas) {
     const auto& table_name = iter.first;
-    auto it = tuple.find(table_name);
-    CHECK(it != tuple.end(),
+    auto table_recprd = tuple.GetTableRecord(table_name);
+    CHECK(table_recprd != nullptr,
           "Can't find record of table %s from tuple", table_name.c_str());
-    crt_offset_ += it->second.record->DumpToMem(data_ + crt_offset_);
+    crt_offset_ += table_recprd->record->DumpToMem(data_ + crt_offset_);
   }
   num_tuples_++;
 
@@ -193,16 +192,23 @@ bool FlatTupleFile::Init() {
 }
 
 bool FlatTupleFile::InitForReading() {
+  if (state_ == WRITING) {
+    LogERROR("File is in WRITING state, abort read attempt");
+    return false;
+  }
+  if (state_ == READING) {
+    return true;
+  }
+
   if (!FileSystem::FileExists(filename_)) {
     LogERROR("FlatTupleFile \"%s\" doesn't exist!", filename_.c_str());
     return false;
   }
-
   if (!Init()) {
     return false;
   }
-  buf_page_.reset();
-  crt_page_num_ = 0;
+
+  state_ = READING;
   return true;
 }
 
@@ -229,134 +235,16 @@ bool FlatTupleFile::InitForWriting() {
   }
   buf_page_.reset();
   crt_page_num_ = 0;
+
+  state_ = WRITING;
   return true;
 }
 
-std::shared_ptr<FetchedResult::Tuple> FlatTupleFile::NextTuple() {
-  // Init buffer FlatRecordPage - create instance, and read the first page from
-  // file.
-  if (!buf_page_) {
-    buf_page_ = ptr::MakeUnique<FlatTuplePage>(&opts_);
-    crt_page_num_ = 0;
-    int read_size = file_descriptor_->Read(buf_page_->mutable_data(),
-                                           Storage::kPageSize);
-    if (read_size != Storage::kPageSize) {
-      LogERROR("Failed to fetch first page from file %s", filename_.c_str());
-      return nullptr;
-    }
+bool FlatTupleFile::WriteTuple(const Tuple& tuple) {
+  if (state_ != WRITING && !InitForWriting()) {
+    return false;
   }
 
-  // Consume next record from buffer FlatRecordPage.
-  auto re = buf_page_->GetNextTuple();
-  uint32 tuple_length = re.first;
-  byte* tuple_data = re.second;
-
-  // Reach the end of this page. Fetch next page if exists.
-  if (tuple_length == 0 || tuple_data == nullptr) {
-    crt_page_num_++;
-    if (crt_page_num_ == num_pages_) {
-      // Reach the end of file, no more record is available.
-      return nullptr;
-    }
-
-    // Reset buffer FlatRecordPage, and load next page data into it.
-    buf_page_->Reset();
-    int read_size = file_descriptor_->Read(buf_page_->mutable_data(),
-                                           Storage::kPageSize);
-    if (read_size != Storage::kPageSize) {
-      LogERROR("Failed to fetch next page %d from file %s",
-               crt_page_num_, filename_.c_str());
-      return nullptr;
-    }
-
-    // Recursive call - the next page is loaded and ready to be read.
-    return NextTuple();
-  }
-
-  // Load next tuple.
-  auto tuple = std::make_shared<FetchedResult::Tuple>();
-  uint32 load_size = 0;
-  for (const auto& iter : opts_.table_metas) {
-    const auto& table_name = iter.first;
-    const auto* table_meta = iter.second;
-    auto& result_record = (*tuple)[table_name];
-    if (table_meta->record_type == Storage::DATA_RECORD) {
-      result_record.record.reset(new Storage::DataRecord());
-    } else if (table_meta->record_type == Storage::INDEX_RECORD) {
-      result_record.record.reset(new Storage::IndexRecord());
-    } else {
-      LogFATAL("Unexpected table record type %s",
-               Storage::RecordTypeStr(table_meta->record_type).c_str());
-    }
-
-    // Set table metadata for the loaded table record.
-    result_record.meta = table_meta;
-    // Load record fields.
-    for (const auto& field_info : table_meta->fetched_fields) {
-      result_record.record->AddField(field_info);
-    }
-    load_size += result_record.record->LoadFromMem(tuple_data + load_size);
-    // result_record.record->Print();
-    // printf("load_size = %d\n", load_size);
-  }
-
-  CHECK(load_size == tuple_length,
-        "Error record from page %u - expect %d bytes, actual %d ",
-        crt_page_num_, tuple_length, load_size);
-
-  return tuple;
-}
-
-FlatTupleFile::ReadSnapshot FlatTupleFile::TakeReadSnapshot() const {
-  ReadSnapshot snapshot;
-  snapshot.page_num = crt_page_num_;
-  if (buf_page_) {
-    // If reach the end of current page, next tuple will be in next page.
-    // There snapshot should be taken at the beginning tuple of next page.
-    if (buf_page_->crt_tindex() == buf_page_->num_tuples()) {
-      snapshot.page_offset = sizeof(uint32);
-      snapshot.page_tuple_index = 0;
-      snapshot.page_num = crt_page_num_ + 1;
-    } else {
-      snapshot.page_offset = buf_page_->crt_offset();
-      snapshot.page_tuple_index = buf_page_->crt_tindex();
-      snapshot.page_tuples = buf_page_->num_tuples();
-    }
-  } else {
-    // Buffer page is not loadd. This is the initial state for reading.
-    snapshot.page_offset = sizeof(uint32);
-    snapshot.page_tuple_index = 0;
-    snapshot.page_num = 0;
-  }
-  return snapshot;
-}
-
-bool FlatTupleFile::RestoreReadSnapshot(const ReadSnapshot& snapshot) {
-  if (crt_page_num_ != snapshot.page_num) {
-    auto new_buf_page_ = ptr::MakeUnique<FlatTuplePage>(&opts_);
-    if (file_descriptor_->Seek(kPageSize * snapshot.page_num) < 0) {
-      LogERROR("Failed to seek to page %d", snapshot.page_num);
-      return false;
-    }
-    int read_size = file_descriptor_->Read(new_buf_page_->mutable_data(),
-                                           Storage::kPageSize);
-    if (read_size != Storage::kPageSize) {
-      LogERROR("Failed to fetch first page from file %s", filename_.c_str());
-      // Re-seek back.
-      file_descriptor_->Seek(kPageSize * crt_page_num_);
-      return false;
-    }
-    crt_page_num_ = snapshot.page_num;
-    buf_page_ = std::move(new_buf_page_);
-  }
-  return buf_page_->Restore(snapshot.page_tuple_index, snapshot.page_offset);
-}
-
-bool FlatTupleFile::ResetRead() {
-  return InitForReading();
-}
-
-bool FlatTupleFile::WriteTuple(const FetchedResult::Tuple& tuple) {
   if (!buf_page_) {
     buf_page_ = ptr::MakeUnique<FlatTuplePage>(&opts_);
     crt_page_num_ = 0;
@@ -391,15 +279,132 @@ bool FlatTupleFile::FinishWriting() {
     LogERROR("Error writing page %d to file", crt_page_num_);
     return false;
   }
+
+  state_ = INIT;
   return true;
+}
+
+FlatTupleFile::Iterator::Iterator(FlatTupleFile* ft_file) : ft_file_(ft_file) {}
+
+FlatTupleFile::Iterator::Iterator(const Iterator& other) {
+  *this = other;
+}
+
+FlatTupleFile::Iterator&
+FlatTupleFile::Iterator::operator=(const Iterator& other) {
+  page_num_ = other.page_num_;
+  page_tuples_ = other.page_tuples_;
+  page_tuple_index_ = other.page_tuple_index_;
+  page_offset_ = other.page_offset_;
+
+  ft_file_ = other.ft_file_;
+  // Reset buffer page. It will be filled when reading.
+  buf_page_.reset();
+  return *this;
+}
+
+std::shared_ptr<Tuple> FlatTupleFile::Iterator::NextTuple() {
+  if (ft_file_->state_ == WRITING) {
+    LogERROR("File is in WRITING state, abort reading");
+    return nullptr;
+  }
+  if (ft_file_->state_ == INIT) {
+    if (!ft_file_->InitForReading()) {
+      return nullptr;
+    }
+  }
+
+  // Init buffer FlatRecordPage - create instance, and read the first page from
+  // file.
+  if (!buf_page_) {
+    buf_page_.reset(new FlatTuplePage(&ft_file_->opts_));
+    if (ft_file_->file_descriptor_->Seek(Storage::kPageSize * page_num_) < 0) {
+      LogERROR("Failed to seek to page %d", page_num_);
+      return nullptr;
+    }
+    int read_size = ft_file_->file_descriptor_->Read(buf_page_->mutable_data(),
+                                                     Storage::kPageSize);
+    if (read_size != Storage::kPageSize) {
+      LogERROR("Failed to fetch first page from file %s",
+               ft_file_->filename_.c_str());
+      return nullptr;
+    }
+    buf_page_->Restore(page_tuple_index_, page_offset_);
+  }
+
+  // Consume next record from buffer FlatRecordPage.
+  auto re = buf_page_->GetNextTuple();
+  uint32 tuple_length = re.first;
+  byte* tuple_data = re.second;
+
+  // Reach the end of this page. Fetch next page if exists.
+  if (tuple_length == 0 || tuple_data == nullptr) {
+    page_num_++;
+    if (page_num_ == ft_file_->num_pages_) {
+      // Reach the end of file, no more record is available.
+      return nullptr;
+    }
+
+    // Reset buffer FlatRecordPage, and load next page data into it.
+    buf_page_->Reset();
+    if (ft_file_->file_descriptor_->Seek(Storage::kPageSize * page_num_) < 0) {
+      LogERROR("Failed to seek to page %d", page_num_);
+      return nullptr;
+    }
+    int read_size = ft_file_->file_descriptor_->Read(buf_page_->mutable_data(),
+                                                     Storage::kPageSize);
+    if (read_size != Storage::kPageSize) {
+      LogERROR("Failed to fetch next page %d from file %s",
+               page_num_, ft_file_->filename_.c_str());
+      return nullptr;
+    }
+
+    // Recursive call - the next page is loaded and ready to be read.
+    return NextTuple();
+  }
+
+  // Load next tuple.
+  auto tuple = std::make_shared<Tuple>();
+  uint32 load_size = 0;
+  for (const auto& iter : ft_file_->opts_.table_metas) {
+    const auto& table_name = iter.first;
+    const auto* table_meta = iter.second;
+    if (table_meta->record_type == Storage::DATA_RECORD) {
+      tuple->AddTableRecord(table_name,
+                            std::make_shared<Storage::DataRecord>());
+    } else if (table_meta->record_type == Storage::INDEX_RECORD) {
+      tuple->AddTableRecord(table_name,
+                            std::make_shared<Storage::IndexRecord>());
+    } else {
+      LogFATAL("Unexpected table record type %s",
+               Storage::RecordTypeStr(table_meta->record_type).c_str());
+    }
+
+    auto result_record = tuple->MutableTableRecord(table_name);
+    // Set table metadata for the loaded table record.
+    result_record->meta = table_meta;
+    // Load record fields.
+    for (const auto& field_info : table_meta->fetched_fields) {
+      result_record->record->AddField(field_info);
+    }
+    load_size += result_record->record->LoadFromMem(tuple_data + load_size);
+    // result_record.record->Print();
+    // printf("load_size = %d\n", load_size);
+  }
+
+  CHECK(load_size == tuple_length,
+        "Error loading record from page %u - expect %d bytes, actual %d ",
+        page_num_, tuple_length, load_size);
+
+  return tuple;
 }
 
 bool FlatTupleFile::DeleteFile() {
   if (file_descriptor_) {
     int re = file_descriptor_->Close();
     if (re != 0) {
+      // Let it leak?
       LogERROR("Failed to close file %s", filename_.c_str());
-      return false;
     }
   }
 
@@ -409,7 +414,9 @@ bool FlatTupleFile::DeleteFile() {
   }
 
   file_descriptor_.reset();
-
+  buf_page_.reset();
+  crt_page_num_ = 0;
+  state_ = INIT;
   return true;
 }
 
@@ -423,15 +430,15 @@ bool FlatTupleFile::Sort(const std::vector<Query::Column>& columns) {
   });
 
   // Compare two tuples based on columns.
-  auto comparator = [&] (std::shared_ptr<FetchedResult::Tuple> t1,
-                         std::shared_ptr<FetchedResult::Tuple> t2) {
-    return FetchedResult::CompareBasedOnColumns(*t1, *t2, columns) < 0;
+  auto comparator = [&] (std::shared_ptr<Tuple> t1,
+                         std::shared_ptr<Tuple> t2) {
+    return Tuple::CompareBasedOnColumns(*t1, *t2, columns) < 0;
   };
 
   std::vector<std::shared_ptr<FlatTupleFile>> out_tempfiles;
 
   uint32 sort_size = 0;
-  std::vector<std::shared_ptr<FetchedResult::Tuple>> sort_group;
+  std::vector<std::shared_ptr<Tuple>> sort_group;
   uint32 chunk_num = 0;
   auto create_chunkfile = [&] {
     // Sort current group and write to tempfile.
@@ -460,23 +467,20 @@ bool FlatTupleFile::Sort(const std::vector<Query::Column>& columns) {
   };
 
   // Read all tuples and crete chunk files of pass 0.
-  if (!InitForReading()) {
-    return false;
-  }
-
+  auto iterator = GetIterator();
   while (true) {
-    auto tuple = NextTuple();
+    auto tuple = iterator.NextTuple();
     if (!tuple) {
       break;
     }
-    if (sort_size + FetchedResult::TupleSize(*tuple) >
+    if (sort_size + tuple->size() >
             (Storage::kPageSize - sizeof(uint32)) * opts_.num_buf_pages) {
       if (!create_chunkfile()) {
         return false;
       }
     }
     sort_group.push_back(tuple);
-    sort_size += FetchedResult::TupleSize(*tuple);
+    sort_size += tuple->size();
   }
   if (!sort_group.empty()) {
     if (!create_chunkfile()) {
@@ -487,15 +491,12 @@ bool FlatTupleFile::Sort(const std::vector<Query::Column>& columns) {
   // Begin merge sort.
   uint32 pass_num = 1;
   std::vector<std::shared_ptr<FlatTupleFile>> in_tempfiles;
+  std::vector<FlatTupleFile::Iterator> in_iterators;
   while (out_tempfiles.size() > 1) {
     // Output of last pass is input of this pass.
     for (const auto& file : out_tempfiles) {
       in_tempfiles.push_back(file);
-      if (!in_tempfiles.back()->InitForReading()) {
-        LogERROR("Failed to init reading for tempfile %s",
-                 in_tempfiles.back()->filename().c_str());
-        return false;
-      }
+      in_iterators.push_back(file->GetIterator());
     }
     out_tempfiles.clear();
 
@@ -514,7 +515,7 @@ bool FlatTupleFile::Sort(const std::vector<Query::Column>& columns) {
 
       // Create a min-heap and do K-lists sort merge.
       struct HeapNode {
-        std::shared_ptr<FetchedResult::Tuple> tuple;
+        std::shared_ptr<Tuple> tuple;
         uint32 file_index;
       };
       auto hp_comparator = [&] (const HeapNode& n1, const HeapNode& n2) {
@@ -529,7 +530,7 @@ bool FlatTupleFile::Sort(const std::vector<Query::Column>& columns) {
                                     in_tempfiles.size());
       //printf("group_start = %d, group_end = %d\n", group_start, group_end);
       for (uint32 i = group_start; i < group_end; i++) {
-        auto tuple = in_tempfiles.at(i)->NextTuple();
+        auto tuple = in_iterators.at(i).NextTuple();
         CHECK(tuple, "Get a null record from file %s",
                       in_tempfiles.at(i)->filename().c_str());
         HeapNode node = {tuple, i};
@@ -546,7 +547,7 @@ bool FlatTupleFile::Sort(const std::vector<Query::Column>& columns) {
           return false;
         }
 
-        auto next_tuple = in_tempfiles.at(min_ele.file_index)->NextTuple();
+        auto next_tuple = in_iterators.at(min_ele.file_index).NextTuple();
         if (next_tuple) {
           HeapNode node = {next_tuple, min_ele.file_index};
           min_heap.push(node);
@@ -568,6 +569,7 @@ bool FlatTupleFile::Sort(const std::vector<Query::Column>& columns) {
       }
     }
     in_tempfiles.clear();
+    in_iterators.clear();
 
     pass_num++;
   }
@@ -585,10 +587,8 @@ bool FlatTupleFile::Sort(const std::vector<Query::Column>& columns) {
     LogERROR("Failed to rename final result file");
     return false;
   }
-  InitForReading();
 
   cleanup.clear();
-
   return true;
 }
 

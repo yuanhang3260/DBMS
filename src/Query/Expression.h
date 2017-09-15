@@ -19,11 +19,11 @@ namespace Query {
 
 // struct EvaluateArgs {
 //   EvaluateArgs(DB::CatalogManager* catalog_m_,
-//                const FetchedResult::Tuple& tuple_) :
+//                const ResultContainer::Tuple& tuple_) :
 //       catalog_m(catalog_m_),
 //       tuple(tuple_) {}
 //   DB::CatalogManager* catalog_m;
-//   const FetchedResult::Tuple& tuple;
+//   const ResultContainer::Tuple& tuple;
 // };
 
 class ExprTreeNode {
@@ -81,10 +81,10 @@ class ExprTreeNode {
   const PhysicalPlan& physical_plan() const { return physical_plan_; }
   PhysicalPlan* mutable_physical_plan() { return &physical_plan_; }
 
-  const FetchedResult& results() const { return results_; }
-  FetchedResult* mutable_results() { return &results_; }
+  const ResultContainer& results() const { return results_; }
+  ResultContainer* mutable_results() { return &results_; }
 
-  virtual NodeValue Evaluate(const FetchedResult::Tuple& arg) const = 0;
+  virtual NodeValue Evaluate(const Tuple& arg) const = 0;
 
   // Takes ownership of iterator.
   void SetIterator(Iterator* iterator) { tuple_iter_.reset(iterator); }
@@ -102,7 +102,7 @@ class ExprTreeNode {
   bool physical_query_root_ = false;
   PhysicalPlan physical_plan_;
 
-  FetchedResult results_;
+  ResultContainer results_;
   std::shared_ptr<Iterator> tuple_iter_;
 };
 
@@ -117,7 +117,7 @@ class ConstValueNode : public ExprTreeNode {
 
   void Print() const override;
 
-  NodeValue Evaluate(const FetchedResult::Tuple& arg) const;
+  NodeValue Evaluate(const Tuple& arg) const;
 };
 
 
@@ -131,7 +131,7 @@ class ColumnNode : public ExprTreeNode {
 
   void Print() const override;
 
-  NodeValue Evaluate(const FetchedResult::Tuple& arg) const override;
+  NodeValue Evaluate(const Tuple& arg) const override;
 
  private:
   bool Init();
@@ -152,7 +152,7 @@ class OperatorNode : public ExprTreeNode {
 
   void Print() const override;
 
-  NodeValue Evaluate(const FetchedResult::Tuple& arg) const override;
+  NodeValue Evaluate(const Tuple& arg) const override;
 
  private:
   // Init() does a lot of work to make sure the node is valid:

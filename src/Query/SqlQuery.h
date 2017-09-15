@@ -67,7 +67,8 @@ class SqlQuery {
   DB::Database* GetDB() { return db_; }
   const std::set<std::string>& tables() const { return tables_; }
   std::string DefaultTable() const;
-  FetchedResult::TupleMeta* mutable_tuple_meta();
+  const TupleMeta& tuple_meta() const;
+  TupleMeta* mutable_tuple_meta();
 
   bool AddTable(const std::string& table);
   bool AddColumn(const std::string& column);
@@ -90,7 +91,7 @@ class SqlQuery {
   bool FinalizeParsing();
 
   const Query::ExprTreeNode& expr_root() const { return *expr_node_; }
-  const Query::FetchedResult& results() const { return results_; }
+  const Query::ResultContainer& results() const { return results_; }
 
   // Execute a SELECT query, returns the number of matching records.
   int ExecuteSelectQuery();
@@ -126,8 +127,8 @@ class SqlQuery {
   void CreateIteratorsRecursive(ExprTreeNode* node);
 
   // (Deprecated) Static execution of select query.
-  int ExecuteSelectQueryFromNode(ExprTreeNode* node);
-  int Do_ExecutePhysicalQuery(ExprTreeNode* node);
+  // int ExecuteSelectQueryFromNode(ExprTreeNode* node);
+  // int Do_ExecutePhysicalQuery(ExprTreeNode* node);
 
   bool IsConstExpression(ExprTreeNode* node);
 
@@ -186,10 +187,10 @@ class SqlQuery {
   std::vector<Column> group_by_columns_;
 
   // Meta data for each table's record in the result.
-  FetchedResult::TupleMeta tuple_meta_;
+  TupleMeta tuple_meta_;
 
   // Final result.
-  FetchedResult results_;
+  ResultContainer results_;
 
   std::string error_msg_;
 

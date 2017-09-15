@@ -50,7 +50,7 @@ void ConstValueNode::Print() const {
   printf("const value node %s\n", value_.AsString().c_str());
 }
 
-NodeValue ConstValueNode::Evaluate(const FetchedResult::Tuple& arg) const {
+NodeValue ConstValueNode::Evaluate(const Tuple& arg) const {
   return value_;
 }
 
@@ -83,7 +83,7 @@ bool ColumnNode::Init() {
   return true;
 }
 
-NodeValue ColumnNode::Evaluate(const FetchedResult::Tuple& tuple) const {
+NodeValue ColumnNode::Evaluate(const Tuple& tuple) const {
   // Make sure Init() has run successfully.
   CHECK(valid_, "Invalid ColumnNode");
 
@@ -94,13 +94,16 @@ NodeValue ColumnNode::Evaluate(const FetchedResult::Tuple& tuple) const {
   NodeValue value = value_;
 
   // Find the field from record.
-  const auto& it = tuple.find(column_.table_name);
-  CHECK(it != tuple.end(),
+  const auto* table_record = tuple.GetTableRecord(column_.table_name);
+  CHECK(table_record != nullptr,
         Strings::StrCat("Couldn't find record of table ", column_.table_name,
                         " from the given tuple"));
-
-  const auto& table_record = it->second;
-  const Schema::Field* field = table_record.GetField(column_.index);
+  const Schema::Field* field = table_record->GetField(column_.index);
+  CHECK(field != nullptr,
+        Strings::StrCat("Couldn't find record field ",
+                        std::to_string(column_.index),
+                        "of table ", column_.table_name,
+                        " from the given tuple"));
 
   // Get value from field.
   switch (column_.type) {
@@ -374,7 +377,7 @@ ValueType OperatorNode::DeriveResultValueType(ValueType t1, ValueType t2) {
   return UNKNOWN_VALUE_TYPE;
 }
 
-NodeValue OperatorNode::Evaluate(const FetchedResult::Tuple& tuple) const {
+NodeValue OperatorNode::Evaluate(const Tuple& tuple) const {
   CHECK(valid_, "Invalid OperatorNode");
 
   NodeValue left_value = left_? left_->Evaluate(tuple) : NodeValue();

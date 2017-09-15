@@ -83,7 +83,7 @@ void PhysicalQueryIterator::Init() {
   ready_ = true;
 }
 
-std::shared_ptr<FetchedResult::Tuple> PhysicalQueryIterator::GetNextTuple() {
+std::shared_ptr<Tuple> PhysicalQueryIterator::GetNextTuple() {
   if (!ready_) {
     Init();
   }
@@ -104,10 +104,10 @@ std::shared_ptr<FetchedResult::Tuple> PhysicalQueryIterator::GetNextTuple() {
       if (!record) {
         return nullptr;
       }
-      auto tuple = std::make_shared<FetchedResult::Tuple>();
-      tuple->emplace(table_name, ResultRecord(record));
+      auto tuple = std::make_shared<Tuple>();
+      tuple->AddTableRecord(table_name, record);
       if (node_->Evaluate(*tuple).v_bool) {
-        FetchedResult::AddTupleMeta(tuple.get(), query_->mutable_tuple_meta());
+        tuple->AddMeta(query_->tuple_meta());
         return tuple;
       }
     }
@@ -116,9 +116,9 @@ std::shared_ptr<FetchedResult::Tuple> PhysicalQueryIterator::GetNextTuple() {
     if (!record) {
       return nullptr;
     }
-    auto tuple = std::make_shared<FetchedResult::Tuple>();
-    tuple->emplace(table_name, ResultRecord(record));
-    FetchedResult::AddTupleMeta(tuple.get(), query_->mutable_tuple_meta());
+    auto tuple = std::make_shared<Tuple>();
+    tuple->AddTableRecord(table_name, record);
+    tuple->AddMeta(query_->tuple_meta());
     return tuple;
   } else {
     LogFATAL("Can't iterate record - Invalid physical plan %s for this node",
@@ -161,7 +161,7 @@ void AndNodeIterator::Init() {
   ready_ = true;
 }
 
-std::shared_ptr<FetchedResult::Tuple> AndNodeIterator::GetNextTuple() {
+std::shared_ptr<Tuple> AndNodeIterator::GetNextTuple() {
   if (!ready_) {
     Init();
   }
@@ -208,11 +208,11 @@ void OrNodeIterator::Init() {
         Strings::StrCat("Expect AND node plan to be POP, but got ",
                         PhysicalPlan::PlanStr(this_plan.plan)));
 
-  result_.tuple_meta = query_->mutable_tuple_meta();
+  result_.SetTupleMeta(query_->mutable_tuple_meta());
 
-  FetchedResult left_result, right_result;
-  left_result.tuple_meta = query_->mutable_tuple_meta();
-  right_result.tuple_meta = query_->mutable_tuple_meta();
+  ResultContainer left_result, right_result;
+  left_result.SetTupleMeta(query_->mutable_tuple_meta());
+  right_result.SetTupleMeta(query_->mutable_tuple_meta());
 
   auto* node_iter = node_->left()->GetIterator();
   while (true) {
@@ -220,7 +220,7 @@ void OrNodeIterator::Init() {
     if (!tuple) {
       break;
     }
-    left_result.AddTuple(std::move(*tuple));
+    left_result.AddTuple(tuple);
   }
 
   node_iter = node_->right()->GetIterator();
@@ -229,7 +229,7 @@ void OrNodeIterator::Init() {
     if (!tuple) {
       break;
     }
-    right_result.AddTuple(std::move(*tuple));
+    right_result.AddTuple(tuple);
   }
 
   const std::string& table_name = this_plan.table_name;
@@ -242,7 +242,7 @@ void OrNodeIterator::Init() {
   ready_ = true;
 }
 
-std::shared_ptr<FetchedResult::Tuple> OrNodeIterator::GetNextTuple() {
+std::shared_ptr<Tuple> OrNodeIterator::GetNextTuple() {
   if (!ready_) {
     Init();
   }
@@ -251,14 +251,13 @@ std::shared_ptr<FetchedResult::Tuple> OrNodeIterator::GetNextTuple() {
     return nullptr;
   }
 
-  if (tuple_index_ >= result_.tuples.size()) {
+  // TODO: Replace this with ResultContainer.GetNextTuple().
+  if (tuple_index_ >= result_.NumTuples()) {
     end_ = true;
     return nullptr;
   }
 
-  auto tuple = std::make_shared<FetchedResult::Tuple>();
-  *tuple = result_.tuples.at(tuple_index_++);
-  return tuple;
+  return result_.GetTuple(tuple_index_++);
 }
 
 void OrNodeIterator::reset() {

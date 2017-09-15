@@ -10,10 +10,7 @@ using Storage::RecordBase;
 
 // *************************** TableRecordMeta *******************************//
 void TableRecordMeta::CreateDataRecordMeta(const DB::TableInfo& schema) {
-  if (!fetched_fields.empty()) {
-    return;
-  }
-
+  fetched_fields.clear();
   for (const auto& field : schema.fields()) {
     fetched_fields.push_back(field);
   }
@@ -22,10 +19,7 @@ void TableRecordMeta::CreateDataRecordMeta(const DB::TableInfo& schema) {
 
 void TableRecordMeta::CreateIndexRecordMeta(
     const DB::TableInfo& schema, const std::vector<uint32>& field_indexes) {
-  if (!fetched_fields.empty()) {
-    return;
-  }
-
+  fetched_fields.clear();
   for (uint32 index : field_indexes) {
     fetched_fields.push_back(schema.fields(index));
   }
@@ -73,58 +67,16 @@ void ResultRecord::AddField(Schema::Field* field) {
 }
 
 
-// **************************** FetchedResult ******************************* //
-uint32 FetchedResult::TupleSize(const FetchedResult::Tuple& tuple) {
+// ******************************* Tuple ************************************ //
+uint32 Tuple::size() const {
   uint32 size = 0;
-  for (const auto& iter : tuple) {
+  for (const auto& iter : records) {
     size += iter.second.record->size();
   }
   return size;
 }
-
-bool FetchedResult::AddTuple(const Tuple& tuple) {
-  tuples.push_back(tuple);
-  for (auto& table_record_iter : tuples.back()) {
-    auto meta_it = tuple_meta->find(table_record_iter.first);
-    if (meta_it == tuple_meta->end()) {
-      tuples.erase(tuples.end() - 1);
-      return false;
-    }
-    table_record_iter.second.meta = &meta_it->second;
-  }
-  return true;
-}
-
-bool FetchedResult::AddTuple(Tuple&& tuple) {
-  if (!AddTupleMeta(&tuple, tuple_meta)) {
-    return false;
-  }
-  tuples.push_back(std::move(tuple));
-  return true;
-}
-
-bool FetchedResult::AddTupleMeta(Tuple* tuple, TupleMeta* meta) {
-  for (auto& table_record_iter : *tuple) {
-    auto meta_it = meta->find(table_record_iter.first);
-    if (meta_it == meta->end()) {
-      return false;
-    }
-    table_record_iter.second.meta = &meta_it->second;
-  }
-  return true;
-}
-
-std::shared_ptr<FetchedResult::Tuple> FetchedResult::MergeTuples(
-    const Tuple& t1, const Tuple& t2) {
-  std::shared_ptr<Tuple> tuple(new Tuple(t1));
-  for (const auto& iter : t2) {
-    tuple->emplace(iter.first, iter.second);
-  }
-  return tuple;
-}
-
-void FetchedResult::PrintTuple(const Tuple& tuple) {
-  for (const auto& iter : tuple) {
+void Tuple::Print() const {
+  for (const auto& iter : records) {
     printf("%s ", iter.first.c_str());
     if (iter.second.record) {
       iter.second.record->Print();
@@ -133,7 +85,45 @@ void FetchedResult::PrintTuple(const Tuple& tuple) {
   printf("\n");
 }
 
-int FetchedResult::CompareBasedOnColumns(
+const ResultRecord* Tuple::GetTableRecord(const std::string& table_name) const {
+  auto it = records.find(table_name);
+  if (it == records.end()) {
+    return nullptr;
+  }
+  return &it->second;
+}
+
+ResultRecord* Tuple::MutableTableRecord(const std::string& table_name) {
+  return const_cast<ResultRecord*>(MutableTableRecord(table_name));
+}
+
+bool Tuple::AddTableRecord(const std::string& table_name,
+                           std::shared_ptr<Storage::RecordBase> record) {
+  records.emplace(table_name, ResultRecord(record));
+  return true;
+}
+
+bool Tuple::AddMeta(const TupleMeta& meta) {
+  for (auto& table_record_iter : records) {
+    auto meta_it = meta.find(table_record_iter.first);
+    if (meta_it == meta.end()) {
+      return false;
+    }
+    table_record_iter.second.meta = &meta_it->second;
+  }
+  return true;
+}
+
+std::shared_ptr<Tuple> Tuple::MergeTuples(
+    const Tuple& t1, const Tuple& t2) {
+  std::shared_ptr<Tuple> tuple(new Tuple(t1));
+  for (const auto& iter : t2.records) {
+    tuple->records.emplace(iter.first, iter.second);
+  }
+  return tuple;
+}
+
+int Tuple::CompareBasedOnColumns(
     const Tuple& t1, const std::vector<Column>& columns_1,
     const Tuple& t2, const std::vector<Column>& columns_2) {
   CHECK(columns_1.size() == columns_2.size(),
@@ -142,32 +132,41 @@ int FetchedResult::CompareBasedOnColumns(
 
   for (uint32 i = 0; i < num_columns; i++) {
     const Column& column_1 = columns_1.at(i);
-    auto it = t1.find(column_1.table_name);
-    CHECK(it != t1.end(),
+    auto record_1 = t1.GetTableRecord(column_1.table_name);
+    CHECK(record_1 != nullptr,
           Strings::StrCat("Couldn't find record of table ", column_1.table_name,
                           " from tuple 1"));
-    const auto& record_1 = it->second;
-    CHECK(record_1.meta != nullptr,
+    CHECK(record_1->meta != nullptr,
           Strings::StrCat("Couldn't find record meta of table ",
                           column_1.table_name,
                           " from tuple 1"));
+    auto field_1 = record_1->GetField(column_1.index);
+    CHECK(field_1 != nullptr,
+          Strings::StrCat("Couldn't find record field ",
+                          std::to_string(column_1.index),
+                          "of table ", column_1.table_name,
+                          " from the given tuple"));
 
     const Column& column_2 = columns_2.at(i);
-    it = t2.find(column_2.table_name);
-    CHECK(it != t2.end(),
+    auto record_2 = t2.GetTableRecord(column_2.table_name);
+    CHECK(record_2 != nullptr,
           Strings::StrCat("Couldn't find record of table ", column_2.table_name,
                           " from tuple 2"));
-    const auto& record_2 = it->second;
-    CHECK(record_2.meta != nullptr,
+    CHECK(record_2->meta != nullptr,
           Strings::StrCat("Couldn't find record meta of table ",
                           column_2.table_name,
                           " from tuple 2"));
+    auto field_2 = record_2->GetField(column_2.index);
+    CHECK(field_2 != nullptr,
+          Strings::StrCat("Couldn't find record field ",
+                          std::to_string(column_2.index),
+                          "of table ", column_2.table_name,
+                          " from the given tuple"));
 
     // CHECK(record_1.meta == record_2.meta,
     //       "Comparing table records with different meta");
 
-    int re = RecordBase::CompareSchemaFields(record_1.GetField(column_1.index),
-                                             record_2.GetField(column_2.index));
+    int re = RecordBase::CompareSchemaFields(field_1, field_2);
     if (re != 0) {
       return re;
     }
@@ -175,22 +174,71 @@ int FetchedResult::CompareBasedOnColumns(
   return 0;
 }
 
-int FetchedResult::CompareBasedOnColumns(
+int Tuple::CompareBasedOnColumns(
     const Tuple& t1, const Tuple& t2,
     const std::vector<Column>& columns) {
   return CompareBasedOnColumns(t1, columns, t2, columns);
 }
 
-void FetchedResult::SortByColumns(const std::vector<Column>& columns) {
-  auto comparator = [&] (const Tuple& t1, const Tuple& t2) {
-    return CompareBasedOnColumns(t1, t2, columns) < 0;
-  };
 
-  std::sort(tuples.begin(), tuples.end(), comparator);
+// ************************* ResultContainer ******************************** //
+std::shared_ptr<Tuple> ResultContainer::GetTuple(uint32 index) {
+  if (index >= tuples_.size()) {
+    return nullptr;
+  }
+
+  return tuples_.at(index);
 }
 
-void FetchedResult::SortByColumns(const std::string& table_name,
-                                  const std::vector<uint32>& field_indexes) {
+std::shared_ptr<Tuple> ResultContainer::GetNextTuple() {
+  if (!materialized_) {
+    if (crt_tindex_ < tuples_.size()) {
+      return tuples_.at(crt_tindex_++);
+    } else {
+      return nullptr;
+    }
+  } else {
+    // TODO: Read from FlatTupleFile.
+    return nullptr;
+  }
+}
+
+bool ResultContainer::AddTuple(std::shared_ptr<Tuple> tuple) {
+  if (!tuple->AddMeta(*tuple_meta_)) {
+    return false;
+  }
+  tuples_.push_back(tuple);
+  return true;
+}
+
+bool ResultContainer::AddTuple(const Tuple& tuple) {
+  std::shared_ptr<Tuple> new_tuple(new Tuple(tuple));
+  if (!new_tuple->AddMeta(*tuple_meta_)) {
+    return false;
+  }
+  tuples_.push_back(new_tuple);
+  return true;
+}
+
+bool ResultContainer::AddTuple(Tuple&& tuple) {
+  std::shared_ptr<Tuple> new_tuple(new Tuple(std::move(tuple)));
+  if (!new_tuple->AddMeta(*tuple_meta_)) {
+    return false;
+  }
+  tuples_.push_back(new_tuple);
+  return true;
+}
+
+void ResultContainer::SortByColumns(const std::vector<Column>& columns) {
+  auto comparator = [&] (std::shared_ptr<Tuple> t1, std::shared_ptr<Tuple> t2) {
+    return Tuple::CompareBasedOnColumns(*t1, *t2, columns) < 0;
+  };
+
+  std::sort(tuples_.begin(), tuples_.end(), comparator);
+}
+
+void ResultContainer::SortByColumns(const std::string& table_name,
+                                    const std::vector<uint32>& field_indexes) {
   std::vector<Column> columns;
   for (int index : field_indexes) {
     columns.emplace_back(table_name, "" /* column name doesn't matter */);
@@ -200,38 +248,39 @@ void FetchedResult::SortByColumns(const std::string& table_name,
   SortByColumns(columns);
 }
 
-void FetchedResult::MergeSortResults(FetchedResult& result_1,
-                                     FetchedResult& result_2,
-                                     const std::vector<Column>& columns) {
+void ResultContainer::MergeSortResults(ResultContainer& result_1,
+                                       ResultContainer& result_2,
+                                       const std::vector<Column>& columns) {
   result_1.SortByColumns(columns);
   result_2.SortByColumns(columns);
 
-  auto iter_1 = result_1.tuples.begin();
-  auto iter_2 = result_2.tuples.begin();
-  while (iter_1 != result_1.tuples.end() && iter_2 != result_2.tuples.end()) {
-    if (CompareBasedOnColumns(*iter_1, *iter_2, columns) <= 0) {
-      tuples.push_back(*iter_1);
+  auto iter_1 = result_1.tuples_.begin();
+  auto iter_2 = result_2.tuples_.begin();
+  while (iter_1 != result_1.tuples_.end() && iter_2 != result_2.tuples_.end()) {
+    if (Tuple::CompareBasedOnColumns(**iter_1, **iter_2, columns) <= 0) {
+      AddTuple(*iter_1);
       ++iter_1;
     } else {
-      tuples.push_back(*iter_2);
+      AddTuple(*iter_2);
       ++iter_2;
     }
   }
 
-  while (iter_1 != result_1.tuples.end()) {
-    tuples.push_back(*iter_1);
+  while (iter_1 != result_1.tuples_.end()) {
+    AddTuple(*iter_1);
     ++iter_1;
   }
-  while (iter_2 != result_2.tuples.end()) {
-    tuples.push_back(*iter_2);
+  while (iter_2 != result_2.tuples_.end()) {
+    AddTuple(*iter_2);
     ++iter_2;
   }
 }
 
-void FetchedResult::MergeSortResults(FetchedResult& result_1,
-                                     FetchedResult& result_2,
-                                     const std::string& table_name,
-                                     const std::vector<uint32>& field_indexes) {
+void ResultContainer::MergeSortResults(
+    ResultContainer& result_1,
+    ResultContainer& result_2,
+    const std::string& table_name,
+    const std::vector<uint32>& field_indexes) {
   std::vector<Column> columns;
   for (int index : field_indexes) {
     columns.emplace_back(table_name, "" /* column name doesn't matter */);
@@ -241,58 +290,58 @@ void FetchedResult::MergeSortResults(FetchedResult& result_1,
   MergeSortResults(result_1, result_2, columns);
 }
 
-void FetchedResult::MergeSortResultsRemoveDup(
-    FetchedResult& result_1, FetchedResult& result_2,
+void ResultContainer::MergeSortResultsRemoveDup(
+    ResultContainer& result_1, ResultContainer& result_2,
     const std::vector<Column>& columns) {
   result_1.SortByColumns(columns);
   result_2.SortByColumns(columns);
 
-  auto iter_1 = result_1.tuples.begin();
-  auto iter_2 = result_2.tuples.begin();
-  const Tuple* last_tuple = nullptr;
-  while (iter_1 != result_1.tuples.end() && iter_2 != result_2.tuples.end()) {
-    int re = CompareBasedOnColumns(*iter_1, *iter_2, columns);
+  auto iter_1 = result_1.tuples_.begin();
+  auto iter_2 = result_2.tuples_.begin();
+  std::shared_ptr<Tuple> last_tuple;
+  while (iter_1 != result_1.tuples_.end() && iter_2 != result_2.tuples_.end()) {
+    int re = Tuple::CompareBasedOnColumns(**iter_1, **iter_2, columns);
     if (re <= 0) {
       if (!last_tuple ||
           (last_tuple &&
-           CompareBasedOnColumns(*last_tuple, *iter_1, columns) != 0)) {
-        AddTuple(std::move(*iter_1));
-        last_tuple = &tuples.back();
+           Tuple::CompareBasedOnColumns(*last_tuple, **iter_1, columns) != 0)) {
+        AddTuple(*iter_1);
+        last_tuple = tuples_.back();
       }
       ++iter_1;
     } else {
       if (!last_tuple ||
           (last_tuple &&
-           CompareBasedOnColumns(*last_tuple, *iter_2, columns) != 0)) {
-        AddTuple(std::move(*iter_2));
-        last_tuple = &tuples.back();
+           Tuple::CompareBasedOnColumns(*last_tuple, **iter_2, columns) != 0)) {
+        AddTuple(*iter_2);
+        last_tuple = tuples_.back();
       }
       ++iter_2;
     }
   }
 
-  while (iter_1 != result_1.tuples.end()) {
+  while (iter_1 != result_1.tuples_.end()) {
     if (!last_tuple ||
         (last_tuple &&
-         CompareBasedOnColumns(*last_tuple, *iter_1, columns)) != 0) {
-      AddTuple(std::move(*iter_1));
-      last_tuple = &tuples.back();
+         Tuple::CompareBasedOnColumns(*last_tuple, **iter_1, columns)) != 0) {
+      AddTuple(*iter_1);
+      last_tuple = tuples_.back();
     }
     ++iter_1;
   }
-  while (iter_2 != result_2.tuples.end()) {
+  while (iter_2 != result_2.tuples_.end()) {
     if (!last_tuple ||
         (last_tuple &&
-         CompareBasedOnColumns(*last_tuple, *iter_2, columns) != 0)) {
-      AddTuple(std::move(*iter_2));
-      last_tuple = &tuples.back();
+         Tuple::CompareBasedOnColumns(*last_tuple, **iter_2, columns) != 0)) {
+      AddTuple(*iter_2);
+      last_tuple = tuples_.back();
     }
     ++iter_2;
   }
 }
 
-void FetchedResult::MergeSortResultsRemoveDup(
-    FetchedResult& result_1, FetchedResult& result_2,
+void ResultContainer::MergeSortResultsRemoveDup(
+    ResultContainer& result_1, ResultContainer& result_2,
     const std::string& table_name, const std::vector<uint32>& field_indexes) {
   std::vector<Column> columns;
   for (int index : field_indexes) {
@@ -303,9 +352,12 @@ void FetchedResult::MergeSortResultsRemoveDup(
   MergeSortResultsRemoveDup(result_1, result_2, columns);
 }
 
-void FetchedResult::reset() {
-  tuple_meta = nullptr;
-  tuples.clear();
+void ResultContainer::reset() {
+  tuple_meta_ = nullptr;
+  tuples_.clear();
+  materialized_ = false;
+  num_tuples_ = 0;
+  crt_tindex_ = 0;
 }
 
 

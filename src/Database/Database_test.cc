@@ -298,8 +298,8 @@ class DatabaseTest: public UnitTest {
   int ExpectedResultNum(const Query::ExprTreeNode& expr_root) {
     int expected_num = 0;
     for (const auto& puppy_record : puppy_records_) {
-      auto tuple = FetchedResult::Tuple();
-      tuple.emplace(kTableName, ResultRecord(puppy_record));
+      auto tuple = Tuple();
+      tuple.AddTableRecord(kTableName, puppy_record);
       if (expr_root.Evaluate(tuple).v_bool) {
         expected_num++;
       }
@@ -311,9 +311,9 @@ class DatabaseTest: public UnitTest {
     int expected_num = 0;
     for (const auto& puppy_record : puppy_records_) {
       for (const auto& host_record : host_records_) {
-        auto tuple = FetchedResult::Tuple();
-        tuple.emplace(kTableName, ResultRecord(puppy_record));
-        tuple.emplace(kHostTableName, ResultRecord(host_record));
+        auto tuple = Tuple();
+        tuple.AddTableRecord(kTableName, puppy_record);
+        tuple.AddTableRecord(kHostTableName, host_record);
         if (expr_root.Evaluate(tuple).v_bool) {
           expected_num++;
         }
@@ -323,14 +323,15 @@ class DatabaseTest: public UnitTest {
   }
 
   bool VerifyResult(const Query::ExprTreeNode& expr_root,
-                    const FetchedResult& result) {
-    for (const auto& tuple : result.tuples) {
-      if (!expr_root.Evaluate(tuple).v_bool) {
-        LogERROR("Result record mismatch with query:");
-        tuple.at(kTableName).record->Print();
-        return false;
-      }
-    }
+                    const ResultContainer& result) {
+    // while (true) {
+    //   auto tuple = result->GetNextTuple();
+    //   if (!expr_root.Evaluate(tuple).v_bool) {
+    //     LogERROR("Result record mismatch with query:");
+    //     tuple.at(kTableName).record->Print();
+    //     return false;
+    //   }
+    // }
     return true;
   }
 
@@ -565,7 +566,7 @@ int main(int argc, char** argv) {
   DB::DatabaseTest test;
   test.setup();
 
-  //test.Test_SelectQuery();
+  test.Test_SelectQuery();
   test.Test_Join();
 
   test.teardown();

@@ -24,7 +24,7 @@ class FlatTupleFileTest: public UnitTest {
   std::vector<std::shared_ptr<RecordBase>> data_records_;
   DB::DatabaseCatalog catalog_;
 
-  Query::FetchedResult::TupleMeta tuple_meta_;
+  Query::TupleMeta tuple_meta_;
   std::unique_ptr<FlatTupleFile> ft_file_;
 
  public:
@@ -150,21 +150,19 @@ class FlatTupleFileTest: public UnitTest {
   }
 
   void Test_WriteRead() {
-    AssertTrue(ft_file_->InitForWriting());
-
     // Write tuples to file.
     for (const auto& record : data_records_) {
-      Query::FetchedResult::Tuple tuple;
+      Query::Tuple tuple;
       tuple.emplace(kPuppyTableName, Query::ResultRecord(record));
       AssertTrue(ft_file_->WriteTuple(tuple));
     }
-    ft_file_->FinishWriting();
+    AssertTrue(ft_file_->FinishWriting());
 
     // Read records from file and compare with original records.
-    AssertTrue(ft_file_->InitForReading());
     uint32 total_tuples = 0;
+    auto iterator = ft_file_->GetIterator();
     while (true) {
-      auto tuple = ft_file_->NextTuple();
+      auto tuple = iterator.NextTuple();
       if (!tuple) {
         break;
       }
@@ -181,22 +179,20 @@ class FlatTupleFileTest: public UnitTest {
     opts.txn_id = UUID::TimeStampID();
     ft_file_.reset(new FlatTupleFile(opts));
 
-    AssertTrue(ft_file_->InitForWriting());
-
     // Write tuples to file.
     for (uint32 i = 0; i < kNumRecordsSource; i++) {
-      Query::FetchedResult::Tuple tuple;
+      Query::Tuple tuple;
       tuple.emplace(kPuppyTableName, Query::ResultRecord(data_records_.at(i)));
       tuple.emplace(kHostTableName, Query::ResultRecord(index_records_.at(i)));
       AssertTrue(ft_file_->WriteTuple(tuple));
     }
-    ft_file_->FinishWriting();
+    AssertTrue(ft_file_->FinishWriting());
 
     // Read records from file and compare with original records.
-    AssertTrue(ft_file_->InitForReading());
     uint32 total_tuples = 0;
+    auto iterator = ft_file_->GetIterator();
     while (true) {
-      auto tuple = ft_file_->NextTuple();
+      auto tuple = iterator.NextTuple();
       if (!tuple) {
         break;
       }
@@ -216,11 +212,9 @@ class FlatTupleFileTest: public UnitTest {
     opts.num_buf_pages = 5;
     ft_file_.reset(new FlatTupleFile(opts));
 
-    AssertTrue(ft_file_->InitForWriting());
-
     // Write tuples to file.
     for (uint32 i = 0; i < kNumRecordsSource; i++) {
-      Query::FetchedResult::Tuple tuple;
+      Query::Tuple tuple;
       tuple.emplace(kPuppyTableName, Query::ResultRecord(data_records_.at(i)));
       tuple.emplace(kHostTableName, Query::ResultRecord(index_records_.at(i)));
       AssertTrue(ft_file_->WriteTuple(tuple));
@@ -233,17 +227,17 @@ class FlatTupleFileTest: public UnitTest {
     column2.index = 2;
     AssertTrue(ft_file_->Sort({column1, column2}));
 
-    AssertTrue(ft_file_->InitForReading());
     uint32 total_tuples = 0;
-    std::shared_ptr<Query::FetchedResult::Tuple> prev_tuple;
+    std::shared_ptr<Query::Tuple> prev_tuple;
+    auto iterator = ft_file_->GetIterator();
     while (true) {
-      auto tuple = ft_file_->NextTuple();
+      auto tuple = iterator.NextTuple();
       if (!tuple) {
         break;
       }
       total_tuples++;
       if (prev_tuple) {
-        AssertTrue(Query::FetchedResult::CompareBasedOnColumns(
+        AssertTrue(Query::Tuple::CompareBasedOnColumns(
                       *prev_tuple, *tuple, {column1, column2}) <= 0);
       }
       prev_tuple = tuple;
@@ -261,47 +255,44 @@ class FlatTupleFileTest: public UnitTest {
     opts.txn_id = UUID::TimeStampID();
     ft_file_.reset(new FlatTupleFile(opts));
 
-    AssertTrue(ft_file_->InitForWriting());
-
     // Write tuples to file.
     for (uint32 i = 0; i < kNumRecordsSource; i++) {
-      Query::FetchedResult::Tuple tuple;
+      Query::Tuple tuple;
       tuple.emplace(kPuppyTableName, Query::ResultRecord(data_records_.at(i)));
       tuple.emplace(kHostTableName, Query::ResultRecord(index_records_.at(i)));
       AssertTrue(ft_file_->WriteTuple(tuple));
     }
-    ft_file_->FinishWriting();
-
-    AssertTrue(ft_file_->InitForReading());
+    AssertTrue(ft_file_->FinishWriting());
 
     // Begin random reading.
     for (uint32 times = 0; times < 50; times++) {
       // Pick up a random tuple.
       int32 begin_tuple_index = Utils::RandomNumber(kNumRecordsSource);
-      std::shared_ptr<Query::FetchedResult::Tuple> tuple_1;
-      FlatTupleFile::ReadSnapshot snapshot_1;
+      std::shared_ptr<Query::Tuple> tuple_1;
+      FlatTupleFile::Iterator iterator_1_copy = ft_file_->GetIterator();
+      FlatTupleFile::Iterator iterator_1 = iterator_1_copy;
       for (int32 i = 0; i <= begin_tuple_index; i++) {
-        snapshot_1 = ft_file_->TakeReadSnapshot();
-        tuple_1 = ft_file_->NextTuple();
+        tuple_1 = iterator_1.NextTuple();
         AssertTrue(tuple_1.get());
       }
 
       // Go to another random tuple.
       int32 end_tuple_index = begin_tuple_index +
           Utils::RandomNumber(kNumRecordsSource - begin_tuple_index);
-      std::shared_ptr<Query::FetchedResult::Tuple> tuple_2;
-      FlatTupleFile::ReadSnapshot snapshot_2;
+      std::shared_ptr<Query::Tuple> tuple_2;
+      FlatTupleFile::Iterator iterator_2;
       for (int32 i = begin_tuple_index; i < end_tuple_index; i++) {
-        snapshot_2 = ft_file_->TakeReadSnapshot();
-        tuple_2 = ft_file_->NextTuple();
+        iterator_2 = ft_file_->GetIterator();
+        tuple_2 = iterator_2.NextTuple();
         AssertTrue(tuple_2.get());
       }
+      FlatTupleFile::Iterator iterator_2_copy = iterator_2;
 
-      // Restore snapshots, repeating 10 times.
+      // Restore snapshots, repeating 3 times.
       for (int j = 0; j < 3; j++) {
         // Restore to first tuple position and re-read.
-        AssertTrue(ft_file_->RestoreReadSnapshot(snapshot_1));
-        auto new_tuple_1 = ft_file_->NextTuple();
+        auto iterator = iterator_1_copy;
+        auto new_tuple_1 = iterator.NextTuple();
         AssertTrue(new_tuple_1.get());
         AssertTrue(*(tuple_1->at(kPuppyTableName).record) ==
                    *(new_tuple_1->at(kPuppyTableName).record));
@@ -309,9 +300,8 @@ class FlatTupleFileTest: public UnitTest {
                    *(new_tuple_1->at(kHostTableName).record));
 
         // Restore to second tuple position and re-read.
-        AssertTrue(ft_file_->RestoreReadSnapshot(snapshot_2));
-        auto new_tuple_2 = ft_file_->NextTuple();
-        AssertTrue(new_tuple_2.get());
+        iterator = iterator_2_copy;
+        auto new_tuple_2 = iterator.NextTuple();
         AssertTrue(*(tuple_2->at(kPuppyTableName).record) ==
                    *(new_tuple_2->at(kPuppyTableName).record));
         AssertTrue(*(tuple_2->at(kHostTableName).record) ==
@@ -319,10 +309,10 @@ class FlatTupleFileTest: public UnitTest {
 
         // Go back to first tuple. This time iterate one by one until reaching
         // the second tuple.
-        AssertTrue(ft_file_->RestoreReadSnapshot(snapshot_1));
-        new_tuple_1 = ft_file_->NextTuple();
+        iterator = iterator_1_copy;
+        new_tuple_1 = iterator.NextTuple();
         for (int k = 0; k < (end_tuple_index - begin_tuple_index); k++) {
-          new_tuple_2 = ft_file_->NextTuple();
+          new_tuple_2 = iterator.NextTuple();
         }
         AssertTrue(new_tuple_2.get());
         AssertTrue(*(tuple_2->at(kPuppyTableName).record) ==
@@ -330,9 +320,6 @@ class FlatTupleFileTest: public UnitTest {
         AssertTrue(*(tuple_2->at(kHostTableName).record) ==
                    *(new_tuple_2->at(kHostTableName).record));
       }
-
-      // Restore everything.
-      AssertTrue(ft_file_->ResetRead());
     }
   }
 };
@@ -343,10 +330,10 @@ int main() {
   Storage::FlatTupleFileTest test;
   test.setup();
 
-  //test.Test_WriteRead();
+  test.Test_WriteRead();
   //test.Test_WriteRead_MultiTableTuples();
   //test.Test_Sort();
-  test.Test_SnapshotRestore();
+  //test.Test_SnapshotRestore();
 
   test.teardown();
 
