@@ -55,7 +55,7 @@ class FlatTuplePage {
   void FinishPage();
 
   // Restore read status to a prev snapshot.
-  bool Restore(uint32 tindex, uint32 offset);
+  bool Restore(uint32 num_tuples, uint32 tindex, uint32 offset);
 
   void Reset();
 
@@ -101,12 +101,15 @@ class FlatTupleFile {
   // Iterator for reading tuples. This is a forward-only iterator.
   class Iterator {
    public:
+    Iterator() = default;
     Iterator(FlatTupleFile* ft_file);
     Iterator(const Iterator& other);
     Iterator& operator=(const Iterator& other);
 
     // Get next record from the file.
     std::shared_ptr<Query::Tuple> NextTuple();
+    // Store current page reading status. Called whenever a new tuple is read.
+    void UpdatePageReadState();
    
    private:
     uint32 page_num_ = 0;
@@ -114,7 +117,7 @@ class FlatTupleFile {
     uint32 page_tuple_index_ = 0;
     uint32 page_offset_ = 0;
 
-    FlatTupleFile* ft_file_;
+    FlatTupleFile* ft_file_ = nullptr;
     std::unique_ptr<FlatTuplePage> buf_page_;
   };
 

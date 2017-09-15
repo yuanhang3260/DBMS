@@ -60,6 +60,8 @@ class ResultContainer {
  public:
   // TODO: Random access should NOT be supported.
   std::shared_ptr<Tuple> GetTuple(uint32 index);
+
+  void InitReading() { crt_tindex_ = 0; }
   std::shared_ptr<Tuple> GetNextTuple();
 
   bool AddTuple(std::shared_ptr<Tuple> tuple);

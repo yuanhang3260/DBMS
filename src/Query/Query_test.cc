@@ -176,7 +176,7 @@ class QueryTest: public UnitTest {
   }
 
   void Test_EvaluateConst() {
-    FetchedResult::Tuple tuple;
+    Tuple tuple;
 
     std::string expr;
 
@@ -275,8 +275,8 @@ class QueryTest: public UnitTest {
   }
 
   void Test_EvaluateSingleExpr() {
-    FetchedResult::Tuple tuple;
-    tuple.emplace("Puppy", ResultRecord(data_record_));
+    Tuple tuple;
+    tuple.AddTableRecord("Puppy", data_record_);
 
     std::string expr;
 
@@ -329,12 +329,12 @@ class QueryTest: public UnitTest {
     printf("\n");
 
     // Test evaluation with index record.
-    FetchedResult::Tuple tuple2;
+    Tuple tuple2;
     TableRecordMeta meta;
     meta.CreateIndexRecordMeta(
         catalog_m_->FindTableByName("Puppy")->table_info(), key_fields_);
-    tuple2.emplace("Puppy", ResultRecord(index_record_));
-    tuple2.at("Puppy").meta = &meta;
+    tuple2.AddTableRecord("Puppy", index_record_);
+    tuple2.MutableTableRecord("Puppy")->meta = &meta;
 
     expr = "Puppy.id + 3 < 6";
     std::cout << expr << std::endl;
@@ -1012,13 +1012,13 @@ int main() {
   Query::QueryTest test;
   test.setup();
 
-  // test.Test_EvaluateConst();
-  // test.Test_ColumnNodeExpr();
-  // test.Test_EvaluateSingleExpr();
-  // test.Test_ParseSelectQuery();
-  // test.Test_EvaluateQueryConditions();
-  // test.Test_GenerateUnitPhysicalPlan();
-  // test.Test_GenerateQueryPhysicalPlan();
+  test.Test_EvaluateConst();
+  test.Test_ColumnNodeExpr();
+  test.Test_EvaluateSingleExpr();
+  test.Test_ParseSelectQuery();
+  test.Test_EvaluateQueryConditions();
+  test.Test_GenerateUnitPhysicalPlan();
+  test.Test_GenerateQueryPhysicalPlan();
   test.Test_AnalyzeJoinExpression();
 
   test.teardown();

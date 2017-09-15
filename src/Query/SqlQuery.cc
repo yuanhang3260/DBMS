@@ -726,6 +726,7 @@ void SqlQuery::SortMergeJoin(const JoinQueryConditionGroups& exprs) {
 
   // Merge join.
   FlatTupleFile::Iterator iterator_1 = ft_file_1->GetIterator();
+  FlatTupleFile::Iterator iterator_1_copy = iterator_1;
   FlatTupleFile::Iterator iterator_2 = ft_file_2->GetIterator();
   auto tuple_1 = iterator_1.NextTuple();
   auto tuple_2 = iterator_2.NextTuple();
@@ -733,6 +734,7 @@ void SqlQuery::SortMergeJoin(const JoinQueryConditionGroups& exprs) {
     while (tuple_1 &&
            Tuple::CompareBasedOnColumns(
               *tuple_1, join_column_1, *tuple_2, join_column_2) < 0) {
+      iterator_1_copy = iterator_1;
       tuple_1 = iterator_1.NextTuple();
     }
     if (!tuple_1) {
@@ -756,9 +758,9 @@ void SqlQuery::SortMergeJoin(const JoinQueryConditionGroups& exprs) {
         break;
       }
       // Traverse tuple_1 group and merge with this tuple_2.
-      FlatTupleFile::Iterator iterator_1_copy = iterator_1;
+      FlatTupleFile::Iterator iterator_1 = iterator_1_copy;
       while (true) {
-        tuple_1 = iterator_1_copy.NextTuple();
+        tuple_1 = iterator_1.NextTuple();
         if (!tuple_1) {
           break;
         }
@@ -1695,12 +1697,13 @@ void SqlQuery::AggregateResults() {
 
   Tuple* agg_tuple = nullptr;
   uint32 group_size = 0;
+  results_.InitReading();
   while (true) {
     auto tuple_ptr = results_.GetNextTuple();
     if (!tuple_ptr) {
       break;
     }
-    auto tuple = *tuple_ptr;
+    Tuple& tuple = *tuple_ptr;
     if (!agg_tuple ||
         (agg_tuple && Tuple::CompareBasedOnColumns(
                           tuple, *agg_tuple, non_aggregation_columns) != 0)) {
@@ -1771,12 +1774,13 @@ void SqlQuery::AggregateResults() {
 }
  
 void SqlQuery::PrintResults() {
-  if (results_.NumTuples()) {
+  if (results_.NumTuples() == 0) {
     printf("Empty set\n");
     return;
   }
 
   // Get the print size for each column.
+  results_.InitReading();
   while (true) {
     auto tuple_ptr = results_.GetNextTuple();
     if (!tuple_ptr) {
@@ -1836,6 +1840,7 @@ void SqlQuery::PrintResults() {
   printf("+\n");
 
   // Do print.
+  results_.InitReading();
   while (true) {
     auto tuple_ptr = results_.GetNextTuple();
     if (!tuple_ptr) {

@@ -153,7 +153,7 @@ class FlatTupleFileTest: public UnitTest {
     // Write tuples to file.
     for (const auto& record : data_records_) {
       Query::Tuple tuple;
-      tuple.emplace(kPuppyTableName, Query::ResultRecord(record));
+      tuple.AddTableRecord(kPuppyTableName, record);
       AssertTrue(ft_file_->WriteTuple(tuple));
     }
     AssertTrue(ft_file_->FinishWriting());
@@ -166,7 +166,7 @@ class FlatTupleFileTest: public UnitTest {
       if (!tuple) {
         break;
       }
-      AssertTrue(*(tuple->at(kPuppyTableName).record) ==
+      AssertTrue(*(tuple->GetTableRecord(kPuppyTableName)->record) ==
                  *data_records_.at(total_tuples));
       total_tuples++;
     }
@@ -182,8 +182,8 @@ class FlatTupleFileTest: public UnitTest {
     // Write tuples to file.
     for (uint32 i = 0; i < kNumRecordsSource; i++) {
       Query::Tuple tuple;
-      tuple.emplace(kPuppyTableName, Query::ResultRecord(data_records_.at(i)));
-      tuple.emplace(kHostTableName, Query::ResultRecord(index_records_.at(i)));
+      tuple.AddTableRecord(kPuppyTableName, data_records_.at(i));
+      tuple.AddTableRecord(kHostTableName, index_records_.at(i));
       AssertTrue(ft_file_->WriteTuple(tuple));
     }
     AssertTrue(ft_file_->FinishWriting());
@@ -196,9 +196,9 @@ class FlatTupleFileTest: public UnitTest {
       if (!tuple) {
         break;
       }
-      AssertTrue(*(tuple->at(kPuppyTableName).record) ==
+      AssertTrue(*((tuple->GetTableRecord(kPuppyTableName)->record)) ==
                  *data_records_.at(total_tuples));
-      AssertTrue(*(tuple->at(kHostTableName).record) ==
+      AssertTrue(*((tuple->GetTableRecord(kHostTableName)->record)) ==
                  *index_records_.at(total_tuples));
       total_tuples++;
     }
@@ -215,8 +215,8 @@ class FlatTupleFileTest: public UnitTest {
     // Write tuples to file.
     for (uint32 i = 0; i < kNumRecordsSource; i++) {
       Query::Tuple tuple;
-      tuple.emplace(kPuppyTableName, Query::ResultRecord(data_records_.at(i)));
-      tuple.emplace(kHostTableName, Query::ResultRecord(index_records_.at(i)));
+      tuple.AddTableRecord(kPuppyTableName, data_records_.at(i));
+      tuple.AddTableRecord(kHostTableName, index_records_.at(i));
       AssertTrue(ft_file_->WriteTuple(tuple));
     }
     AssertTrue(ft_file_->FinishWriting());
@@ -249,6 +249,8 @@ class FlatTupleFileTest: public UnitTest {
   }
 
   void Test_SnapshotRestore() {
+    std::cout << __FUNCTION__ << std::endl;
+
     // Write tuples to file.
     FlatTupleFileOptions opts(tuple_meta_, {kPuppyTableName, kHostTableName});
     opts.db_name = kDBName;
@@ -258,67 +260,72 @@ class FlatTupleFileTest: public UnitTest {
     // Write tuples to file.
     for (uint32 i = 0; i < kNumRecordsSource; i++) {
       Query::Tuple tuple;
-      tuple.emplace(kPuppyTableName, Query::ResultRecord(data_records_.at(i)));
-      tuple.emplace(kHostTableName, Query::ResultRecord(index_records_.at(i)));
+      tuple.AddTableRecord(kPuppyTableName, data_records_.at(i));
+      tuple.AddTableRecord(kHostTableName, index_records_.at(i));
+      //tuple.Print();
       AssertTrue(ft_file_->WriteTuple(tuple));
     }
     AssertTrue(ft_file_->FinishWriting());
+    //printf("\n");
 
     // Begin random reading.
     for (uint32 times = 0; times < 50; times++) {
       // Pick up a random tuple.
       int32 begin_tuple_index = Utils::RandomNumber(kNumRecordsSource);
+      FlatTupleFile::Iterator iterator = ft_file_->GetIterator();
+      FlatTupleFile::Iterator iterator_1;
       std::shared_ptr<Query::Tuple> tuple_1;
-      FlatTupleFile::Iterator iterator_1_copy = ft_file_->GetIterator();
-      FlatTupleFile::Iterator iterator_1 = iterator_1_copy;
       for (int32 i = 0; i <= begin_tuple_index; i++) {
-        tuple_1 = iterator_1.NextTuple();
+        iterator_1 = iterator;
+        tuple_1 = iterator.NextTuple();
         AssertTrue(tuple_1.get());
       }
 
       // Go to another random tuple.
       int32 end_tuple_index = begin_tuple_index +
           Utils::RandomNumber(kNumRecordsSource - begin_tuple_index);
-      std::shared_ptr<Query::Tuple> tuple_2;
-      FlatTupleFile::Iterator iterator_2;
+      //printf("%d, %d\n", begin_tuple_index, end_tuple_index);
+      FlatTupleFile::Iterator iterator_2 = iterator_1;
+      std::shared_ptr<Query::Tuple> tuple_2 = tuple_1;
       for (int32 i = begin_tuple_index; i < end_tuple_index; i++) {
-        iterator_2 = ft_file_->GetIterator();
-        tuple_2 = iterator_2.NextTuple();
+        iterator_2 = iterator;
+        tuple_2 = iterator.NextTuple();
         AssertTrue(tuple_2.get());
       }
-      FlatTupleFile::Iterator iterator_2_copy = iterator_2;
 
       // Restore snapshots, repeating 3 times.
       for (int j = 0; j < 3; j++) {
         // Restore to first tuple position and re-read.
-        auto iterator = iterator_1_copy;
+        iterator = iterator_1;
         auto new_tuple_1 = iterator.NextTuple();
         AssertTrue(new_tuple_1.get());
-        AssertTrue(*(tuple_1->at(kPuppyTableName).record) ==
-                   *(new_tuple_1->at(kPuppyTableName).record));
-        AssertTrue(*(tuple_1->at(kHostTableName).record) ==
-                   *(new_tuple_1->at(kHostTableName).record));
+        AssertTrue(*(tuple_1->GetTableRecord(kPuppyTableName)->record) ==
+                   *(new_tuple_1->GetTableRecord(kPuppyTableName)->record));
+        AssertTrue(*(tuple_1->GetTableRecord(kHostTableName)->record) ==
+                   *(new_tuple_1->GetTableRecord(kHostTableName)->record));
 
         // Restore to second tuple position and re-read.
-        iterator = iterator_2_copy;
+        iterator = iterator_2;
         auto new_tuple_2 = iterator.NextTuple();
-        AssertTrue(*(tuple_2->at(kPuppyTableName).record) ==
-                   *(new_tuple_2->at(kPuppyTableName).record));
-        AssertTrue(*(tuple_2->at(kHostTableName).record) ==
-                   *(new_tuple_2->at(kHostTableName).record));
+        AssertTrue(new_tuple_2.get());
+        AssertTrue(*(tuple_2->GetTableRecord(kPuppyTableName)->record) ==
+                   *(new_tuple_2->GetTableRecord(kPuppyTableName)->record));
+        AssertTrue(*(tuple_2->GetTableRecord(kHostTableName)->record) ==
+                   *(new_tuple_2->GetTableRecord(kHostTableName)->record));
 
         // Go back to first tuple. This time iterate one by one until reaching
         // the second tuple.
-        iterator = iterator_1_copy;
+        iterator = iterator_1;
         new_tuple_1 = iterator.NextTuple();
+        AssertTrue(new_tuple_1.get());
         for (int k = 0; k < (end_tuple_index - begin_tuple_index); k++) {
           new_tuple_2 = iterator.NextTuple();
         }
         AssertTrue(new_tuple_2.get());
-        AssertTrue(*(tuple_2->at(kPuppyTableName).record) ==
-                   *(new_tuple_2->at(kPuppyTableName).record));
-        AssertTrue(*(tuple_2->at(kHostTableName).record) ==
-                   *(new_tuple_2->at(kHostTableName).record));
+        AssertTrue(*(tuple_2->GetTableRecord(kPuppyTableName)->record) ==
+                   *(new_tuple_2->GetTableRecord(kPuppyTableName)->record));
+        AssertTrue(*(tuple_2->GetTableRecord(kHostTableName)->record) ==
+                   *(new_tuple_2->GetTableRecord(kHostTableName)->record));
       }
     }
   }
@@ -330,10 +337,10 @@ int main() {
   Storage::FlatTupleFileTest test;
   test.setup();
 
-  test.Test_WriteRead();
+  //test.Test_WriteRead();
   //test.Test_WriteRead_MultiTableTuples();
   //test.Test_Sort();
-  //test.Test_SnapshotRestore();
+  test.Test_SnapshotRestore();
 
   test.teardown();
 

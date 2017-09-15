@@ -37,7 +37,8 @@ Storage::RecordType ResultRecord::record_type() const {
 
 const Schema::Field* ResultRecord::GetField(uint32 index) const {
   if (record_type() == Storage::DATA_RECORD) {
-    CHECK(index < record->NumFields(), "index %d out of range", index);
+    CHECK(index < record->NumFields(),
+          "index %d out of range %d", index, record->NumFields());
     return record->fields().at(index).get();
   } else if (record_type() == Storage::INDEX_RECORD) {
     int pos = -1;
@@ -94,7 +95,7 @@ const ResultRecord* Tuple::GetTableRecord(const std::string& table_name) const {
 }
 
 ResultRecord* Tuple::MutableTableRecord(const std::string& table_name) {
-  return const_cast<ResultRecord*>(MutableTableRecord(table_name));
+  return const_cast<ResultRecord*>(GetTableRecord(table_name));
 }
 
 bool Tuple::AddTableRecord(const std::string& table_name,
@@ -107,6 +108,8 @@ bool Tuple::AddMeta(const TupleMeta& meta) {
   for (auto& table_record_iter : records) {
     auto meta_it = meta.find(table_record_iter.first);
     if (meta_it == meta.end()) {
+      LogERROR("Couldn't find meta for table %s",
+               table_record_iter.first.c_str());
       return false;
     }
     table_record_iter.second.meta = &meta_it->second;

@@ -72,8 +72,8 @@ std::pair<uint32, byte*> FlatTuplePage::GetNextTuple() {
   return {tuple_length, tuple_data};
 }
 
-bool FlatTuplePage::Restore(uint32 tindex, uint32 offset) {
-  memcpy(&num_tuples_, data_, sizeof(num_tuples_));
+bool FlatTuplePage::Restore(uint32 num_tuples, uint32 tindex, uint32 offset) {
+  num_tuples_ = num_tuples;
   crt_tindex_ = tindex;
   crt_offset_ = offset;
   return true;
@@ -329,7 +329,7 @@ std::shared_ptr<Tuple> FlatTupleFile::Iterator::NextTuple() {
                ft_file_->filename_.c_str());
       return nullptr;
     }
-    buf_page_->Restore(page_tuple_index_, page_offset_);
+    buf_page_->Restore(page_tuples_, page_tuple_index_, page_offset_);
   }
 
   // Consume next record from buffer FlatRecordPage.
@@ -396,7 +396,16 @@ std::shared_ptr<Tuple> FlatTupleFile::Iterator::NextTuple() {
         "Error loading record from page %u - expect %d bytes, actual %d ",
         page_num_, tuple_length, load_size);
 
+  UpdatePageReadState();
   return tuple;
+}
+
+void FlatTupleFile::Iterator::UpdatePageReadState() {
+  if (buf_page_) {
+    page_tuples_ = buf_page_->num_tuples();
+    page_tuple_index_ = buf_page_->crt_tindex();
+    page_offset_ = buf_page_->crt_offset();
+  }
 }
 
 bool FlatTupleFile::DeleteFile() {

@@ -17,12 +17,13 @@ namespace {
 using Storage::DataRecord;
 using Storage::IndexRecord;
 using Storage::RecordBase;
-using Query::FetchedResult;
+using Query::ResultContainer;
 using Query::Interpreter;
 using Query::OperatorType;
 using Query::PhysicalPlan;
 using Query::ResultRecord;
 using Query::SqlQuery;
+using Query::Tuple;
 
 const char* const kDBName = "test_db";
 const char* const kTableName = "Puppy";
@@ -566,7 +567,7 @@ int main(int argc, char** argv) {
   DB::DatabaseTest test;
   test.setup();
 
-  test.Test_SelectQuery();
+  //test.Test_SelectQuery();
   test.Test_Join();
 
   test.teardown();

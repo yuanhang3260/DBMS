@@ -70,52 +70,68 @@ class CommonTest: public UnitTest {
 
   void setup() {
     InitRecordResource(&data_records_);
+
+    tuple_meta_.emplace(kTableName, TableRecordMeta());
   }
 
   void Test_SortByColumn() {
     ResultContainer result;
-    result.tuple_meta = &tuple_meta_;
+    result.SetTupleMeta(&tuple_meta_);
     for (const auto& record : data_records_) {
       auto tuple = Tuple();
-      tuple.emplace(kTableName, ResultRecord(record));
-      result.AddTuple(std::move(tuple));
+      AssertTrue(tuple.AddTableRecord(kTableName, record));
+      result.AddTuple(tuple);
     }
 
     result.SortByColumns(kTableName, key_fields_);
-
-    for (const auto& tuple : result.tuples) {
-      tuple.at(kTableName).record->Print();
+    result.InitReading();
+    while (true) {
+      auto tuple = result.GetNextTuple();
+      if (!tuple) {
+        break;
+      }
+      tuple->GetTableRecord(kTableName)->record->Print();
     }
+    printf("\n");
   }
 
   void Test_MergeSortResultsRemoveDup() {
+    std::cout << __FUNCTION__ << std::endl;
+
     std::vector<std::shared_ptr<RecordBase>> data_records_1;
     InitRecordResource(&data_records_1);
     ResultContainer result1;
-    result1.tuple_meta = &tuple_meta_;
+    result1.SetTupleMeta(&tuple_meta_);
     for (const auto& record : data_records_1) {
       auto tuple = Tuple();
-      tuple.emplace(kTableName, ResultRecord(record));
-      result1.AddTuple(std::move(tuple));
+      AssertTrue(tuple.AddTableRecord(kTableName, record));
+      result1.AddTuple(tuple);
     }
 
     std::vector<std::shared_ptr<RecordBase>> data_records_2;
     InitRecordResource(&data_records_2);
     ResultContainer result2;
-    result2.tuple_meta = &tuple_meta_;
+    result2.SetTupleMeta(&tuple_meta_);
     for (const auto& record : data_records_2) {
       auto tuple = Tuple();
-      tuple.emplace(kTableName, ResultRecord(record));
-      result2.AddTuple(std::move(tuple));
+      AssertTrue(tuple.AddTableRecord(kTableName, record));
+      result2.AddTuple(tuple);
     }
 
     ResultContainer result;
+    result.SetTupleMeta(&tuple_meta_);
     result.MergeSortResultsRemoveDup(result1, result2, kTableName, {1});
-    AssertGreaterEqual(7, result.tuples.size());
+    AssertGreaterEqual(7, result.NumTuples());
 
-    // for (const auto& tuple : result.tuples) {
-    //   tuple.at(kTableName).record->Print();
-    // }
+    result.InitReading();
+    while (true) {
+      auto tuple = result.GetNextTuple();
+      if (!tuple) {
+        break;
+      }
+      tuple->GetTableRecord(kTableName)->record->Print();
+    }
+    printf("\n");
   }
 };
 
