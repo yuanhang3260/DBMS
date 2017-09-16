@@ -47,7 +47,7 @@ class FlatTuplePage {
   const byte* data() const { return data_; }
 
   // Return the length and data of next tuple, and increment buffer offset.
-  std::pair<uint32, byte*> GetNextTuple();
+  std::shared_ptr<Query::Tuple> GetNextTuple();
 
   // Dump a tuple to page, and increment buffer offset. Return the length of
   // the record.

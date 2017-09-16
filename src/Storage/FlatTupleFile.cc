@@ -44,7 +44,7 @@ FlatTuplePage::~FlatTuplePage() {
   }
 }
 
-std::pair<uint32, byte*> FlatTuplePage::GetNextTuple() {
+std::shared_ptr<Tuple> FlatTuplePage::GetNextTuple() {
   CHECK(data_, "Buffer page is not created yet.");
 
   // Check meta data is parsed or not.
@@ -52,7 +52,7 @@ std::pair<uint32, byte*> FlatTuplePage::GetNextTuple() {
     memcpy(&num_tuples_, data_, sizeof(num_tuples_));
     // Loaded an empty page? Maybe, in case we did something wrong.
     if (num_tuples_ == 0) {
-      return {0, nullptr}; 
+      return nullptr; 
     }
     crt_offset_ = sizeof(num_tuples_);
     crt_tindex_ = 0;
@@ -60,7 +60,7 @@ std::pair<uint32, byte*> FlatTuplePage::GetNextTuple() {
 
   // Reach the end of this page.
   if (crt_tindex_ == num_tuples_) {
-    return {0, nullptr};
+    return nullptr;
   }
 
   uint32 tuple_length;
@@ -69,7 +69,40 @@ std::pair<uint32, byte*> FlatTuplePage::GetNextTuple() {
   crt_offset_ += (sizeof(tuple_length) + tuple_length);
   crt_tindex_++;
 
-  return {tuple_length, tuple_data};
+  // Load tuple from data.
+  auto tuple = std::make_shared<Tuple>();
+  uint32 load_size = 0;
+  for (const auto& iter : opts_->table_metas) {
+    const auto& table_name = iter.first;
+    const auto* table_meta = iter.second;
+    if (table_meta->record_type == Storage::DATA_RECORD) {
+      tuple->AddTableRecord(table_name,
+                            std::make_shared<Storage::DataRecord>());
+    } else if (table_meta->record_type == Storage::INDEX_RECORD) {
+      tuple->AddTableRecord(table_name,
+                            std::make_shared<Storage::IndexRecord>());
+    } else {
+      LogFATAL("Unexpected table record type %s",
+               Storage::RecordTypeStr(table_meta->record_type).c_str());
+    }
+
+    auto result_record = tuple->MutableTableRecord(table_name);
+    // Set table metadata for the loaded table record.
+    result_record->meta = table_meta;
+    // Load record fields.
+    for (const auto& field_info : table_meta->fetched_fields) {
+      result_record->record->AddField(field_info);
+    }
+    load_size += result_record->record->LoadFromMem(tuple_data + load_size);
+    // result_record.record->Print();
+    // printf("load_size = %d\n", load_size);
+  }
+
+  CHECK(load_size == tuple_length,
+        "Error loading record from page - expect %d bytes, actual %d ",
+        tuple_length, load_size);
+
+  return tuple;
 }
 
 bool FlatTuplePage::Restore(uint32 num_tuples, uint32 tindex, uint32 offset) {
@@ -333,13 +366,9 @@ std::shared_ptr<Tuple> FlatTupleFile::Iterator::NextTuple() {
     buf_page_->Restore(page_tuples_, page_tuple_index_, page_offset_);
   }
 
-  // Consume next record from buffer FlatRecordPage.
-  auto re = buf_page_->GetNextTuple();
-  uint32 tuple_length = re.first;
-  byte* tuple_data = re.second;
-
-  // Reach the end of this page. Fetch next page if exists.
-  if (tuple_length == 0 || tuple_data == nullptr) {
+  // Get next tuple from buffer page.
+  auto tuple = buf_page_->GetNextTuple();
+  if (!tuple) {
     page_num_++;
     if (page_num_ == ft_file_->num_pages_) {
       // Reach the end of file, no more record is available.
@@ -363,39 +392,6 @@ std::shared_ptr<Tuple> FlatTupleFile::Iterator::NextTuple() {
     // Recursive call - the next page is loaded and ready to be read.
     return NextTuple();
   }
-
-  // Load next tuple.
-  auto tuple = std::make_shared<Tuple>();
-  uint32 load_size = 0;
-  for (const auto& iter : ft_file_->opts_.table_metas) {
-    const auto& table_name = iter.first;
-    const auto* table_meta = iter.second;
-    if (table_meta->record_type == Storage::DATA_RECORD) {
-      tuple->AddTableRecord(table_name,
-                            std::make_shared<Storage::DataRecord>());
-    } else if (table_meta->record_type == Storage::INDEX_RECORD) {
-      tuple->AddTableRecord(table_name,
-                            std::make_shared<Storage::IndexRecord>());
-    } else {
-      LogFATAL("Unexpected table record type %s",
-               Storage::RecordTypeStr(table_meta->record_type).c_str());
-    }
-
-    auto result_record = tuple->MutableTableRecord(table_name);
-    // Set table metadata for the loaded table record.
-    result_record->meta = table_meta;
-    // Load record fields.
-    for (const auto& field_info : table_meta->fetched_fields) {
-      result_record->record->AddField(field_info);
-    }
-    load_size += result_record->record->LoadFromMem(tuple_data + load_size);
-    // result_record.record->Print();
-    // printf("load_size = %d\n", load_size);
-  }
-
-  CHECK(load_size == tuple_length,
-        "Error loading record from page %u - expect %d bytes, actual %d ",
-        page_num_, tuple_length, load_size);
 
   UpdatePageReadState();
   return tuple;

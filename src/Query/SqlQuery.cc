@@ -733,6 +733,11 @@ void SqlQuery::SortMergeJoin(const JoinQueryConditionGroups& exprs) {
       break;
     }
 
+    if (Tuple::CompareBasedOnColumns(
+            *tuple_1, join_column_1, *tuple_2, join_column_2) != 0) {
+      continue;
+    }
+
     std::shared_ptr<Tuple> tuple_1_flag = tuple_1;
     std::shared_ptr<Tuple> tuple_2_flag = tuple_2;
     while (tuple_2) {

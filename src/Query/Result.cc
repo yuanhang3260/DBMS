@@ -5,7 +5,7 @@
 #include "Storage/Common.h"
 
 namespace {
-const uint32 kContainerBufferLimit = 1 * Storage::kPageSize;
+const uint32 kContainerBufferLimit = 3 * Storage::kPageSize;
 }
 
 namespace Query {

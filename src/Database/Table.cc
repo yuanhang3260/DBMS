@@ -20,7 +20,7 @@ using Storage::DataRecord;
 using Storage::IndexRecord;
 using Storage::RecordID;
 
-const bool kEnableInFlyIter = false;
+const bool kEnableInFlyIter = true;
 
 }
 
