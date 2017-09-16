@@ -100,10 +100,10 @@ uint32 FlatTuplePage::DumpTuple(const Tuple& tuple) {
   // name, so the dump order is also by table name.
   for (const auto& iter : opts_->table_metas) {
     const auto& table_name = iter.first;
-    auto table_recprd = tuple.GetTableRecord(table_name);
-    CHECK(table_recprd != nullptr,
+    auto table_record = tuple.GetTableRecord(table_name);
+    CHECK(table_record != nullptr,
           "Can't find record of table %s from tuple", table_name.c_str());
-    crt_offset_ += table_recprd->record->DumpToMem(data_ + crt_offset_);
+    crt_offset_ += table_record->record->DumpToMem(data_ + crt_offset_);
   }
   num_tuples_++;
 
@@ -217,6 +217,7 @@ bool FlatTupleFile::InitForWriting() {
 
   if (filename_.empty()) {
     filename_ = NewTempfileName();
+    //printf("create filename %s\n", filename_.c_str());
   }
 
   // Check the file. If it already exists, empty it. Otherwise create new file. 

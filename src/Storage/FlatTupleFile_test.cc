@@ -337,9 +337,9 @@ int main() {
   Storage::FlatTupleFileTest test;
   test.setup();
 
-  //test.Test_WriteRead();
-  //test.Test_WriteRead_MultiTableTuples();
-  //test.Test_Sort();
+  test.Test_WriteRead();
+  test.Test_WriteRead_MultiTableTuples();
+  test.Test_Sort();
   test.Test_SnapshotRestore();
 
   test.teardown();

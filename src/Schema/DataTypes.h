@@ -32,6 +32,7 @@ class IntField: public Field {
  public:
   IntField() = default;
   IntField(int value) : value_(value) {}
+  ~IntField() {}
 
   DEFINE_ACCESSOR(value, int);
   FieldType type() const override { return FieldType::INT; }
@@ -103,6 +104,7 @@ class LongIntField: public Field {
  public:
   LongIntField() = default;
   LongIntField(int64 value) : value_(value) {}
+  ~LongIntField() {}
 
   DEFINE_ACCESSOR(value, int64);
   FieldType type() const override { return FieldType::LONGINT; }
@@ -174,6 +176,7 @@ class DoubleField: public Field {
  public:
   DoubleField() = default;
   DoubleField(double value) : value_(value) {}
+  ~DoubleField() {}
 
   DEFINE_ACCESSOR(value, double);
   FieldType type() const override { return FieldType::DOUBLE; }
@@ -243,6 +246,7 @@ class BoolField: public Field {
  public:
   BoolField() = default;
   BoolField(bool value) : value_(value) {}
+  ~BoolField() {}
 
   DEFINE_ACCESSOR(value, bool);
   FieldType type() const override { return FieldType::BOOL; }
@@ -307,6 +311,7 @@ class CharField: public Field {
  public:
   CharField() = default;
   CharField(char c) : value_(c) {}
+  ~CharField() {}
 
   DEFINE_ACCESSOR(value, char);
   FieldType type() const override { return FieldType::CHAR; }
@@ -372,6 +377,7 @@ class StringField: public Field {
   StringField() = default;
   StringField(const std::string& str) : value_(str) {}
   StringField(const char* buf, int size) : value_(buf, size) {}
+  ~StringField() {}
 
   DEFINE_ACCESSOR(value, std::string);
   FieldType type() const override { return FieldType::STRING; }

@@ -31,6 +31,7 @@ OBJ = $(OBJ_DIR)/Database/Catalog_pb.o  \
       $(OBJ_DIR)/Query/NodeValue.o  \
       $(OBJ_DIR)/Query/Result.o  \
       $(OBJ_DIR)/Query/SqlQuery.o  \
+      $(OBJ_DIR)/Query/Tuple.o  \
       $(OBJ_DIR)/Schema/SchemaType.o  \
       $(OBJ_DIR)/Schema/DataTypes.o  \
       $(OBJ_DIR)/Sql/scanner.o  \

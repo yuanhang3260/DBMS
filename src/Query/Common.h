@@ -46,6 +46,7 @@ struct Column {
   std::string column_name;
   int index = -1;
   Schema::FieldType type = Schema::FieldType::UNKNOWN_TYPE;
+  uint32 size = 0; // For CharArray type
 
   std::string AsString(bool use_table_prefix) const;
   std::string DebugString() const;

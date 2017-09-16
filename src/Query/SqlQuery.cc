@@ -9,9 +9,6 @@
 #include "Storage/FlatTupleFile.h"
 #include "Storage/Record.h"
 
-using Storage::FlatTupleFile;
-using Storage::FlatTupleFileOptions;
-
 namespace Query {
 
 namespace {
@@ -34,8 +31,8 @@ void SqlQuery::reset() {
   order_by_columns_.clear();
   group_by_columns_.clear();
   aggregated_columns_num_ = 0;
-  tuple_meta_.clear();
 
+  tuple_meta_.clear();
   results_.reset();
 }
 
@@ -332,6 +329,7 @@ bool SqlQuery::FinalizeParsing() {
     // Assign column field index and type.
     column_request.column.index = field_m->index();
     column_request.column.type = field_m->type();
+    column_request.column.size = field_m->size();
 
     if (column_request.aggregation_type == NO_AGGREGATION) {
       non_aggregate_columns++;
@@ -418,15 +416,16 @@ int SqlQuery::ExecuteSelectQuery() {
   // results_ = std::move(*expr_node_->mutable_results());
 
   // Use iterator in fly.
-  results_.SetTupleMeta(&tuple_meta_);
+  results_ = std::make_shared<ResultContainer>(this);
   auto* iter = expr_node_->GetIterator();
   while (true) {
     auto tuple = iter->GetNextTuple();
     if (!tuple) {
       break;
     }
-    results_.AddTuple(tuple);
+    results_->AddTuple(tuple);
   }
+  results_->FinalizeAdding();
 
   if (aggregated_columns_num_ > 0) {
     AggregateResults();
@@ -437,10 +436,10 @@ int SqlQuery::ExecuteSelectQuery() {
     for (const auto& column_request : order_by_columns_) {
       columns.push_back(column_request.column);
     }
-    results_.SortByColumns(columns);
+    results_->SortByColumns(columns);
   }
 
-  return results_.NumTuples();
+  return results_->NumTuples();
 }
 
 std::shared_ptr<SqlQuery::JoinQueryConditionGroups>
@@ -580,7 +579,7 @@ void SqlQuery::NestedLoopJoin(const JoinQueryConditionGroups& exprs) {
   PrepareQueryPlan(node_2.get());
   std::cout << node_2->physical_plan().plan << std::endl;
 
-  results_.SetTupleMeta(&tuple_meta_);
+  results_ = std::make_shared<ResultContainer>(this);
 
   // Do loop join.
   auto* iter_1 = node_1->GetIterator();
@@ -616,7 +615,7 @@ void SqlQuery::NestedLoopJoin(const JoinQueryConditionGroups& exprs) {
       for (const auto& tuple_1 : block_tuples) {
         auto tuple = Tuple::MergeTuples(*tuple_1, *tuple_2);
         if (expr_node_->Evaluate(*tuple).v_bool) {
-          results_.AddTuple(tuple);
+          results_->AddTuple(tuple);
         }
       }
     }
@@ -631,6 +630,7 @@ void SqlQuery::NestedLoopJoin(const JoinQueryConditionGroups& exprs) {
     }
     block_tuples_size = 0;
   }
+  results_->FinalizeAdding();
 }
 
 void SqlQuery::SortMergeJoin(const JoinQueryConditionGroups& exprs) {
@@ -640,55 +640,35 @@ void SqlQuery::SortMergeJoin(const JoinQueryConditionGroups& exprs) {
   auto node_2 = BuildExpressTree(*(++tables_.begin()), exprs.table_2_exprs);
   PrepareQueryPlan(node_2.get());
 
-  results_.SetTupleMeta(&tuple_meta_);
-
   // Fetch records from 2 tables and materialize to tmpfiles.
   auto dump_and_sort_tuples_to_file = [&] (
       std::shared_ptr<ExprTreeNode> node,
       const std::string& table_name,
       const std::vector<Query::Column>& sort_columns) {
     auto* iter = node->GetIterator();
-    std::shared_ptr<FlatTupleFile> ft_file;
+    auto result = std::make_shared<ResultContainer>(this);
     while (true) {
       auto tuple = iter->GetNextTuple();
       if (!tuple) {
         break;
       }
-      if (!ft_file) {
-        FlatTupleFileOptions opts(tuple_meta_, {table_name});
-        opts.db_name = db_->catalog().name();
-        opts.txn_id = 0;  // TODO: Add transaction id.
-        ft_file = std::make_shared<FlatTupleFile>(opts);
-        if (!ft_file->InitForWriting()) {
-          ft_file.reset();
-          return ft_file;
-        }
-      }
-      if (!ft_file->WriteTuple(*tuple)) {
+      if (!result->AddTuple(tuple)) {
         LogERROR("Failed to write tuple to tmpfile");
       }
     }
-    if (!ft_file->FinishWriting()) {
-      ft_file->DeleteFile();
-      ft_file.reset();
-      return ft_file;
+    if (!result->FinalizeAdding()) {
+      result.reset();
+      return result;
     }
 
     // Sort records.
-    if (!ft_file->Sort(sort_columns)) {
+    if (!result->SortByColumns(sort_columns)) {
       LogERROR("Failed to sort results from table %s", table_name.c_str());
-      ft_file.reset();
-      return ft_file;
+      result.reset();
+      return result;
     }
-    return ft_file;
+    return result;
   };
-
-  // Tmpfiles.
-  std::shared_ptr<FlatTupleFile> ft_file_1, ft_file_2;
-  auto cleanup = Utility::CleanUp([&] {
-    ft_file_1->DeleteFile();
-    ft_file_2->DeleteFile();
-  });
 
   // Get join columns for both tables, respectively.
   std::vector<Query::Column> join_column_1, join_column_2;
@@ -708,34 +688,37 @@ void SqlQuery::SortMergeJoin(const JoinQueryConditionGroups& exprs) {
   }
 
   // Do load and sort.
-  ft_file_1 = dump_and_sort_tuples_to_file(node_1, *tables_.begin(),
-                                           join_column_1);
-  if (!ft_file_1) {
+  auto result_1 = dump_and_sort_tuples_to_file(node_1, *tables_.begin(),
+                                               join_column_1);
+  if (!result_1) {
     LogERROR("Failed to dump results from table %s",
              (*tables_.begin()).c_str());
     return;
   }
 
-  ft_file_2 = dump_and_sort_tuples_to_file(node_2, *(++tables_.begin()),
-                                           join_column_2);
-  if (!ft_file_2) {
+  auto result_2 = dump_and_sort_tuples_to_file(node_2, *(++tables_.begin()),
+                                               join_column_2);
+  if (!result_2) {
     LogERROR("Failed to dump results from table %s",
              (*(++tables_.begin())).c_str());
     return;
   }
 
+  // Final result.
+  results_ = std::make_shared<ResultContainer>(this);
+
   // Merge join.
-  FlatTupleFile::Iterator iterator_1 = ft_file_1->GetIterator();
-  FlatTupleFile::Iterator iterator_1_copy = iterator_1;
-  FlatTupleFile::Iterator iterator_2 = ft_file_2->GetIterator();
-  auto tuple_1 = iterator_1.NextTuple();
-  auto tuple_2 = iterator_2.NextTuple();
+  ResultContainer::Iterator iterator_1 = result_1->GetIterator();
+  ResultContainer::Iterator iterator_1_copy = iterator_1;
+  ResultContainer::Iterator iterator_2 = result_2->GetIterator();
+  auto tuple_1 = iterator_1.GetNextTuple();
+  auto tuple_2 = iterator_2.GetNextTuple();
   while (tuple_1 && tuple_2) {
     while (tuple_1 &&
            Tuple::CompareBasedOnColumns(
               *tuple_1, join_column_1, *tuple_2, join_column_2) < 0) {
       iterator_1_copy = iterator_1;
-      tuple_1 = iterator_1.NextTuple();
+      tuple_1 = iterator_1.GetNextTuple();
     }
     if (!tuple_1) {
       break;
@@ -744,7 +727,7 @@ void SqlQuery::SortMergeJoin(const JoinQueryConditionGroups& exprs) {
     while (tuple_2 &&
            Tuple::CompareBasedOnColumns(
               *tuple_1, join_column_1, *tuple_2, join_column_2) > 0) {
-      tuple_2 = iterator_2.NextTuple();
+      tuple_2 = iterator_2.GetNextTuple();
     }
     if (!tuple_2) {
       break;
@@ -758,9 +741,9 @@ void SqlQuery::SortMergeJoin(const JoinQueryConditionGroups& exprs) {
         break;
       }
       // Traverse tuple_1 group and merge with this tuple_2.
-      FlatTupleFile::Iterator iterator_1 = iterator_1_copy;
+      ResultContainer::Iterator iterator_1 = iterator_1_copy;
       while (true) {
-        tuple_1 = iterator_1.NextTuple();
+        tuple_1 = iterator_1.GetNextTuple();
         if (!tuple_1) {
           break;
         }
@@ -770,12 +753,13 @@ void SqlQuery::SortMergeJoin(const JoinQueryConditionGroups& exprs) {
         }
         auto tuple = Tuple::MergeTuples(*tuple_1, *tuple_2);
         if (expr_node_->Evaluate(*tuple).v_bool) {
-          results_.AddTuple(tuple);
+          results_->AddTuple(tuple);
         }
       }
-      tuple_2 = iterator_2.NextTuple();
+      tuple_2 = iterator_2.GetNextTuple();
     }
   }
+  results_->FinalizeAdding();
 }
 
 int SqlQuery::ExecuteJoinQuery() {
@@ -801,10 +785,10 @@ int SqlQuery::ExecuteJoinQuery() {
     for (const auto& column_request : order_by_columns_) {
       columns.push_back(column_request.column);
     }
-    results_.SortByColumns(columns);
+    results_->SortByColumns(columns);
   }
 
-  return results_.NumTuples();
+  return results_->NumTuples();
 }
 
 std::shared_ptr<ExprTreeNode> SqlQuery::BuildExpressTree(
@@ -1630,6 +1614,7 @@ void SqlQuery::AggregateResults() {
   std::vector<ColumnRequest*> aggregation_columns;
   std::vector<Column> non_aggregation_columns;
   std::map<std::string, uint32> extra_index;
+  std::map<std::string, std::vector<DB::TableField>> aggregation_fields;
   for (auto& column_request : columns_) {
     if (column_request.aggregation_type != NO_AGGREGATION) { 
       // Give the aggregation column extra index, appending all columns of the
@@ -1637,23 +1622,29 @@ void SqlQuery::AggregateResults() {
       const auto& table_name = column_request.column.table_name;
       auto* table_m = FindTable(column_request.column.table_name);
       CHECK(table_m != nullptr, "Couldn't find table %s", table_name.c_str());
+      auto* field_m = table_m->FindFieldByIndex(column_request.column.index);
+      CHECK(field_m != nullptr, "Couldn't find field %s from table %s",
+                                column_request.column.column_name.c_str(),
+                                table_name.c_str());
       if (extra_index[table_name] == 0) {
         extra_index[table_name] = table_m->NumFields();
       }
       column_request.column.index = extra_index.at(table_name);
+      extra_index[table_name]++;
       if (column_request.aggregation_type == COUNT) {
         column_request.column.type = Schema::FieldType::INT;
       }
 
-      // Update table record meta.
-      auto it = results_.GetTupleMeta()->find(table_name);
-      CHECK(it != results_.GetTupleMeta()->end(),
-            "Couldn't find table record meta for table %s", table_name.c_str());
-      it->second.fetched_fields.push_back(DB::TableField());
-      it->second.fetched_fields.back().set_index(extra_index.at(table_name));
-      it->second.fetched_fields.back().set_type(column_request.column.type);
-
-      extra_index[table_name]++;
+      // Save aggregation fields. It will be used to update result tuple meta
+      // at the end of this function. Note we can't update tuple meta here
+      // because the current result doesn't contain aggregation field in
+      // records. If tuple meta is updated, FlatTupleFile will have problem
+      // in loading tuple from file.
+      aggregation_fields[table_name].push_back(field_m->field());
+      aggregation_fields[table_name].back().
+          set_index(column_request.column.index);
+      aggregation_fields[table_name].back().
+          set_type(column_request.column.type);
 
       // Update order_by_columns if it has aggregated columns.
       for (auto& order_by_column_request : order_by_columns_) {
@@ -1671,9 +1662,8 @@ void SqlQuery::AggregateResults() {
     }
   }
 
-  ResultContainer result;
-  result.SetTupleMeta(&tuple_meta_);
-  results_.SortByColumns(non_aggregation_columns);
+  auto aggregated_result = std::make_shared<ResultContainer>(this);
+  results_->SortByColumns(non_aggregation_columns);
 
   // Help function to calculate AVG() columns for a tuple.
   auto cal_avg = [&] (Tuple* agg_tuple, uint32 group_size) {
@@ -1695,24 +1685,26 @@ void SqlQuery::AggregateResults() {
     }
   };
 
-  Tuple* agg_tuple = nullptr;
+  std::shared_ptr<Tuple> agg_tuple;
   uint32 group_size = 0;
-  results_.InitReading();
+  auto iterator = results_->GetIterator();
   while (true) {
-    auto tuple_ptr = results_.GetNextTuple();
-    if (!tuple_ptr) {
+    auto tuple = iterator.GetNextTuple();
+    if (!tuple) {
       break;
     }
-    Tuple& tuple = *tuple_ptr;
     if (!agg_tuple ||
         (agg_tuple && Tuple::CompareBasedOnColumns(
-                          tuple, *agg_tuple, non_aggregation_columns) != 0)) {
-      // Calculate AVG() columns for last group.
-      cal_avg(agg_tuple, group_size);
+                          *tuple, *agg_tuple, non_aggregation_columns) != 0)) {
+      // Populated a new aggregated tuple. Add it to result.
+      if (agg_tuple) {
+        // Calculate AVG() columns for last group.
+        cal_avg(agg_tuple.get(), group_size);
+        aggregated_result->AddTuple(agg_tuple);
+      }
 
-      // New group.
-      result.AddTuple(tuple);
-      agg_tuple = &tuple;
+      // New aggregation group.
+      agg_tuple = tuple;
 
       // Append aggregated column fields to the record.
       for (const auto& aggregation_column : aggregation_columns) {
@@ -1750,7 +1742,7 @@ void SqlQuery::AggregateResults() {
         // Find original field.
         const Schema::Field* original_field = nullptr;
         if (aggregation_column->aggregation_type != COUNT) {
-          auto table_record = tuple.GetTableRecord(table_name);
+          auto table_record = tuple->GetTableRecord(table_name);
           CHECK(table_record != nullptr,
                 "Couldn't find record of table %s from tuple",
                 table_name.c_str());
@@ -1767,22 +1759,40 @@ void SqlQuery::AggregateResults() {
       group_size++;
     }
   }
-  // Calculate AVG() columns for the last group.
-  cal_avg(agg_tuple, group_size);
+  // Add the last aggregated group.
+  if (agg_tuple) {
+    // Calculate AVG() columns for last group.
+    cal_avg(agg_tuple.get(), group_size);
+    aggregated_result->AddTuple(agg_tuple);
+  }
 
-  results_ = std::move(result);
+  aggregated_result->FinalizeAdding();
+
+  results_ = aggregated_result;
+
+  // Update result tuple meta.
+  for (const auto& iter : aggregation_fields) {
+    const auto& table_name = iter.first;
+    const auto& agg_fields = iter.second;
+    for (const auto& field : agg_fields) {
+      auto it = tuple_meta_.find(table_name);
+      CHECK(it != tuple_meta_.end(),
+            "Couldn't find table record meta for table %s", table_name.c_str());
+      it->second.fetched_fields.push_back(field);
+    }
+  }
 }
  
 void SqlQuery::PrintResults() {
-  if (results_.NumTuples() == 0) {
+  if (results_->NumTuples() == 0) {
     printf("Empty set\n");
     return;
   }
 
   // Get the print size for each column.
-  results_.InitReading();
+  auto iterator = results_->GetIterator();
   while (true) {
-    auto tuple_ptr = results_.GetNextTuple();
+    auto tuple_ptr = iterator.GetNextTuple();
     if (!tuple_ptr) {
       break;
     }
@@ -1840,9 +1850,9 @@ void SqlQuery::PrintResults() {
   printf("+\n");
 
   // Do print.
-  results_.InitReading();
+  iterator = results_->GetIterator();
   while (true) {
-    auto tuple_ptr = results_.GetNextTuple();
+    auto tuple_ptr = iterator.GetNextTuple();
     if (!tuple_ptr) {
       break;
     }
@@ -1872,7 +1882,7 @@ void SqlQuery::PrintResults() {
     }
   }
   printf("+\n");
-  printf("%u rows in set\n", results_.NumTuples());
+  printf("%u rows in set\n", results_->NumTuples());
 }
 
 TupleMeta* SqlQuery::mutable_tuple_meta() {
@@ -1881,6 +1891,14 @@ TupleMeta* SqlQuery::mutable_tuple_meta() {
 
 const TupleMeta& SqlQuery::tuple_meta() const {
   return tuple_meta_;
+}
+
+std::shared_ptr<Storage::FlatTupleFile>
+SqlQuery::CreateFlatTupleFile(const std::vector<std::string>& tables) const {
+  Storage::FlatTupleFileOptions opts(tuple_meta_, tables);
+  opts.db_name = db_->catalog().name();
+  opts.txn_id = 0;  // TODO: Add transaction id.
+  return std::make_shared<Storage::FlatTupleFile>(opts);
 }
 
 std::string SqlQuery::error_msg() const {

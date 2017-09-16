@@ -19,6 +19,7 @@ class SqlQuery;
 class Iterator {
  public:
   Iterator(SqlQuery* query, ExprTreeNode* node);
+  virtual ~Iterator() {}
 
   virtual void Init() = 0;
   virtual std::shared_ptr<Tuple> GetNextTuple() = 0;
@@ -37,6 +38,7 @@ class Iterator {
 class PhysicalQueryIterator : public Iterator {
  public:
   PhysicalQueryIterator(SqlQuery* query, ExprTreeNode* node);
+  virtual ~PhysicalQueryIterator() {}
 
   void Init() override;
   std::shared_ptr<Tuple> GetNextTuple() override;
@@ -51,6 +53,7 @@ class PhysicalQueryIterator : public Iterator {
 class AndNodeIterator : public Iterator {
  public:
   AndNodeIterator(SqlQuery* query, ExprTreeNode* node);
+  virtual ~AndNodeIterator() {}
 
   void Init() override;
   std::shared_ptr<Tuple> GetNextTuple() override;
@@ -64,14 +67,15 @@ class AndNodeIterator : public Iterator {
 class OrNodeIterator : public Iterator {
  public:
   OrNodeIterator(SqlQuery* query, ExprTreeNode* node);
+  virtual ~OrNodeIterator() {}
 
   void Init() override;
   std::shared_ptr<Tuple> GetNextTuple() override;
   void reset() override;
 
  private:
-  ResultContainer result_;
-  uint32 tuple_index_ = 0;
+  std::shared_ptr<ResultContainer> result_;
+  ResultContainer::Iterator result_iterator_;
 };
 
 }

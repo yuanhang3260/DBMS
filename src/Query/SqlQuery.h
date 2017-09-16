@@ -91,7 +91,7 @@ class SqlQuery {
   bool FinalizeParsing();
 
   const Query::ExprTreeNode& expr_root() const { return *expr_node_; }
-  const Query::ResultContainer& results() const { return results_; }
+  const Query::ResultContainer& results() const { return *results_; }
 
   // Execute a SELECT query, returns the number of matching records.
   int ExecuteSelectQuery();
@@ -103,6 +103,10 @@ class SqlQuery {
 
   // Print results.
   void PrintResults();
+
+  // Create a FlatTupleFile.
+  std::shared_ptr<Storage::FlatTupleFile> CreateFlatTupleFile(
+      const std::vector<std::string>& tables) const;
 
   void reset();
   std::string error_msg() const;
@@ -190,11 +194,13 @@ class SqlQuery {
   TupleMeta tuple_meta_;
 
   // Final result.
-  ResultContainer results_;
+  std::shared_ptr<ResultContainer> results_;
 
   std::string error_msg_;
 
   friend class QueryTest;
+
+  FORBID_COPY_AND_ASSIGN(SqlQuery);
 };
 
 }

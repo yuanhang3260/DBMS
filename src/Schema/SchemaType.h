@@ -15,6 +15,7 @@ std::string FieldTypeStr(FieldType type);
 class Field {
  public:
   Field() = default;
+  virtual ~Field() {}
 
   virtual FieldType type() const = 0;
   virtual int length() const = 0;

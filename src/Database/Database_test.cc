@@ -325,14 +325,19 @@ class DatabaseTest: public UnitTest {
 
   bool VerifyResult(const Query::ExprTreeNode& expr_root,
                     const ResultContainer& result) {
-    // while (true) {
-    //   auto tuple = result->GetNextTuple();
-    //   if (!expr_root.Evaluate(tuple).v_bool) {
-    //     LogERROR("Result record mismatch with query:");
-    //     tuple.at(kTableName).record->Print();
-    //     return false;
-    //   }
-    // }
+    auto& result_ = const_cast<ResultContainer&>(result);
+    auto iterator = result_.GetIterator();
+    while (true) {
+      auto tuple = iterator.GetNextTuple();
+      if (!tuple) {
+        break;
+      }
+      if (!expr_root.Evaluate(*tuple).v_bool) {
+        LogERROR("Result record mismatch with query:");
+        tuple->GetTableRecord(kTableName)->record->Print();
+        return false;
+      }
+    }
     return true;
   }
 
@@ -435,7 +440,9 @@ class DatabaseTest: public UnitTest {
     interpreter_->reset();
     printf("\n");
 
-    expr = "SELECT * FROM Puppy WHERE id = 4 OR(age > 8 AND signature < \"h\") ORDER BY name, id";
+    expr = "SELECT * FROM Puppy "
+           "WHERE id = 4 OR(age > 8 AND signature < \"h\") "
+           "ORDER BY name, id";
     std::cout << expr << std::endl;
     AssertTrue(interpreter_->Parse(expr));
     query = interpreter_->shared_query();
@@ -496,7 +503,9 @@ class DatabaseTest: public UnitTest {
     interpreter_->reset();
     printf("\n");
 
-    expr = "SELECT age, AVG(weight) FROM Puppy GROUP BY age ORDER BY AVG(weight)";
+    expr = "SELECT age, AVG(weight) FROM Puppy "
+           "GROUP BY age "
+           "ORDER BY AVG(weight)";
     std::cout << expr << std::endl;
     AssertTrue(interpreter_->Parse(expr));
     query = interpreter_->shared_query();
@@ -567,7 +576,7 @@ int main(int argc, char** argv) {
   DB::DatabaseTest test;
   test.setup();
 
-  //test.Test_SelectQuery();
+  test.Test_SelectQuery();
   test.Test_Join();
 
   test.teardown();

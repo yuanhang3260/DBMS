@@ -17,15 +17,6 @@
 
 namespace Query {
 
-// struct EvaluateArgs {
-//   EvaluateArgs(DB::CatalogManager* catalog_m_,
-//                const ResultContainer::Tuple& tuple_) :
-//       catalog_m(catalog_m_),
-//       tuple(tuple_) {}
-//   DB::CatalogManager* catalog_m;
-//   const ResultContainer::Tuple& tuple;
-// };
-
 class ExprTreeNode {
  public:
   enum Type {
@@ -40,6 +31,8 @@ class ExprTreeNode {
                std::shared_ptr<ExprTreeNode> right) :
       left_(left),
       right_(right) {}
+
+  virtual ~ExprTreeNode() {}
 
   ExprTreeNode* left() const { return left_.get(); }
   ExprTreeNode* right() const { return right_.get(); }
@@ -81,8 +74,8 @@ class ExprTreeNode {
   const PhysicalPlan& physical_plan() const { return physical_plan_; }
   PhysicalPlan* mutable_physical_plan() { return &physical_plan_; }
 
-  const ResultContainer& results() const { return results_; }
-  ResultContainer* mutable_results() { return &results_; }
+  // const ResultContainer& results() const { return results_; }
+  // ResultContainer* mutable_results() { return &results_; }
 
   virtual NodeValue Evaluate(const Tuple& arg) const = 0;
 
@@ -102,7 +95,7 @@ class ExprTreeNode {
   bool physical_query_root_ = false;
   PhysicalPlan physical_plan_;
 
-  ResultContainer results_;
+  //ResultContainer results_;
   std::shared_ptr<Iterator> tuple_iter_;
 };
 
@@ -112,6 +105,7 @@ class ConstValueNode : public ExprTreeNode {
   explicit ConstValueNode(const NodeValue& value) {
     value_ = value;
   }
+  virtual ~ConstValueNode() {}
 
   Type type() const override { return ExprTreeNode::CONST_VALUE; }
 
@@ -124,6 +118,7 @@ class ConstValueNode : public ExprTreeNode {
 class ColumnNode : public ExprTreeNode {
  public:
   ColumnNode(const Column& column);
+  virtual ~ColumnNode() {}
 
   Type type() const override { return ExprTreeNode::TABLE_COLUMN; }
 
@@ -145,6 +140,7 @@ class OperatorNode : public ExprTreeNode {
   OperatorNode(OperatorType op,
                std::shared_ptr<ExprTreeNode> left,
                std::shared_ptr<ExprTreeNode> right);
+  virtual ~OperatorNode() {}
 
   Type type() const override { return ExprTreeNode::OPERATOR; }
 

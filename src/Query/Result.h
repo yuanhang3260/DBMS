@@ -1,74 +1,33 @@
 #ifndef QUERY_RESULT_H_
 #define QUERY_RESULT_H_
 
+#include "Base/MacroUtils.h"
+
 #include "Database/Catalog_pb.h"
 #include "Query/Common.h"
+#include "Query/Tuple.h"
+#include "Storage/FlatTupleFile.h"
 
 namespace Query {
 
-// Result.
-struct TableRecordMeta {
-  std::vector<DB::TableField> fetched_fields;
-  Storage::RecordType record_type = Storage::DATA_RECORD;
+class SqlQuery;
 
-  void CreateDataRecordMeta(const DB::TableInfo& schema);
-  void CreateIndexRecordMeta(const DB::TableInfo& schema,
-                             const std::vector<uint32>& field_indexes);
-};
-
-struct ResultRecord {
-  ResultRecord() = default;
-  ResultRecord(std::shared_ptr<Storage::RecordBase> record_) :
-      record(record_) {}
-
-  std::shared_ptr<Storage::RecordBase> record;
-  const TableRecordMeta* meta = nullptr;
-
-  Storage::RecordType record_type() const;
-
-  const Schema::Field* GetField(uint32 index) const;
-  Schema::Field* MutableField(uint32 index);
-  // Takes ownership of the argument.
-  void AddField(Schema::Field* field);
-};
-
-using TupleMeta = std::map<std::string, TableRecordMeta>;
-
-struct Tuple {
-  // Table name -> ResultRecord
-  std::map<std::string, ResultRecord> records;
-
-  uint32 size() const;
-  void Print() const;
-
-  const ResultRecord* GetTableRecord(const std::string& table_name) const;
-  ResultRecord* MutableTableRecord(const std::string& table_name);
-  bool AddTableRecord(const std::string& table_name,
-                      std::shared_ptr<Storage::RecordBase> record);
-  bool AddMeta(const TupleMeta& meta);
-
-  static std::shared_ptr<Tuple> MergeTuples(const Tuple& t1, const Tuple& t2);
-
-  static int CompareBasedOnColumns(
-      const Tuple& t1, const std::vector<Column>& columns_1,
-      const Tuple& t2, const std::vector<Column>& columns_2);
-  static int CompareBasedOnColumns(
-      const Tuple& t1, const Tuple& t2, const std::vector<Column>& columns);
-};
-
+// This is a generic tuple container for query result. Tuples can be either
+// stored in memory or materialized to FlatTupleFile if their total size exceeds
+// limit. All these details are transparent to user. The interface is AddTuple
+// to add new tuple into container, and forward-only iterator to access tuples.
 class ResultContainer {
  public:
-  // TODO: Random access should NOT be supported.
-  std::shared_ptr<Tuple> GetTuple(uint32 index);
-
-  void InitReading() { crt_tindex_ = 0; }
-  std::shared_ptr<Tuple> GetNextTuple();
+  ResultContainer() = default;
+  ResultContainer(SqlQuery* query);
+  ~ResultContainer();
 
   bool AddTuple(std::shared_ptr<Tuple> tuple);
   bool AddTuple(const Tuple& tuple);
   bool AddTuple(Tuple&& tuple);
+  bool FinalizeAdding();
 
-  uint32 NumTuples() const { return tuples_.size(); }
+  uint32 NumTuples() const { return num_tuples_; }
 
   void SetTupleMeta(TupleMeta* tuple_meta) { tuple_meta_ = tuple_meta; }
   TupleMeta* GetTupleMeta() { return tuple_meta_; }
@@ -76,39 +35,70 @@ class ResultContainer {
   void reset();
 
   // Sort tuples by given columns.
-  void SortByColumns(const std::vector<Column>& columns);
-  void SortByColumns(const std::string& table_name,
+  bool SortByColumns(const std::vector<Column>& columns);
+  bool SortByColumns(const std::string& table_name,
                      const std::vector<uint32>& field_indexes);
 
   // Take two set of results, sort and merge them by columns.
-  void MergeSortResults(ResultContainer& result_1,
+  bool MergeSortResults(ResultContainer& result_1,
                         ResultContainer& result_2,
                         const std::vector<Column>& columns);
 
-  void MergeSortResults(ResultContainer& result_1,
+  bool MergeSortResults(ResultContainer& result_1,
                         ResultContainer& result_2,
                         const std::string& table_name,
                         const std::vector<uint32>& field_indexes);
 
-  void MergeSortResultsRemoveDup(ResultContainer& result_1,
+  bool MergeSortResultsRemoveDup(ResultContainer& result_1,
                                  ResultContainer& result_2,
                                  const std::vector<Column>& columns);
 
-  void MergeSortResultsRemoveDup(ResultContainer& result_1,
+  bool MergeSortResultsRemoveDup(ResultContainer& result_1,
                                  ResultContainer& result_2,
                                  const std::string& table_name,
                                  const std::vector<uint32>& field_indexes);
 
+  class Iterator {
+   public:
+    Iterator() = default;
+    Iterator(ResultContainer* results);
+
+    std::shared_ptr<Tuple> GetNextTuple();
+
+   private:
+    bool materialized() const { return results_->materialized_; }
+
+    ResultContainer* results_ = nullptr;
+
+    // For in-memory container, with tuples stored in vector.
+    uint32 crt_tindex_ = 0;
+
+    Storage::FlatTupleFile::Iterator ftf_iterator_;
+  };
+
+  Iterator GetIterator();
+
  private:
-  TupleMeta* tuple_meta_;
+  std::shared_ptr<Storage::FlatTupleFile>
+  CreateFlatTupleFile(const std::vector<std::string>& tables) const;
+
+  SqlQuery* query_ = nullptr;
+  TupleMeta* tuple_meta_ = nullptr;
+  // Which tables' records are contained in this result set. This field is
+  // self-learning when AddTuple() is called.
+  std::vector<std::string> tables_;
 
   std::vector<std::shared_ptr<Tuple>> tuples_;
+  std::shared_ptr<Storage::FlatTupleFile> ft_file_;
 
   uint32 num_tuples_ = 0;
-  uint32 crt_tindex_ = 0;
+  uint32 tuples_size_ = 0;
 
   bool materialized_ = false;
+
+  FORBID_COPY_AND_ASSIGN(ResultContainer);
 };
+
 
 // Result aggregation.
 enum AggregationType {

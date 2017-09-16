@@ -8,7 +8,7 @@
 #include "IO/FileDescriptor.h"
 
 #include "Database/Catalog_pb.h"
-#include "Query/Result.h"
+#include "Query/Tuple.h"
 #include "Storage/PageRecord_Common.h"
 #include "Storage/Record.h"
 
@@ -18,7 +18,7 @@ struct FlatTupleFileOptions{
   FlatTupleFileOptions(const Query::TupleMeta& tuple_meta,
                        const std::vector<std::string>& tables);
   // Metadata of each table's record. Note this map also gives the order of
-  // records when tuple is dumped to / loaded from memory, because the map is
+  // records when tuple is dumped to/loaded from memory, because the map is
   // sorted by table name.
   using TableMetas = std::map<std::string, const Query::TableRecordMeta*>;
   TableMetas table_metas;
@@ -149,8 +149,6 @@ class FlatTupleFile {
     READING,
   };
   State state_ = INIT;
-
-  friend class FlatTupleFile::Iterator;
 
   FORBID_COPY_AND_ASSIGN(FlatTupleFile);
 };

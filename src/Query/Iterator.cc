@@ -208,11 +208,8 @@ void OrNodeIterator::Init() {
         Strings::StrCat("Expect AND node plan to be POP, but got ",
                         PhysicalPlan::PlanStr(this_plan.plan)));
 
-  result_.SetTupleMeta(query_->mutable_tuple_meta());
-
-  ResultContainer left_result, right_result;
-  left_result.SetTupleMeta(query_->mutable_tuple_meta());
-  right_result.SetTupleMeta(query_->mutable_tuple_meta());
+  result_ = std::make_shared<ResultContainer>(query_);
+  ResultContainer left_result(query_), right_result(query_);
 
   auto* node_iter = node_->left()->GetIterator();
   while (true) {
@@ -221,6 +218,10 @@ void OrNodeIterator::Init() {
       break;
     }
     left_result.AddTuple(tuple);
+  }
+  if (!left_result.FinalizeAdding()) {
+    end_ = true;
+    return;
   }
 
   node_iter = node_->right()->GetIterator();
@@ -231,13 +232,19 @@ void OrNodeIterator::Init() {
     }
     right_result.AddTuple(tuple);
   }
+  if (!right_result.FinalizeAdding()) {
+    end_ = true;
+    return;
+  }
 
   const std::string& table_name = this_plan.table_name;
   auto* table_m = query_->FindTable(table_name);
   CHECK(table_m != nullptr,
         Strings::StrCat("Couldn't find table ", table_name));
-  result_.MergeSortResultsRemoveDup(
+  result_->MergeSortResultsRemoveDup(
       left_result, right_result, table_name, table_m->PrimaryIndex());
+
+  result_iterator_ = result_->GetIterator();
 
   ready_ = true;
 }
@@ -251,17 +258,15 @@ std::shared_ptr<Tuple> OrNodeIterator::GetNextTuple() {
     return nullptr;
   }
 
-  // TODO: Replace this with ResultContainer.GetNextTuple().
-  if (tuple_index_ >= result_.NumTuples()) {
+  auto tuple = result_iterator_.GetNextTuple();
+  if (!tuple) {
     end_ = true;
-    return nullptr;
   }
-
-  return result_.GetTuple(tuple_index_++);
+  return tuple;
 }
 
 void OrNodeIterator::reset() {
-  tuple_index_ = 0;
+  result_iterator_ = result_->GetIterator();
   end_ = false;
 }
 

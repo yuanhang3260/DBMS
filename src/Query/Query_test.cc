@@ -377,7 +377,9 @@ class QueryTest: public UnitTest {
     interpreter_->reset();
     printf("\n");
 
-    expr = "SELECT Puppy.name, Puppy.*, Host.name, Puppy.age FROM Puppy, Host WHERE Puppy.name = \"snoopy\"";
+    expr = "SELECT Puppy.name, Puppy.*, Host.name, Puppy.age "
+           "FROM Puppy, Host "
+           "WHERE Puppy.name = \"snoopy\"";
     std::cout << expr << std::endl;
     AssertTrue(interpreter_->Parse(expr));
     node = interpreter_->shared_query()->GetExprNode();
