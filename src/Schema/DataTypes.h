@@ -96,7 +96,7 @@ class IntField: public Field {
   void Inc(int inc) { value_ += inc; }
 
  private:
-  int value_ = LONG_MIN;
+  int value_ = (int)LONG_MIN;
 };
 
 
